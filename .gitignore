@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# 数据与数据库（克隆的仓库数据、本地数据库不进版本控制）
+data/
+*.db
+*.sqlite3
+
+# 模型文件
+models/*.joblib
+models/*.pkl
+models/*.pt
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
