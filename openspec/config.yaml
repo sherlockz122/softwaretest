@@ -4,6 +4,24 @@ context: |
   Language: zh
   All artifacts must be written in zh.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Canonical project documents are under docs/ and baseline DG-BL-2026-09-26.
+  softwarePrediction/ contains imported source material and must not be used as the implementation baseline.
+  Database is MySQL 8; architecture is FastAPI modular monolith plus Celery/Redis workers.
+  Branch wang is the current personal development space; changes are not yet synchronized with the team.
+  Push only to origin/wang. Do not modify main or other branches or initiate integration into main; that is the maintainer's responsibility.
+  Every change must trace to User Stories and planned tests in docs/07-需求设计测试追踪矩阵.md.
+
+rules:
+  proposal:
+    - State the related User Story IDs and explicit non-goals
+    - Identify affected canonical documents
+  specs:
+    - Include normal, boundary, and invalid-input scenarios for each core capability
+    - Preserve time-causality, versioning, and auditability requirements
+  design:
+    - Describe data constraints, failure recovery, security controls, and test strategy
+  tasks:
+    - Make each task independently verifiable and link implementation tasks to planned tests
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

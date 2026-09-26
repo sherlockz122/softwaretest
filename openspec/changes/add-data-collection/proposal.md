@@ -1,5 +1,11 @@
 # Change: add-data-collection
 
+## 关联基线
+
+- User Stories：US-01～US-04
+- 基线：`DG-BL-2026-09-26`
+- 受影响文档：`docs/02-系统架构与详细设计.md`、`docs/04-API与数据库规格.md`、`docs/07-需求设计测试追踪矩阵.md`
+
 ## Why
 
 JIT 缺陷预测需要真实仓库的提交历史数据，当前系统没有任何数据入口，
@@ -7,13 +13,14 @@ JIT 缺陷预测需要真实仓库的提交历史数据，当前系统没有任�
 
 ## What Changes
 
-- 新增仓库克隆与元数据管理能力
-- 新增提交解析与持久化能力（哈希、作者、时间、消息、文件变更）
-- 新增缺陷修复提交识别规则（关键词 + Issue ID）
-- 新增数据采集模块的单元测试
+- 新增公开 HTTPS Git 仓库接入、URL/DNS/重定向安全校验与元数据管理
+- 新增异步克隆、提交解析与持久化能力（哈希、作者、时间、消息、父提交、文件变更）
+- 新增幂等任务、心跳、批次 checkpoint、失败与重试状态
+- 新增可审计的缺陷修复证据识别：缺陷关键词与已确认的 bug Issue；普通 Issue ID 不自动视为 Fix
+- 新增数据采集模块的单元、集成、安全与异常测试
 
 ## 影响范围
 
-- 新增数据库表：repositories、commits、file_changes
-- 新增后端模块：数据采集服务
+- 新增数据库表：repository、author_identity、git_commit、file_change、defect_evidence、async_task
+- 新增后端模块：仓库接入、数据采集、Fix 证据与异步任务服务
 - 不包含 SZZ 标注、特征提取与模型训练（后续 change 实现）
