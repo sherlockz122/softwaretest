@@ -1,7 +1,10 @@
 # Tasks
 
+## 0. 前置框架
+- [ ] 0.1 确认 bootstrap-application 实际运行验收已通过；复用认证、async_task/outbox 与 A29～A32，不重复实现
+
 ## 1. 仓库克隆
-- [ ] 1.1 定义 repository、author_identity 与 async_task 模型、迁移和唯一约束
+- [ ] 1.1 定义 repository、author_identity 模型、迁移和唯一约束，增加采集 task payload 并复用框架任务表
 - [ ] 1.2 实现 HTTPS URL 语法、凭据、端口、A/AAAA 地址和重定向安全校验
 - [ ] 1.3 实现仓库规范化与幂等创建，返回 repository_id 和 task_id
 - [ ] 1.4 实现隔离目录克隆、大小/时间/并发限制与安全化错误

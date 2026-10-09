@@ -1,0 +1,29 @@
+# Tasks
+
+## 0. 开工准备（本次第一批）
+- [x] 0.1 保存环境、Python 版本及启动设计基线；证据：准备基线提交 984dea7
+- [x] 0.2 完成 proposal/spec/design、首批 API/表契约、追踪及存储预算；执行 OpenSpec 严格校验（两项 change 通过）
+- [x] 0.3 验收项目命令存储保护，写准备阶段报告；审核提交范围后仅推送 wang（证据见 docs/reports/2026-10-09-第一批准备任务阶段报告.md，远程核查见交付消息）
+
+## 1. 可运行工程
+- [ ] 1.1 配置 Python 根工程与 uv 锁、前端 Vue/npm 锁；PLATFORM-ENV 验证项目 Python 3.11 与前端构建
+- [ ] 1.2 配置本地 MySQL/Redis 与五组件 Compose，D 盘卷、容器日志轮转与启动说明；PLATFORM-ENV 验证隔离端口及健康状态
+- [ ] 1.3 配置统一错误/request_id、最小健康检查及配置校验；PLATFORM-ENV 验证缺失 secret 拒绝启动
+
+## 2. 最小认证（US-22，NFR-01/04）
+- [ ] 2.1 实施 user/auth_session/审计迁移和显式预置账号；INT-MIGRATION 验证约束、升级与空库回滚
+- [ ] 2.2 实施 A01～A04、密码哈希、JWT 会话校验、refresh 轮转及 CSRF；SEC-AUTH 验证正常、失效、重复 refresh、退出和跨站请求
+- [ ] 2.3 实施角色和任务操作者检查；SEC-RBAC 验证 Viewer 发起/取消任务和 Member 操作他人任务被拒绝
+
+## 3. 可靠任务（US-02/12/21，NFR-02）
+- [ ] 3.1 实施 async_task/task_outbox 迁移与诊断创建 A35；INT-OUTBOX 验证幂等键、同键异载荷和事务回滚
+- [ ] 3.2 实施投递器、领取租约、发送/补投/超限与 queued deadline；INT-OUTBOX 注入 Redis 中断和发后写回失败
+- [ ] 3.3 实施真实 Worker、执行令牌、心跳与恢复协调器；REL-LEASE 验证重复消息、kill Worker、旧令牌写回和重试上限
+- [ ] 3.4 实施 A29～A32、取消和 successor；REL-CANCEL 验证并发重试、queued 取消及取消/成功竞态
+
+## 4. 页面与交付
+- [ ] 4.1 实施登录和任务页面、加载/空态/错误/刷新；UI-TASK 验证状态与 API 一致、重复点击及认证失效
+- [ ] 4.2 接入存储检查到 pull/build/采集入口；STORAGE-GUARD 验证低容量拒绝和 D 盘临时/缓存目录
+- [ ] 4.3 配置实际代码需要的 CI 检查、迁移/接口/规格检查和前端构建，不用空检查冒充验收
+- [ ] 4.4 执行 E2E-BOOT，整理接口导出、迁移、运行和故障证据，登记追踪矩阵
+- [ ] 4.5 框架业务验收通过后归档 change；本次准备阶段不得提前勾选

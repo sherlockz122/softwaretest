@@ -2,7 +2,7 @@
 
 ## 1 目标与边界
 
-本 change 建立安全、可恢复、可审计的数据入口，为 SZZ 和特征工程提供确定性输入。范围包括公开 HTTPS 仓库接入、提交与文件变更解析、Fix 证据以及通用异步任务基础。
+本 change 建立安全、可恢复、可审计的数据入口，为 SZZ 和特征工程提供确定性输入。范围包括公开 HTTPS 仓库接入、提交与文件变更解析和 Fix 证据。依赖先验收 `bootstrap-application` 的认证、通用任务/outbox、A29～A32；本 change 只扩展采集 payload、checkpoint 和业务页面，不重复拥有框架实现任务。
 
 不包含 SZZ 回溯、Kamei 特征、数据集和模型训练。
 
@@ -26,15 +26,17 @@ sequenceDiagram
     participant A as Repository API
     participant S as URL Safety Policy
     participant D as MySQL
+    participant O as Outbox Dispatcher
     participant Q as Celery/Redis
     participant W as Worker
 
     U->>A: POST repository + Idempotency-Key
     A->>S: 校验 URL、DNS 和重定向策略
     S-->>A: allow
-    A->>D: 原子创建 repository + async_task
-    A->>Q: enqueue task_id
+    A->>D: 同事务创建 repository + async_task + outbox + audit
     A-->>U: 202 repository_id + task_id
+    O->>D: 领取持久 outbox（投递租约）
+    O->>Q: enqueue task_id（失败退避补投）
     Q->>W: clone/parse
     W->>D: 分批 upsert commit/file_change + checkpoint
     W->>D: Fix 证据 + 任务终态
@@ -44,7 +46,7 @@ sequenceDiagram
 
 - `repository.canonical_url` 唯一。
 - `git_commit(repository_id, sha)` 唯一。
-- `async_task(task_type, scope_key, idempotency_key)` 唯一。
+- `async_task(type, scope_key, idempotency_key)` 唯一；同键异载荷返回 409，复用框架契约。
 - 一个解析批次的提交、文件变更和 checkpoint 在同一事务中提交。
 - 重试读取 checkpoint 并执行 upsert，不先删除已成功数据。
 
@@ -63,6 +65,8 @@ sequenceDiagram
 ## 7 失败与恢复
 
 可重试失败包括暂时网络错误、Worker 中断和部分依赖不可用；输入拒绝、资源超限和不安全 URL 不自动重试。Worker 心跳过期后任务标记 stale，由协调器创建 successor 或进入人工处理。
+
+stale 是健康标记；协调器条件写 failed 后才创建 successor，原终态保留。所有业务批次和 checkpoint 必须在同一事务检查有效 execution_token、状态和租约，旧 Worker 无权提交。投递补偿、queued 超时及恢复上限复用框架契约，采集阶段另外验证批次幂等。
 
 ## 8 验证
 

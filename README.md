@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前处于开发准备阶段，已完成需求与技术基线统一，尚未开始应用代码实现。第一项开发工作为修订并实施 `add-data-collection` OpenSpec change。
+当前处于开发准备阶段，已完成需求与技术基线统一，尚未开始应用代码实现。先实施 `bootstrap-application` 建立可运行工程、最小认证和可靠任务，再实施 `add-data-collection` 的仓库采集。首批准备任务的范围与验收见 [阶段报告](docs/reports/2026-10-09-第一批准备任务阶段报告.md)。
 
 ## 当前分支范围
 
@@ -23,3 +23,5 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 ## Python 开发环境
 
 项目使用 Python 3.11 和根目录 `.venv`，版本要求记录在 `.python-version`。虚拟环境不进入 Git；系统默认 Python 可以继续使用其他版本。激活、退出及编辑器解释器选择见 [Python 环境使用](docs/development/Python环境使用.md)。
+
+容量有限时按 [存储预算与命令使用](docs/development/存储预算与命令使用.md) 执行：框架阶段新增预算目标 4 GiB，D 盘保留至少 6 GiB，缓存与临时文件放在项目 `runtime/`。
