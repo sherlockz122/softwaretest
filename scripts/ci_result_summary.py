@@ -33,6 +33,13 @@ def main():
                 body = case.find(outcome).text or ""
                 for file, line in re.findall(r"(?m)^([A-Za-z0-9_/.-]+\.py):(\d+):", body):
                     print(f"  location: {identifier(file)}:{line}")
+                for category in (
+                    "static_ip_requires_explicit_subnet",
+                    "address_already_in_use",
+                    "unknown",
+                ):
+                    if "Scoped Docker DNS acceptance action failed: " + category in body:
+                        print(f"  Docker DNS category: {category}")
                 break
     print(f"JUnit: {len(cases)} cases, {failed} failed/error, {skipped} skipped")
 
