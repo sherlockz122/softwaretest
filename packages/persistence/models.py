@@ -15,7 +15,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0004_commit_parsing"
+SCHEMA_HEAD = "0005_repository_sync"
 
 
 class Base(DeclarativeBase):
@@ -194,6 +194,11 @@ class Repository(Stamp, Base):
             name="ck_repository_parse_status",
         ),
         Index("ix_repository_created_id", "created_at", "id"),
+        CheckConstraint(
+            "sync_status IN ('pending','queued','syncing','synced','requires_review',"
+            "'failed','cancelled')",
+            name="ck_repository_sync_status",
+        ),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
     id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
@@ -213,6 +218,12 @@ class Repository(Stamp, Base):
         VARCHAR(24), default="pending", server_default="pending"
     )
     parse_root_task_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    sync_status: Mapped[str] = mapped_column(
+        VARCHAR(24), default="pending", server_default="pending"
+    )
+    sync_root_task_id: Mapped[str | None] = mapped_column(
         uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
     )
     updated_at: Mapped[datetime] = mapped_column(
@@ -312,6 +323,41 @@ class ParseCheckpoint(Stamp, Base):
     )
     head_sha: Mapped[str | None] = mapped_column(hash_column())
     commit_limit: Mapped[int | None] = mapped_column(BIGINT())
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+    plan_hash: Mapped[str | None] = mapped_column(hash_column())
+    total: Mapped[int | None] = mapped_column(BIGINT())
+    processed: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    last_sha: Mapped[str | None] = mapped_column(hash_column())
+
+
+class SyncWindow(Stamp, Base):
+    __tablename__ = "sync_window"
+    __table_args__ = (
+        CheckConstraint(
+            "processed >= 0 AND (total IS NULL OR total >= processed) AND size_bytes >= 0",
+            name="ck_sync_counts",
+        ),
+        CheckConstraint(
+            "relation IN ('pending','initial','unchanged','fast_forward','requires_review')",
+            name="ck_sync_relation",
+        ),
+        Index("ix_sync_repository", "repository_id", "created_at", "root_task_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    base_head_sha: Mapped[str | None] = mapped_column(hash_column())
+    base_storage_key: Mapped[str] = mapped_column(VARCHAR(192))
+    base_branch: Mapped[str | None] = mapped_column(VARCHAR(255))
+    head_sha: Mapped[str | None] = mapped_column(hash_column())
+    storage_key: Mapped[str | None] = mapped_column(VARCHAR(192))
+    default_branch: Mapped[str | None] = mapped_column(VARCHAR(255))
+    size_bytes: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    relation: Mapped[str] = mapped_column(VARCHAR(24), default="pending", server_default="pending")
     parser_version: Mapped[str] = mapped_column(VARCHAR(64))
     plan_hash: Mapped[str | None] = mapped_column(hash_column())
     total: Mapped[int | None] = mapped_column(BIGINT())

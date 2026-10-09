@@ -164,6 +164,20 @@ class ParsingService:
             task.lease_until = now + timedelta(seconds=self.settings.task_lease_seconds)
             return point.processed, point.last_sha
 
+    def plan(self, task_id, token, reader, head, commit_limit):
+        return reader.plan(head, commit_limit)
+
+    def finish(self, db, task, repo, point, end):
+        task.result_json = {
+            "repository_id": repo.id,
+            "commits_imported": end,
+            "head_sha": point.head_sha,
+            "commit_limit": point.commit_limit,
+            "parser_version": point.parser_version,
+        }
+        self.tasks.terminal(db, task, "succeeded")
+        audit(db, task, "task.succeeded")
+
     def heartbeat(self, task_id, token):
         with Session(self.engine) as db, db.begin():
             context = self.fenced(db, task_id, token)
@@ -227,15 +241,7 @@ class ParsingService:
             task.version += 1
             if complete:
                 task.progress = 100
-                task.result_json = {
-                    "repository_id": repo.id,
-                    "commits_imported": end,
-                    "head_sha": point.head_sha,
-                    "commit_limit": point.commit_limit,
-                    "parser_version": point.parser_version,
-                }
-                self.tasks.terminal(db, task, "succeeded")
-                audit(db, task, "task.succeeded")
+                self.finish(db, task, repo, point, end)
             db.flush()
             return True
 

@@ -1,6 +1,10 @@
 import { reactive } from "vue";
 
 const messages = {
+  REPOSITORY_SYNC_STATE_CONFLICT:
+    "仓库需先完成解析；已有同步、失败或待复核窗口时，请查看当前任务。",
+  REPOSITORY_SYNC_BASE_CONFLICT:
+    "同步基线发生变化，已停止写入，请检查当前窗口。",
   REPOSITORY_PARSE_STATE_CONFLICT:
     "仓库尚未克隆完成或已有解析窗口，请刷新详情或在当前任务重试。",
   REPOSITORY_UNSAFE_URL:

@@ -423,6 +423,31 @@ test("public repository lost-response replay, real Worker clone and persisted me
     .click();
   await expect(page.getByTestId("file-list").locator("li")).not.toHaveCount(0);
   await shot(page, info, "repository-file-changes");
+  let syncTask;
+  let syncHeaders;
+  await page.route("**/api/v1/repositories/*/sync", async (route) => {
+    syncHeaders = route.request().headers();
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    syncTask = (await response.json()).task_id;
+    await route.abort("failed");
+  });
+  await page.getByRole("button", { name: "同步默认分支", exact: true }).click();
+  await expect.poll(() => syncTask).toBeTruthy();
+  const syncReplay = await page.request.post(
+    `/api/v1/repositories/${accepted}/sync`,
+    { headers: syncHeaders, data: {} },
+  );
+  expect(syncReplay.status()).toBe(202);
+  expect((await syncReplay.json()).task_id).toBe(syncTask);
+  await expect(page.getByTestId("sync-status")).toHaveText("同步完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("sync-windows")).toContainText("HEAD 未变化");
+  await expect(page.getByTestId("sync-windows")).toContainText(
+    "已入库 0 / 0 个新提交",
+  );
+  await shot(page, info, "repository-synced");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "登录", exact: true }),
@@ -437,6 +462,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
   await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
   await expect(page.getByTestId("parse-status")).toHaveText("解析完成");
+  await expect(page.getByTestId("sync-status")).toHaveText("同步完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({
@@ -479,10 +505,63 @@ test("repository Viewer controls and mobile detail remain readable", async ({
     })
     .click();
   await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
+  await expect(
+    page.getByRole("button", { name: "同步默认分支", exact: true }),
+  ).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
   await shot(page, info, "mobile-repository");
+});
+
+test("history review UI preserves accepted HEAD and blocks another sync", async ({
+  page,
+}, info) => {
+  // UI state fixture only. Actual force-push cases use real TLS Git/MySQL in test_sync.py.
+  await login(page);
+  let queriesAvailable = false;
+  await page.route("**/api/v1/repositories/*/sync-windows?*", (route) =>
+    queriesAvailable ? route.continue() : route.abort("failed"),
+  );
+  await page.route("**/api/v1/repositories/*", async (route) => {
+    if (
+      !/\/repositories\/[0-9a-f-]+$/.test(
+        new URL(route.request().url()).pathname,
+      )
+    )
+      return route.continue();
+    const response = await route.fetch();
+    const data = await response.json();
+    data.sync_status = "requires_review";
+    data.history_coverage = "recent_window";
+    await route.fulfill({ response, json: data });
+  });
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await page
+    .getByRole("link", {
+      name: "https://github.com/octocat/hello-world.git",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByTestId("sync-status")).toHaveText("历史变化待复核");
+  await expect(page.getByTestId("sync-window-error")).toBeVisible();
+  queriesAvailable = true;
+  await page.getByRole("button", { name: "刷新详情", exact: true }).click();
+  await expect(page.getByTestId("sync-windows")).toContainText("HEAD 未变化");
+  await expect(page.getByTestId("sync-window-error")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    "已暂停同步并保留旧 HEAD",
+  );
+  await expect(
+    page.getByText("初次解析只选取最近 N 个提交", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "同步默认分支", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("repository-head")).toHaveText(
+    /^[0-9a-f]{40}$/,
+  );
+  await shot(page, info, "repository-review-required");
 });

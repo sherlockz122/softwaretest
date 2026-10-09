@@ -126,7 +126,7 @@ class TaskService:
         db.flush()
         db.add(TaskOutbox(task_id=task.id, next_attempt_at=database_now(db)))
         audit(db, task, "task.retry" if parent else "task.create")
-        if parent and kind in {"repository.clone", "repository.parse"}:
+        if parent and kind in {"repository.clone", "repository.parse", "repository.sync"}:
             repository = db.get(Repository, payload["repository_id"], with_for_update=True)
             if not repository:
                 raise TaskError(404, "REPOSITORY_NOT_FOUND")
@@ -135,6 +135,8 @@ class TaskService:
             repository.latest_task_id = task.id
             if kind == "repository.clone":
                 repository.status = "queued"
+            elif kind == "repository.sync":
+                repository.sync_status = "queued"
             else:
                 repository.parse_status = "queued"
         return task
@@ -204,6 +206,7 @@ class TaskService:
             "diagnostic",
             "repository.clone",
             "repository.parse",
+            "repository.sync",
         } or status not in STATES | {None}:
             raise TaskError(422, "TASK_INVALID_INPUT")
         with Session(self.engine) as db, db.begin():
@@ -275,11 +278,21 @@ class TaskService:
         task.version += 1
         task.error_code = code
         task.error_message = "任务未完成，请根据任务编号检查或重试" if code else None
-        if task.type in {"repository.clone", "repository.parse"}:
+        if task.type in {"repository.clone", "repository.parse", "repository.sync"}:
             repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
             if repository and repository.latest_task_id == task.id:
                 if task.type == "repository.clone":
                     repository.status = "cloned" if status == "succeeded" else status
+                elif task.type == "repository.sync":
+                    repository.sync_status = (
+                        (
+                            "requires_review"
+                            if repository.sync_status == "requires_review"
+                            else "synced"
+                        )
+                        if status == "succeeded"
+                        else status
+                    )
                 else:
                     repository.parse_status = "parsed" if status == "succeeded" else status
 
@@ -289,7 +302,12 @@ class TaskService:
             timestamp = database_now(db)
             if not task or task.status != "queued" or task.queued_deadline <= timestamp:
                 return None
-            if task.type not in {"diagnostic", "repository.clone", "repository.parse"}:
+            if task.type not in {
+                "diagnostic",
+                "repository.clone",
+                "repository.parse",
+                "repository.sync",
+            }:
                 self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
                 audit(db, task, "task.failed")
                 return None
@@ -299,13 +317,15 @@ class TaskService:
             task.lease_until = timestamp + timedelta(seconds=self.settings.task_lease_seconds)
             task.version += 1
             audit(db, task, "task.start")
-            if task.type in {"repository.clone", "repository.parse"}:
+            if task.type in {"repository.clone", "repository.parse", "repository.sync"}:
                 repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
                 if not repository or repository.latest_task_id != task.id:
                     self.terminal(db, task, "failed", "REPOSITORY_STATE_CONFLICT")
                     return None
                 if task.type == "repository.clone":
                     repository.status = "cloning"
+                elif task.type == "repository.sync":
+                    repository.sync_status = "syncing"
                 else:
                     repository.parse_status = "parsing"
             return task.execution_token, (

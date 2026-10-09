@@ -58,7 +58,12 @@ onUnmounted(() => clearInterval(poll));
         <dd>{{ task.data.value.stage }}</dd>
         <dt>进度</dt>
         <dd>
-          <template v-if="task.data.value.type === 'repository.clone'"
+          <template
+            v-if="
+              task.data.value.type === 'repository.clone' ||
+              (task.data.value.type === 'repository.sync' &&
+                task.data.value.stage === 'cloning')
+            "
             >当前仓库 {{ task.data.value.processed }} 字节；完成后进度为
             100%。</template
           >
@@ -93,6 +98,13 @@ onUnmounted(() => clearInterval(poll));
       </div>
       <div v-if="task.data.value.result" class="result">
         <h2>执行结果</h2>
+        <p
+          v-if="task.data.value.result.disposition === 'requires_review'"
+          role="alert"
+          class="error"
+        >
+          历史变化待复核；本次检查已结束，仓库 HEAD 尚未推进。
+        </p>
         <RouterLink
           v-if="task.data.value.result.repository_id"
           :to="'/repositories/' + task.data.value.result.repository_id"

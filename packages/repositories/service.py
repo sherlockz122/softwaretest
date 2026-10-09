@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from packages.persistence.models import AsyncTask, ParseCheckpoint, Repository
+from packages.persistence.models import AsyncTask, ParseCheckpoint, Repository, SyncWindow
 from packages.repositories.safety import RepositoryError, URLPolicy, canonicalize
 from packages.repositories.storage import Storage
 from packages.repositories.transport import RepositoryProbe
@@ -97,6 +97,7 @@ class RepositoryService:
             "task": public(task, timestamp),
             "commits_imported": repository.parse_status == "parsed",
             "parse_status": repository.parse_status,
+            "sync_status": repository.sync_status,
         }
 
     def listing(self, page=1, page_size=20):
@@ -142,6 +143,15 @@ class RepositoryService:
                 if point
                 else None
             )
+            from packages.repositories.sync import SyncService
+
+            sync_point = (
+                db.get(SyncWindow, repository.sync_root_task_id)
+                if repository.sync_root_task_id
+                else None
+            )
+            result["sync_window"] = SyncService.visible(sync_point) if sync_point else None
+            result["history_coverage"] = "recent_window" if point and point.commit_limit else "full"
             return result
 
     def publish(self, task_id, token, metadata, storage_key):

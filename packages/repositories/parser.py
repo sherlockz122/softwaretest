@@ -9,6 +9,7 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from uuid import uuid4
 
 from pydriller.domain.commit import ModifiedFile
 
@@ -83,7 +84,9 @@ class NativeReader:
         self.bare, self.attempt, self.environment = bare, attempt, environment
         self.tick, self.deadline, self.git = tick, deadline, git or shutil.which("git")
 
-    def command(self, arguments, limit=METADATA_LIMIT, allow_limit=False):
+    def command(
+        self, arguments, limit=METADATA_LIMIT, allow_limit=False, codes=(0,), exit_code=False
+    ):
         output, errors = self.attempt / "parse.out", self.attempt / "parse.err"
         process = None
         try:
@@ -111,20 +114,34 @@ class NativeReader:
                     if process.poll() is not None:
                         break
                     time.sleep(0.02)
-            if process.returncode:
+            if process.returncode not in codes:
                 raise RepositoryError(422, "REPOSITORY_PARSE_FAILED")
-            return output.read_bytes()
+            return process.returncode if exit_code else output.read_bytes()
         finally:
             if process is not None:
                 terminate(process)
             output.unlink(missing_ok=True)
             errors.unlink(missing_ok=True)
 
-    def plan(self, head, commit_limit):
+    def ancestor(self, base, head):
+        for value in (base, head):
+            sha_valid(value.encode("ascii"))
+        if self.command(["cat-file", "-e", base + "^{commit}"], codes=(0, 128), exit_code=True):
+            return False
+        return (
+            self.command(["merge-base", "--is-ancestor", base, head], codes=(0, 1), exit_code=True)
+            == 0
+        )
+
+    def plan(self, head, commit_limit, exclude=None):
         if head is None:
             return []
         sha_valid(head.encode("ascii"))
-        raw = self.command(["rev-list", "--timestamp", head, "--"], INDEX_LIMIT)
+        revisions = [head]
+        if exclude is not None:
+            sha_valid(exclude.encode("ascii"))
+            revisions.append("^" + exclude)
+        raw = self.command(["rev-list", "--timestamp", *revisions, "--"], INDEX_LIMIT)
         rows = []
         for line in raw.splitlines():
             timestamp, sha = line.split(b" ", 1)
@@ -313,7 +330,7 @@ class ParseExecutor:
             if source is None:
                 return False
             bare, head, commit_limit = source
-            attempt = self.storage.attempt(payload["repository_id"], token)
+            attempt = self.storage.attempt(payload["repository_id"], str(uuid4()))
             clone = CloneExecutor(
                 self.settings,
                 RepositoryService(self.settings, SimpleNamespace(engine=self.service.engine)),
@@ -350,7 +367,7 @@ class ParseExecutor:
                 time.monotonic() + self.settings.repository_parse_timeout_seconds,
                 clone.git,
             )
-            plan = reader.plan(head, commit_limit)
+            plan = self.service.plan(task_id, token, reader, head, commit_limit)
             plan_hash = hashlib.sha256(json.dumps(plan, separators=(",", ":")).encode()).hexdigest()
             total = len(plan)
             resume = self.service.prepare(task_id, token, plan_hash, total)

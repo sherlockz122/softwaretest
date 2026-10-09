@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from apps.api.auth import current_user
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
+from packages.repositories.sync import SyncService
 
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
 
@@ -19,6 +20,10 @@ class RepositoryBody(BaseModel):
 class ParseBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     commit_limit: int | None = Field(default=None, ge=1, le=10000000, strict=True)
+
+
+class SyncBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 def service(request):
@@ -88,3 +93,29 @@ def files(
     page_size: int = Query(default=20, ge=1, le=100),
 ):
     return parsing(request).files(str(repository_id), sha, page, page_size)
+
+
+@router.post("/{repository_id:uuid}/sync", status_code=202)
+def sync(
+    repository_id: UUID,
+    body: SyncBody,
+    request: Request,
+    user=Depends(current_user),
+    key: str = Header(alias="Idempotency-Key"),
+):
+    return SyncService(request.app.state.settings, request.app.state.connections).create(
+        user, str(repository_id), key, request.state.request_id
+    )
+
+
+@router.get("/{repository_id:uuid}/sync-windows")
+def sync_windows(
+    repository_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return SyncService(request.app.state.settings, request.app.state.connections).windows(
+        str(repository_id), page, page_size
+    )

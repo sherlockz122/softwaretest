@@ -17,6 +17,15 @@ const commits = useLatest((input, signal) =>
   ),
 );
 const parsing = ref(false);
+const syncing = ref(false);
+const syncFailure = ref(null);
+const syncPage = ref(1);
+const windows = useLatest((input, signal) =>
+  client.request(
+    `/repositories/${encodeURIComponent(input.id)}/sync-windows?page=${input.page}&page_size=10`,
+    { signal },
+  ),
+);
 const failure = ref(null);
 const commitLimit = ref("");
 const selected = ref(null);
@@ -31,6 +40,19 @@ function selectCommit(commit) {
   selected.value = commit;
   filePage.value = 1;
   files.load({ id: route.params.id, sha: commit.sha, page: filePage.value });
+}
+async function refresh() {
+  const id = route.params.id;
+  const queries = [
+    repo.load(id),
+    commits.load({ id, page: page.value }),
+    windows.load({ id, page: syncPage.value }),
+  ];
+  if (selected.value)
+    queries.push(
+      files.load({ id, sha: selected.value.sha, page: filePage.value }),
+    );
+  await Promise.all(queries);
 }
 watch(filePage, (value) => {
   if (selected.value)
@@ -48,6 +70,54 @@ const parseLabels = {
   failed: "解析失败",
   cancelled: "已取消",
 };
+const syncLabels = {
+  pending: "未同步",
+  queued: "同步排队中",
+  syncing: "同步中",
+  synced: "同步完成",
+  requires_review: "历史变化待复核",
+  failed: "同步失败",
+  cancelled: "同步已取消",
+};
+const relationLabels = {
+  pending: "等待新快照",
+  initial: "空历史后的首次提交",
+  unchanged: "HEAD 未变化",
+  fast_forward: "新增可达提交",
+  requires_review: "祖先关系或默认分支变化",
+};
+async function startSync() {
+  if (syncing.value) return;
+  const id = route.params.id;
+  const previous = repo.data.value.sync_window?.root_task_id;
+  const input = JSON.stringify([id, repo.data.value.head_sha, previous]);
+  syncing.value = true;
+  syncFailure.value = null;
+  try {
+    await client.request(`/repositories/${encodeURIComponent(id)}/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": keys.get("sync", input),
+      },
+      body: "{}",
+    });
+    keys.done("sync", input);
+  } catch (error) {
+    if (id === route.params.id) syncFailure.value = error;
+  } finally {
+    if (id === route.params.id) {
+      await repo.load(id);
+      if (
+        syncFailure.value?.code === "NETWORK_UNAVAILABLE" &&
+        repo.data.value?.sync_window?.root_task_id !== previous &&
+        repo.data.value?.sync_window
+      )
+        syncFailure.value = null;
+    }
+    syncing.value = false;
+  }
+}
 const contentLabels = {
   parsed: "已解析",
   binary: "二进制内容略过",
@@ -92,12 +162,29 @@ watch(
   () => {
     page.value = 1;
     failure.value = null;
+    syncFailure.value = null;
+    syncPage.value = 1;
     selected.value = null;
   },
 );
 watch(
-  () => [route.params.id, page.value, repo.data.value?.parse_window?.processed],
+  () => [
+    route.params.id,
+    page.value,
+    repo.data.value?.parse_window?.processed,
+    repo.data.value?.sync_window?.processed,
+  ],
   () => commits.load({ id: route.params.id, page: page.value }),
+  { immediate: true },
+);
+watch(
+  () => [
+    route.params.id,
+    syncPage.value,
+    repo.data.value?.sync_window?.root_task_id,
+    repo.data.value?.sync_window?.processed,
+  ],
+  () => windows.load({ id: route.params.id, page: syncPage.value }),
   { immediate: true },
 );
 const labels = {
@@ -128,12 +215,7 @@ onUnmounted(() => clearInterval(poll));
     <RouterLink to="/repositories">← 返回仓库目录</RouterLink>
     <div class="section-heading">
       <h1>仓库详情</h1>
-      <button
-        :disabled="repo.loading.value"
-        @click="repo.load(route.params.id)"
-      >
-        刷新详情
-      </button>
+      <button :disabled="repo.loading.value" @click="refresh">刷新详情</button>
     </div>
     <RequestError :error="repo.error.value" />
     <p v-if="repo.loading.value" role="status">正在读取仓库…</p>
@@ -200,6 +282,91 @@ onUnmounted(() => clearInterval(poll));
         Viewer 可查看解析结果；启动解析需要 Member 或 Admin。
       </p>
       <RequestError v-if="!repo.data.value.parse_window" :error="failure" />
+      <h2>增量同步</h2>
+      <p data-testid="sync-status">
+        {{ syncLabels[repo.data.value.sync_status] }}
+      </p>
+      <p
+        v-if="repo.data.value.history_coverage === 'recent_window'"
+        class="hint"
+      >
+        初次解析只选取最近 N
+        个提交；增量同步不会补齐此前历史，后续特征和数据集需检查覆盖度。
+      </p>
+      <button
+        v-if="
+          canParse &&
+          repo.data.value.parse_status === 'parsed' &&
+          ['pending', 'synced'].includes(repo.data.value.sync_status)
+        "
+        class="primary"
+        :disabled="syncing || active.has(repo.data.value.task.status)"
+        @click="startSync"
+      >
+        {{ syncing ? "提交中…" : "同步默认分支" }}
+      </button>
+      <p
+        v-if="repo.data.value.sync_status === 'requires_review'"
+        role="alert"
+        class="error"
+      >
+        默认分支或历史祖先关系发生变化，已暂停同步并保留旧
+        HEAD、提交和新快照。后续需制定复核与恢复方案。
+      </p>
+      <p
+        v-if="['failed', 'cancelled'].includes(repo.data.value.sync_status)"
+        class="hint"
+      >
+        此前同步进度已保留，请在当前任务中重试。
+      </p>
+      <p v-if="!canParse" class="hint">启动同步需要 Member 或 Admin。</p>
+      <RequestError :error="syncFailure" />
+      <RequestError
+        data-testid="sync-window-error"
+        :error="windows.error.value"
+      />
+      <ul
+        v-if="windows.data.value"
+        class="repository-list"
+        data-testid="sync-windows"
+      >
+        <li
+          v-for="window in windows.data.value.items"
+          :key="window.root_task_id"
+        >
+          <p>
+            {{ relationLabels[window.relation] }} · 已入库
+            {{ window.processed }} / {{ window.total ?? "待扫描" }} 个新提交
+          </p>
+          <p class="task-id">
+            {{ window.base_head_sha ?? "空历史" }} →
+            {{ window.head_sha ?? "待扫描或空历史" }}
+          </p>
+          <small
+            >{{ window.parser_version }} · {{ date(window.created_at) }}</small
+          >
+        </li>
+      </ul>
+      <div v-if="windows.data.value?.total" class="pagination">
+        <button
+          :disabled="syncPage <= 1 || windows.loading.value"
+          @click="syncPage--"
+        >
+          上一页同步
+        </button>
+        <span
+          >共 {{ windows.data.value.total }} 个同步窗口，第
+          {{ syncPage }} 页</span
+        >
+        <button
+          :disabled="
+            syncPage * 10 >= windows.data.value.total || windows.loading.value
+          "
+          @click="syncPage++"
+        >
+          下一页同步
+        </button>
+      </div>
       <p>
         <RouterLink :to="'/tasks/' + repo.data.value.task.id"
           >查看当前任务</RouterLink

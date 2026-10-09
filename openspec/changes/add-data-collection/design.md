@@ -95,4 +95,8 @@ URL 限公开 HTTPS、443、ASCII DNS 名或 IPv4，拒绝凭据/查询/片段/�
 
 初次解析通过独立POST /repositories/{id}/parse启动，A07仍只接受url；A11及其files子路由只读已提交批次。窗口固定克隆HEAD与可选最近N，排序committer time/SHA；一个仓库首期只有一个不可改写窗口，后续增量同步另做快照/祖先检查。0004增加作者、commit、file及root任务绑定checkpoint。每10提交的upsert/checkpoint同事务，成功与最终批次同事务，全部业务写入检查有效token/lease/latest/root。取消/资源失败保留批次，successor继续；不确定提交结果不删除数据。
 
+## 11. 第八阶段增量同步（2026-10-10）
+
+0005新增sync_window和repository独立sync_status/root。A10以{}请求，先完成初次解析；新目录完整安全clone、原HEAD祖先及默认分支检查、rev-list new ^base、复用每10提交事务。候选第一次绑定窗口后不改变，重试不再联网；最后批次才推进正式HEAD/存储引用。无变化0/0成功；强推/分支改变/历史消失以成功检查结果requires_review暂停并保留候选，不导入分叉，不删旧历史，没有自动重新基线。初次窗口唯一及历史sync窗口保留，最近N覆盖度不提升。资源预算是新clone/index峰值加解析512MiB及2GiB余量，D不足提前拒绝不转C。A09返回当前窗口/覆盖度，A10子资源分页查询历史窗口。未来Fix/SZZ/数据集需区分接受HEAD与部分批次并集，人工复核恢复/归档清理另有审计设计。复验见 [同步指导](../../../docs/development/增量同步与验收.md)。
+
 调整2.1实现方法为受监督原生Git遍历/读取 + PyDriller受限hunk行号解析，避免库遍历器自行发起不受deadline/输出约束的命令。邮箱规范化哈希入库、身份版本化；merge元数据保留/diff明确跳过，root/rename/delete/binary/编码/超限状态记录。完整固定参数、边界及未来覆盖度约束见 [解析指导](../../../docs/development/提交解析与验收.md)。该调整不减少解析验收场景，不引入Fix/SZZ或默认隐藏历史上限。

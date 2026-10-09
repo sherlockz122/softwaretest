@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前实现工程、认证、可靠任务、登录/任务页面、安全克隆（A07～A09）及第七阶段初次提交解析/checkpoint（A11与文件列表）。真实outbox/Worker分批导入作者、提交及文件变更，可取消/恢复，仓库详情区分已克隆与解析完成。增量同步、Fix、SZZ和模型待后续。框架 [当前规格](openspec/specs/application-foundation/spec.md) 已归档，采集change保持活动。见 [提交解析与验收](docs/development/提交解析与验收.md)、[第七阶段报告](docs/reports/2026-10-09-第七阶段提交解析与恢复报告.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
+当前实现工程、认证、可靠任务、登录/任务页面、安全克隆（A07～A09）、初次提交解析/checkpoint（A11与文件列表）及第八阶段增量同步（A10）。同步采用独立不可变快照，取消/故障恢复沿用同一窗口，最终批次才推进HEAD；强推或默认分支变化进入requires_review，保留旧数据。Fix、SZZ、模型和分叉复核恢复流程待后续。框架 [当前规格](openspec/specs/application-foundation/spec.md) 已归档，采集change保持活动。见 [增量同步与验收](docs/development/增量同步与验收.md)、[提交解析与验收](docs/development/提交解析与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 

@@ -8,6 +8,7 @@ from packages.repositories.clone import CloneExecutor
 from packages.repositories.parser import ParseExecutor
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
+from packages.repositories.sync import SyncExecutor, SyncService
 from packages.tasks.service import TaskService
 
 
@@ -25,7 +26,11 @@ def execute(task_id):
             return
         token, duration = claim
         if isinstance(duration, dict):
-            if "parser_version" in duration:
+            if "sync_version" in duration:
+                SyncExecutor(settings, SyncService(settings, connections)).run(
+                    task_id, token, duration
+                )
+            elif "parser_version" in duration:
                 ParseExecutor(settings, ParsingService(settings, connections)).run(
                     task_id, token, duration
                 )

@@ -302,13 +302,13 @@ Worker 按 `status=queued` 原子领取、设置随机 execution_token 与 lease
 
 ## 11 第六阶段仓库契约及第七阶段扩展（个人 wang）
 
-A07～A09已接入登录权限，第七阶段初次解析已实现；整个采集change仍待增量同步/Fix。A07要求Member/Admin、Idempotency-Key与{url}，202返回repository_id/task_id/status；同用户同键/规范URL重放不联网，同键异URL409 TASK_IDEMPOTENCY_CONFLICT，不同键/已有规范URL409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长/公开smart HTTP，重定向拒绝。网络检查在事务外，最终同事务创建repository/task/outbox/audit。
+A07～A09已接入登录权限，第七阶段初次解析已实现；整个采集change仍待Fix。A07要求Member/Admin、Idempotency-Key与{url}，202返回repository_id/task_id/status；同用户同键/规范URL重放不联网，同键异URL409 TASK_IDEMPOTENCY_CONFLICT，不同键/已有规范URL409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长/公开smart HTTP，重定向拒绝。网络检查在事务外，最终同事务创建repository/task/outbox/audit。
 
 A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}`（最大100），按created_at desc/id asc。A09返回仓库元数据、最新task、commits_imported和parse_status；第七阶段详情额外返回parse_window（HEAD/commit_limit/parser_version/processed/total/checkpoint_sha或null）。commits_imported仅完整解析窗口成功为true。不存在404 REPOSITORY_NOT_FOUND。所有已认证角色查看共享目录，不返回storage_key/命令输出。
 
 迁移0003创建repository基本字段；0004增加parse_status（pending/queued/parsing/parsed/failed/cancelled）和parse_root_task_id FK task。产品级raw url字段不创建；checkpoint_sha实际在parse_checkpoint中。降级前检查整条受影响路径非空及已建立解析窗口，MySQL隐式提交前即拒绝，保留认证/任务/采集数据。
 
-repository.clone仍表示bare克隆成功，A10与A12待实现。repository.parse计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
+repository.clone仍表示bare克隆成功，第八阶段A10已实现，A12待实现。repository.parse计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
 
 拒绝/失败码包括 REPOSITORY_UNSAFE_URL、UNSAFE_ADDRESS、REDIRECT_REJECTED、NOT_PUBLIC_GIT（422），DNS_UNAVAILABLE、NETWORK_UNAVAILABLE、STORAGE_UNAVAILABLE、STORAGE_UNSAFE、GIT_UNAVAILABLE（503），STORAGE_LOW（507），ALREADY_EXISTS（409），以及 Worker CLONE_FAILED、CLONE_TIMEOUT、SIZE_LIMIT、TRANSFER_LIMIT、OUTPUT_LIMIT、HEAD_UNAVAILABLE、INVALID_METADATA。上述缩写均带 REPOSITORY_ 前缀；响应始终带 request_id，错误不回显用户 URL、凭据或路径。
 
@@ -323,3 +323,14 @@ A11 `GET /repositories/{id}/commits` 返回稳定committer_time/SHA升序分页�
 0004固定DDL：author_identity UUID、identity_key+identity_version UNIQUE、name_alias<=256、email_hash NULL；git_commit唯一(repository_id,sha)，author/repository外键RESTRICT、双UTC时间/分钟偏移、message MEDIUMTEXT、parents JSON/计数、状态/版本，事件索引(repository_id,committer_time,sha)；file_change外键commit RESTRICT、唯一(commit_id,ordinal)、双路径MEDIUMTEXT/路径bytes哈希、blob SHA、类型、非负可空计数、binary标志、内容状态、受限diff/行号JSON/版本；parse_checkpoint root_task_id PK FK task、repository_id UNIQUE FK repository、固定HEAD/窗口/版本/plan_hash、processed/total/last_sha，约束0<=processed<=total、窗口>0。
 
 状态与资源策略详见 [解析指导](development/提交解析与验收.md)。稳定码还包括PARSE_TIMEOUT/PARSE_FAILED/PARSE_RESOURCE_LIMIT及PARSE_PLAN_CONFLICT/PARSE_VERSION_CONFLICT（均REPOSITORY_前缀），只返回安全摘要和request_id。成功分批写与checkpoint/终态原子，回执未知保留数据；强推/多快照同步下批交付，不能由初次解析冒称完成。
+
+
+## 13 第八阶段增量同步契约
+
+A10 POST `/repositories/{id}/sync`：Member/Admin、Idempotency-Key、严格空对象{}，先完成初次解析；202返回task_id/status。同用户/仓库/键重放；另键已有活动/失败/取消/待复核窗口409 REPOSITORY_SYNC_STATE_CONFLICT，失败/取消走A31同根重试。不接收URL/ref/路径/窗口重选。受理及候选不存在时预算2*repository_max_bytes+512MiB及2GiB余量。
+
+A09增加sync_status、sync_window及history_coverage；GET `/repositories/{id}/sync-windows`是A10只读子资源，Viewer，created_at desc/root_task_id asc，page/page_size最大100。窗口返回root_task_id、base_head_sha/head_sha/default_branch、relation、parser_version、processed/total/checkpoint_sha和created_at，不返回存储路径/token/邮箱。A11仍可读已提交批次并集，不代表已完成同步的HEAD。
+
+0005冻结DDL：repository.sync_status CHECK pending/queued/syncing/synced/requires_review/failed/cancelled，sync_root_task_id FK async_task RESTRICT；sync_window root_task_id PK FK task、repository_id FK RESTRICT、base/head SHA、两份存储引用/分支、非负size、relation CHECK pending/initial/unchanged/fast_forward/requires_review、parser_version/plan_hash/processed/total/last_sha、计数CHECK、repository/created/root索引。首次checkpoint UNIQUE不变，升迁保留现存数据；降级前整路径及已建窗口检查，在任何DDL前拒绝非空。
+
+repository.sync复用租约/取消/重试/outbox；克隆期processed单位字节，parsing后单位新提交。无变化0/0成功；强推/分支变化/历史消失task succeeded且result.disposition=requires_review，repository.sync_status=requires_review，保存候选但正式HEAD/数据不变；没有自动解除/重新基线。成功导入最后一批、checkpoint和HEAD/引用在同事务。SYNC_BASE_CONFLICT、SYNC_STATE_CONFLICT、PARSE_VERSION_CONFLICT均REPOSITORY_前缀；外网安全错误继续复用克隆契约。详见 [同步指导](development/增量同步与验收.md)。
