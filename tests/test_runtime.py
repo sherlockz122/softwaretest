@@ -88,38 +88,40 @@ def test_proxy_recovers_after_api_address_changes():
     assert network.startswith("defectguard-wang_")
     old_address = details["IPAddress"]
     image = docker("images", "-q", "redis")
-    blocker = "dg-stage3-dns-" + uuid4().hex
-    # Reserve only the former API address, forcing Docker to assign a new one.
+    blockers = []
+    # Some engines prohibit static addresses on an automatically allocated subnet.
+    # Dynamic blockers exercise the allocator without changing the project network.
     # Existing Redis image, no new pull, ports, mounts, application secrets or volumes.
-    docker("rm", "--stop", "--force", "api")
-    created = False
     try:
-        raw_docker(
-            "run",
-            "--pull",
-            "never",
-            "-d",
-            "--name",
-            blocker,
-            "--network",
-            network,
-            "--ip",
-            old_address,
-            image,
-            "sleep",
-            "300",
-        )
-        created = True
-        docker("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "api")
-        new_api_id = docker("ps", "-q", "api")
-        updated = json.loads(
-            raw_docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", new_api_id)
-        )
+        for _ in range(3):
+            docker("rm", "--stop", "--force", "api")
+            blocker = "dg-stage3-dns-" + uuid4().hex
+            raw_docker(
+                "run",
+                "--pull",
+                "never",
+                "-d",
+                "--name",
+                blocker,
+                "--network",
+                network,
+                image,
+                "sleep",
+                "300",
+            )
+            blockers.append(blocker)
+            docker("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "api")
+            new_api_id = docker("ps", "-q", "api")
+            updated = json.loads(
+                raw_docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", new_api_id)
+            )
+            if updated[network]["IPAddress"] != old_address:
+                break
         assert updated[network]["IPAddress"] != old_address
         assert docker("ps", "-q", "web") == web_id
         wait_ready()
     finally:
-        if created:
+        for blocker in blockers:
             raw_docker("rm", "-f", blocker)
         docker("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "api")
 
