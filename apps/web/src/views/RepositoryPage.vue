@@ -6,7 +6,9 @@ import { useLatest } from "../latest";
 import { active, operationKeys, date } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 import FixPanel from "../components/FixPanel.vue";
+import SZZPanel from "../components/SZZPanel.vue";
 const fixPanel = ref(null);
+const szzPanel = ref(null);
 const route = useRoute();
 const repo = useLatest((id, signal) =>
   client.request("/repositories/" + encodeURIComponent(id), { signal }),
@@ -56,6 +58,7 @@ async function refresh() {
     );
   await Promise.all(queries);
   await fixPanel.value?.refresh();
+  await szzPanel.value?.refresh();
 }
 watch(filePage, (value) => {
   if (selected.value)
@@ -389,6 +392,13 @@ onUnmounted(() => clearInterval(poll));
         :can-write="canParse"
         :busy="active.has(repo.data.value.task.status)"
         :reload="() => repo.load(route.params.id)"
+      />
+      <SZZPanel
+        ref="szzPanel"
+        :repo="repo.data.value"
+        :can-write="canParse"
+        :busy="active.has(repo.data.value.task.status)"
+        :reload="refresh"
       />
       <h2>提交记录</h2>
       <RequestError :error="commits.error.value" />

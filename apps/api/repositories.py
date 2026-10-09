@@ -2,16 +2,18 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from apps.api.auth import current_user
 from packages.mining.fix import FixService
 from packages.mining.fix_rules import RULE_VERSION
+from packages.mining.szz import SZZService
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
 from packages.repositories.sync import SyncService
 
 router = APIRouter(prefix="/api/v1/repositories", tags=["repositories"])
+szz_router = APIRouter(prefix="/api/v1/szz-runs", tags=["szz"])
 
 
 class RepositoryBody(BaseModel):
@@ -39,6 +41,66 @@ class FixReviewBody(BaseModel):
     status: Literal["confirmed", "rejected", "unreviewed"]
     expected_revision: int = Field(ge=0, strict=True)
     note: str = Field(min_length=1, max_length=300, pattern=r"\S")
+
+
+class SZZBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fix_run_id: UUID
+    algorithm_version: Literal["baseline-szz-v1"] = "baseline-szz-v1"
+    as_of: AwareDatetime | None = None
+
+
+def szzing(request):
+    return SZZService(request.app.state.settings, request.app.state.connections)
+
+
+@router.post("/{repository_id:uuid}/szz-runs", status_code=202)
+def start_szz(
+    repository_id: UUID,
+    body: SZZBody,
+    request: Request,
+    user=Depends(current_user),
+    key: str = Header(alias="Idempotency-Key"),
+):
+    policy = {
+        "fix_run_id": str(body.fix_run_id),
+        "algorithm_version": body.algorithm_version,
+        "as_of": body.as_of.isoformat() if body.as_of else None,
+    }
+    return szzing(request).create(user, str(repository_id), key, policy, request.state.request_id)
+
+
+@router.get("/{repository_id:uuid}/szz-runs")
+def szz_runs(
+    repository_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return szzing(request).runs(str(repository_id), page, page_size)
+
+
+@szz_router.get("/{run_id:uuid}/links")
+def szz_links(
+    run_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return szzing(request).links(str(run_id), page, page_size)
+
+
+@szz_router.get("/{run_id:uuid}/results")
+def szz_results(
+    run_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return szzing(request).results(str(run_id), page, page_size)
 
 
 def service(request):

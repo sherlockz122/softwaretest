@@ -4,6 +4,7 @@ from uuid import UUID
 
 from apps.worker.main import app, settings
 from packages.mining.fix import FixService
+from packages.mining.szz import SZZService
 from packages.platform.connections import Connections
 from packages.repositories.clone import CloneExecutor
 from packages.repositories.parser import ParseExecutor
@@ -27,7 +28,11 @@ def execute(task_id):
             return
         token, duration = claim
         if isinstance(duration, dict):
-            if "fix_version" in duration:
+            if "szz_version" in duration:
+                ParseExecutor(settings, SZZService(settings, connections)).run(
+                    task_id, token, duration
+                )
+            elif "fix_version" in duration:
                 ParseExecutor(settings, FixService(settings, connections)).run(
                     task_id, token, duration
                 )

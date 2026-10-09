@@ -1,10 +1,10 @@
 # Fix证据与验收
 
-2026-10-10第九阶段在个人wang实现US-04/A12。迁移head为`0006_fix_evidence`。Fix只生成版本化候选证据及人工复核记录，SZZ、缺陷标签、Kamei/训练仍待独立阶段；未发现证据不等于clean。
+2026-10-10第九阶段在个人wang实现US-04/A12，其迁移为`0006_fix_evidence`；当前第十阶段head为`0007_szz`。Fix生成版本化候选证据及人工复核记录，已接入独立[SZZ追溯](SZZ追溯与验收.md)；成熟标签/不可变数据集、Kamei与训练仍待后续。未发现证据不等于clean。
 
 ## 运行与接口
 
-先按[工程启动](工程启动与验收.md)启动MySQL/Redis、升级迁移，再启动完整服务。已解析的仓库详情提供“运行 Fix 识别”，Member/Admin可运行及复核，Viewer只读。与解析/同步/Fix活动任务互斥；失败/取消可以在当前任务重试，新分析保留旧轮记录。历史分叉requires_review时仅分析仍被接受的旧HEAD，不会解除同步暂停。
+先按[工程启动](工程启动与验收.md)启动MySQL/Redis、升级迁移，再启动完整服务。已解析的仓库详情提供“运行 Fix 识别”，Member/Admin可运行及复核，Viewer只读。与解析/同步/Fix/SZZ活动任务互斥；失败/取消可以在当前任务重试，新分析保留旧轮记录。历史分叉requires_review时仅分析仍被接受的旧HEAD，不会解除同步暂停。
 
 | A12关联操作 | 契约 |
 |---|---|
@@ -41,4 +41,4 @@ fix_run记录根任务、接受HEAD/私有快照引用、解析版本、history_
 
 受理、运行/批次复用512MiB预计增长加2GiB紧急余量；本批工程规划0.3～1GiB，数据/镜像峰值另计。可控新增在D，容量不足提前停止并告知，不转C，不自动prune旧数据。结果在`runtime/acceptance/stage9`脱敏索引，不保留HAR/trace/storageState、不上传Actions artifact，最后核对推送确切SHA的CI。
 
-下一轮独立baseline SZZ change：冻结Fix轮次、接受HEAD/覆盖度、复核revision和Issue observed_at，定义父策略、内容排除、行级证据、Unknown及成熟标签。事后Issue和人工复核不能泄漏到此前特征/候选预测；外部观测失败和20引用上限不能被用来宣称无缺陷。requires_review恢复/重新基线、受控快照归档仍需独立审计设计。扩大规模先探测CPU/内存/时间和空间峰值。
+第十阶段独立baseline SZZ已冻结Fix轮次、接受HEAD/覆盖度、复核revision和Issue observed_at，并实现父策略、内容排除、行级候选证据与Unknown，详见[SZZ指导](SZZ追溯与验收.md)。下一轮Kamei14/不可变时间数据集须补齐成熟度和观察窗口。事后Issue和人工复核不能泄漏到此前特征/候选预测；外部观测失败和20引用上限不能被用来宣称无缺陷。requires_review恢复/重新基线、受控快照归档仍需独立审计设计。扩大规模先探测CPU/内存/时间和空间峰值。

@@ -49,6 +49,7 @@ class SyncService(ParsingService):
                     or repo.sync_status not in {"pending", "synced"}
                     or not repo.storage_key
                     or repo.fix_status in {"queued", "detecting"}
+                    or repo.szz_status in {"queued", "tracing"}
                 ):
                     raise RepositoryError(409, "REPOSITORY_SYNC_STATE_CONFLICT")
                 initial = db.get(ParseCheckpoint, repo.parse_root_task_id)

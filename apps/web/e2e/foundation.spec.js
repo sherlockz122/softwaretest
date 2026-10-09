@@ -523,6 +523,44 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await expect(page.getByTestId("fix-assessment").first()).toContainText(
     "人工确认",
   );
+  let szzTask;
+  let szzHeaders;
+  let szzBody;
+  await page.route("**/api/v1/repositories/*/szz-runs", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    szzHeaders = route.request().headers();
+    szzBody = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    szzTask = (await response.json()).task_id;
+    await route.abort("failed");
+  });
+  await page
+    .getByRole("button", { name: "运行 SZZ 追溯", exact: true })
+    .click();
+  await expect.poll(() => szzTask).toBeTruthy();
+  const szzReplay = await page.request.post(
+    `/api/v1/repositories/${accepted}/szz-runs`,
+    { headers: szzHeaders, data: szzBody },
+  );
+  expect(szzReplay.status()).toBe(202);
+  expect((await szzReplay.json()).task_id).toBe(szzTask);
+  await expect(page.getByTestId("szz-status")).toHaveText("追溯完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("szz-result")).toHaveCount(3);
+  await expect(page.getByTestId("szz-panel")).toContainText(
+    "不能据此生成 clean 标签",
+  );
+  await shot(page, info, "repository-szz-complete");
+  await page.unroute("**/api/v1/repositories/*/szz-runs");
+  await page
+    .getByRole("button", { name: "运行 SZZ 追溯", exact: true })
+    .click();
+  await expect(page.getByTestId("szz-status")).toHaveText("追溯完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("szz-runs").locator("li")).toHaveCount(2);
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "登录", exact: true }),
@@ -539,6 +577,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await expect(page.getByTestId("parse-status")).toHaveText("解析完成");
   await expect(page.getByTestId("sync-status")).toHaveText("同步完成");
   await expect(page.getByTestId("fix-status")).toHaveText("识别完成");
+  await expect(page.getByTestId("szz-status")).toHaveText("追溯完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({
@@ -585,6 +624,10 @@ test("repository Viewer controls and mobile detail remain readable", async ({
     page.getByRole("button", { name: "同步默认分支", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByTestId("fix-panel")).toBeVisible();
+  await expect(page.getByTestId("szz-panel")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "运行 SZZ 追溯", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "运行 Fix 识别", exact: true }),
   ).toHaveCount(0);
@@ -673,4 +716,28 @@ test("Fix query failure can recover through repository refresh", async ({
   await expect(page.getByTestId("fix-panel").getByRole("alert")).toHaveCount(0);
   await expect(page.getByTestId("fix-assessment")).toHaveCount(3);
   await shot(page, info, "fix-query-recovered");
+});
+
+test("SZZ query failure recovers frozen results", async ({ page }, info) => {
+  await login(page);
+  let available = false;
+  await page.route("**/api/v1/repositories/*/szz-runs?*", (route) =>
+    available ? route.continue() : route.abort("failed"),
+  );
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await page
+    .getByRole("link", {
+      name: "https://github.com/octocat/hello-world.git",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByTestId("szz-panel").getByRole("alert")).toContainText(
+    "连接失败",
+  );
+  available = true;
+  await page.getByRole("button", { name: "刷新详情", exact: true }).click();
+  await expect(page.getByTestId("szz-runs").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("szz-panel").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByTestId("szz-result")).toHaveCount(3);
+  await shot(page, info, "szz-query-recovered");
 });

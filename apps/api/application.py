@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException
 
 from apps.api.auth import router
 from apps.api.repositories import router as repositories_router
+from apps.api.repositories import szz_router
 from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
@@ -123,6 +124,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     app.include_router(router)
     app.include_router(tasks_router)
     app.include_router(repositories_router)
+    app.include_router(szz_router)
     if settings.environment != "production":
         app.include_router(diagnostic_router)
 

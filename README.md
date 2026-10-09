@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前实现工程、认证、可靠任务、仓库安全克隆（A07～A09）、初次提交解析（A11）、增量同步（A10）及第九阶段Fix证据（A12）。Fix绑定接受快照/规则，保留Issue观测和每轮结果，支持异步恢复及可审计人工复核；普通Issue编号不自动当Fix，未发现证据不等于clean。同步强推/分支变化仍暂停待复核。SZZ、模型、分叉复核恢复及受控归档待后续；框架 [当前规格](openspec/specs/application-foundation/spec.md) 已归档，采集change保持活动。见 [Fix证据与验收](docs/development/Fix证据与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
+当前实现工程、认证、可靠任务、仓库安全克隆（A07～A09）、提交解析（A11）、增量同步（A10）、Fix证据/复核（A12）及第十阶段baseline SZZ（A13/A14）。SZZ冻结Fix轮次/复核版本、接受快照与观测截止，提供可恢复行级候选证据和可用时间，不以无证据生成clean；历史分叉仍暂停待复核。Kamei/数据集/模型、分叉决策和受控归档待后续。框架已归档，采集与独立SZZ change保持活动；仅wang。见 [SZZ追溯与验收](docs/development/SZZ追溯与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 

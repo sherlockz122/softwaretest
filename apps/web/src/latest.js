@@ -28,5 +28,12 @@ export function useLatest(loader) {
     version += 1;
     controller?.abort();
   });
-  return { data, loading, error, load };
+  function clear() {
+    version += 1;
+    controller?.abort();
+    data.value = error.value = null;
+    loading.value = false;
+    lastInput = Symbol("cleared");
+  }
+  return { data, loading, error, load, clear };
 }

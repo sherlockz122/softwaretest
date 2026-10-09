@@ -15,7 +15,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0006_fix_evidence"
+SCHEMA_HEAD = "0007_szz"
 
 
 class Base(DeclarativeBase):
@@ -203,6 +203,10 @@ class Repository(Stamp, Base):
             "fix_status IN ('pending','queued','detecting','detected','failed','cancelled')",
             name="ck_repository_fix_status",
         ),
+        CheckConstraint(
+            "szz_status IN ('pending','queued','tracing','traced','failed','cancelled')",
+            name="ck_repository_szz_status",
+        ),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
     id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
@@ -234,6 +238,12 @@ class Repository(Stamp, Base):
         VARCHAR(24), default="pending", server_default="pending"
     )
     fix_root_task_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    szz_status: Mapped[str] = mapped_column(
+        VARCHAR(24), default="pending", server_default="pending"
+    )
+    szz_root_task_id: Mapped[str | None] = mapped_column(
         uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
     )
     updated_at: Mapped[datetime] = mapped_column(
@@ -468,3 +478,70 @@ class IssueObservation(Stamp, Base):
     )
     number: Mapped[int] = mapped_column(BIGINT(), primary_key=True)
     snapshot: Mapped[dict] = mapped_column(JSON())
+
+
+class SZZRun(Stamp, Base):
+    __tablename__ = "szz_run"
+    __table_args__ = (
+        CheckConstraint(
+            "processed >= 0 AND (total IS NULL OR total >= processed)", name="ck_szz_counts"
+        ),
+        Index("ix_szz_repository", "repository_id", "created_at", "root_task_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    fix_root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("fix_run.root_task_id", ondelete="RESTRICT")
+    )
+    head_sha: Mapped[str | None] = mapped_column(hash_column())
+    storage_key: Mapped[str] = mapped_column(VARCHAR(192))
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+    history_coverage: Mapped[str] = mapped_column(VARCHAR(24))
+    algorithm_version: Mapped[str] = mapped_column(VARCHAR(64))
+    algorithm_hash: Mapped[str] = mapped_column(hash_column())
+    label_version: Mapped[str] = mapped_column(hash_column())
+    source_digest: Mapped[str] = mapped_column(hash_column())
+    as_of: Mapped[datetime] = mapped_column(DATETIME(fsp=6))
+    git_version: Mapped[str | None] = mapped_column(VARCHAR(64))
+    plan_hash: Mapped[str | None] = mapped_column(hash_column())
+    total: Mapped[int | None] = mapped_column(BIGINT())
+    processed: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    last_sha: Mapped[str | None] = mapped_column(hash_column())
+
+
+class SZZItem(Stamp, Base):
+    __tablename__ = "szz_item"
+    __table_args__ = (
+        UniqueConstraint("root_task_id", "sha", name="uq_szz_item"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("szz_run.root_task_id", ondelete="RESTRICT")
+    )
+    assessment_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("fix_assessment.id", ondelete="RESTRICT")
+    )
+    sha: Mapped[str] = mapped_column(hash_column())
+    input_json: Mapped[dict] = mapped_column(JSON())
+    result_json: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+
+
+class SZZLink(Stamp, Base):
+    __tablename__ = "szz_link"
+    __table_args__ = (
+        UniqueConstraint("item_id", "ordinal", name="uq_szz_link"),
+        CheckConstraint("ordinal >= 0", name="ck_szz_link_ordinal"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    item_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("szz_item.id", ondelete="RESTRICT")
+    )
+    ordinal: Mapped[int] = mapped_column(INTEGER())
+    evidence: Mapped[dict] = mapped_column(JSON())

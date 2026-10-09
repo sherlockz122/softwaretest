@@ -61,3 +61,6 @@
 - [第八阶段报告](reports/2026-10-10-第八阶段增量同步与恢复报告.md)
 - [Fix证据与验收](development/Fix证据与验收.md)
 - [第九阶段报告](reports/2026-10-10-第九阶段Fix证据与复核报告.md)
+
+- [SZZ追溯与验收](development/SZZ追溯与验收.md)
+- [第十阶段SZZ追溯与恢复报告](reports/2026-10-10-第十阶段SZZ追溯与恢复报告.md)

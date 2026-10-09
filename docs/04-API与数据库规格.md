@@ -340,3 +340,7 @@ A09增加sync_status、sync_window及history_coverage；GET `/repositories/{id}/
 0005冻结DDL：repository.sync_status CHECK pending/queued/syncing/synced/requires_review/failed/cancelled，sync_root_task_id FK async_task RESTRICT；sync_window root_task_id PK FK task、repository_id FK RESTRICT、base/head SHA、两份存储引用/分支、非负size、relation CHECK pending/initial/unchanged/fast_forward/requires_review、parser_version/plan_hash/processed/total/last_sha、计数CHECK、repository/created/root索引。首次checkpoint UNIQUE不变，升迁保留现存数据；降级前整路径及已建窗口检查，在任何DDL前拒绝非空。
 
 repository.sync复用租约/取消/重试/outbox；克隆期processed单位字节，parsing后单位新提交。无变化0/0成功；强推/分支变化/历史消失task succeeded且result.disposition=requires_review，repository.sync_status=requires_review，保存候选但正式HEAD/数据不变；没有自动解除/重新基线。成功导入最后一批、checkpoint和HEAD/引用在同事务。SYNC_BASE_CONFLICT、SYNC_STATE_CONFLICT、PARSE_VERSION_CONFLICT均REPOSITORY_前缀；外网安全错误继续复用克隆契约。详见 [同步指导](development/增量同步与验收.md)。
+
+## 第十阶段A13/A14实际扩展
+
+A13要求fix_run_id，algorithm_version固定baseline-szz-v1，as_of可null或带时区UTC截止且未来拒绝；202/幂等/Member+。A14分页行证据，另有仓库szz-runs历史及/szz-runs/{id}/results提交状态；均认证只读/page_size最大100。0007增加szz_run固定Fix/HEAD/私有快照/解析/算法/Git/覆盖/cutoff/输入及标签摘要，szz_item冻结assessment/review输入与批次结果，szz_link按(item,ordinal)唯一保存行证据JSON；repository.szz_status/root/latest随任务变化。规划ER图中的blamed_commit引用以SHA证据保存，有限历史来源无本地commit行时必须保留Unknown，不能伪造FK。完整契约见 [SZZ指导](development/SZZ追溯与验收.md) 及生成OpenAPI。

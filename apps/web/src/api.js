@@ -1,6 +1,11 @@
 import { reactive } from "vue";
 
 const messages = {
+  SZZ_STATE_CONFLICT: "请完成当前 Fix 识别，并等待仓库活动任务结束。",
+  SZZ_SOURCE_CONFLICT: "Fix 轮次与接受快照不一致，请选择当前可用轮次。",
+  SZZ_VERSION_CONFLICT: "追溯策略、Git 或接受快照发生变化，请检查本轮记录。",
+  SZZ_CUTOFF_FUTURE: "观察截止时间不能晚于当前时间。",
+  SZZ_RUN_NOT_FOUND: "此轮 SZZ 不存在，请刷新轮次列表。",
   FIX_STATE_CONFLICT: "请先完成解析，并等待当前任务结束后再运行 Fix 识别。",
   FIX_VERSION_CONFLICT: "分析规则或基线发生变化，请检查本轮记录。",
   FIX_PLAN_CONFLICT: "分析计划与已保存数据不一致，已停止写入。",

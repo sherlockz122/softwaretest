@@ -395,6 +395,8 @@ class ParseExecutor:
                 return self.service.batch(task_id, token, processed, [], plan_hash, complete=True)
             return True
         except ExecutionStopped:
+            # Finalize a requested cancellation outside the interrupted record transaction.
+            self.service.heartbeat(task_id, token)
             return False
         except RepositoryError as error:
             RepositoryService(self.settings, SimpleNamespace(engine=self.service.engine)).fail(
