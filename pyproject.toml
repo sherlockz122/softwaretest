@@ -16,6 +16,7 @@ dependencies = [
   "argon2-cffi>=25,<26",
   "pyjwt>=2.10,<3",
   "dnspython>=2.6,<3",
+  "pydriller>=2.9,<3",
 ]
 
 [dependency-groups]

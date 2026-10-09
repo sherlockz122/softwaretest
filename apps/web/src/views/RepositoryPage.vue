@@ -1,13 +1,104 @@
 <script setup>
-import { onUnmounted, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { active } from "../task-tools";
+import { active, operationKeys, date } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const repo = useLatest((id, signal) =>
   client.request("/repositories/" + encodeURIComponent(id), { signal }),
+);
+const page = ref(1);
+const commits = useLatest((input, signal) =>
+  client.request(
+    `/repositories/${encodeURIComponent(input.id)}/commits?page=${input.page}&page_size=10`,
+    { signal },
+  ),
+);
+const parsing = ref(false);
+const failure = ref(null);
+const commitLimit = ref("");
+const selected = ref(null);
+const filePage = ref(1);
+const files = useLatest((input, signal) =>
+  client.request(
+    `/repositories/${encodeURIComponent(input.id)}/commits/${input.sha}/files?page=${input.page}&page_size=20`,
+    { signal },
+  ),
+);
+function selectCommit(commit) {
+  selected.value = commit;
+  filePage.value = 1;
+  files.load({ id: route.params.id, sha: commit.sha, page: filePage.value });
+}
+watch(filePage, (value) => {
+  if (selected.value)
+    files.load({ id: route.params.id, sha: selected.value.sha, page: value });
+});
+const keys = operationKeys();
+const canParse = computed(() =>
+  ["Member", "Admin"].includes(client.state.user?.role),
+);
+const parseLabels = {
+  pending: "未开始",
+  queued: "排队中",
+  parsing: "解析中",
+  parsed: "解析完成",
+  failed: "解析失败",
+  cancelled: "已取消",
+};
+const contentLabels = {
+  parsed: "已解析",
+  binary: "二进制内容略过",
+  blob_limit: "文件超过内容上限",
+  diff_limit: "diff 超过保留上限",
+  commit_diff_limit: "提交超过内容预算",
+  encoding: "编码不兼容",
+  submodule: "子模块内容略过",
+  ambiguous_patch: "跨文件 patch 略过",
+  merge_skipped: "合并 diff 略过",
+  message_encoding: "消息编码异常",
+};
+async function startParse() {
+  if (parsing.value) return;
+  parsing.value = true;
+  failure.value = null;
+  const id = route.params.id;
+  const limit = commitLimit.value === "" ? null : Number(commitLimit.value);
+  const input = JSON.stringify([id, limit]);
+  try {
+    await client.request(`/repositories/${encodeURIComponent(id)}/parse`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": keys.get("parse", input),
+      },
+      body: JSON.stringify({ commit_limit: limit }),
+    });
+    keys.done("parse", input);
+    if (id === route.params.id) await repo.load(id);
+  } catch (error) {
+    if (id === route.params.id) failure.value = error;
+  } finally {
+    // A lost POST response can still have created a task. Refresh the repository
+    // so polling follows its current task instead of the completed clone.
+    if (id === route.params.id) await repo.load(id);
+    parsing.value = false;
+  }
+}
+watch(
+  () => route.params.id,
+  () => {
+    page.value = 1;
+    failure.value = null;
+    selected.value = null;
+  },
+);
+watch(
+  () => [route.params.id, page.value, repo.data.value?.parse_window?.processed],
+  () => commits.load({ id: route.params.id, page: page.value }),
+  { immediate: true },
 );
 const labels = {
   queued: "排队中",
@@ -64,10 +155,54 @@ onUnmounted(() => clearInterval(poll));
         <dt>仓库大小</dt>
         <dd>{{ (repo.data.value.size_bytes / 1024 / 1024).toFixed(2) }} MiB</dd>
       </dl>
-      <p>克隆阶段保存 Git 数据；当前尚未导入提交和文件变更记录。</p>
+      <p v-if="repo.data.value.parse_status === 'pending'">
+        克隆阶段保存 Git 数据；当前尚未导入提交和文件变更记录。
+      </p>
+      <p data-testid="parse-status">
+        {{ parseLabels[repo.data.value.parse_status] }}
+      </p>
+      <p v-if="repo.data.value.parse_window">
+        已入库 {{ repo.data.value.parse_window.processed }} /
+        {{ repo.data.value.parse_window.total ?? "待扫描" }} 个提交；
+        {{
+          repo.data.value.parse_window.commit_limit
+            ? `最近 ${repo.data.value.parse_window.commit_limit} 个提交`
+            : "全部可达历史"
+        }}。
+        {{ repo.data.value.parse_window.parser_version }}
+      </p>
+      <form
+        v-if="
+          canParse &&
+          repo.data.value.status === 'cloned' &&
+          repo.data.value.parse_status === 'pending'
+        "
+        class="create-task"
+        @submit.prevent="startParse"
+      >
+        <div>
+          <label for="commit-limit">提交窗口（留空为全部）</label
+          ><input
+            id="commit-limit"
+            v-model="commitLimit"
+            type="number"
+            min="1"
+            max="10000000"
+            step="1"
+            :disabled="parsing"
+          />
+        </div>
+        <button class="primary" :disabled="parsing">
+          {{ parsing ? "提交中…" : "开始解析提交" }}
+        </button>
+      </form>
+      <p v-if="!canParse" class="hint">
+        Viewer 可查看解析结果；启动解析需要 Member 或 Admin。
+      </p>
+      <RequestError v-if="!repo.data.value.parse_window" :error="failure" />
       <p>
         <RouterLink :to="'/tasks/' + repo.data.value.task.id"
-          >查看克隆任务</RouterLink
+          >查看当前任务</RouterLink
         >，可查看进度、取消或重试。
       </p>
       <p v-if="repo.data.value.task.health === 'stale'" role="status">
@@ -77,6 +212,100 @@ onUnmounted(() => clearInterval(poll));
         <p>{{ repo.data.value.task.error.message }}</p>
         <small>错误编号：{{ repo.data.value.task.error.code }}</small>
         <small>请求编号：{{ repo.data.value.task.error.request_id }}</small>
+      </div>
+      <h2>提交记录</h2>
+      <RequestError :error="commits.error.value" />
+      <div
+        v-if="commits.data.value && !commits.error.value"
+        data-testid="commit-list"
+      >
+        <p>
+          共
+          {{ commits.data.value.total }}
+          个已入库提交。解析运行或中断时，这里显示已成功提交的批次。
+        </p>
+        <ul class="repository-list">
+          <li v-for="commit in commits.data.value.items" :key="commit.id">
+            <code class="task-id">{{ commit.sha }}</code>
+            <p>
+              {{ commit.message || "（空提交消息）"
+              }}{{ commit.message_truncated ? "…" : "" }}
+            </p>
+            <small
+              >{{ commit.author.name_alias || "未命名作者" }} ·
+              {{ date(commit.committer_time) }} · {{ commit.file_count }} 个文件
+              · {{ commit.parent_count }} 个父提交 ·
+              {{
+                contentLabels[commit.parse_status] || commit.parse_status
+              }}</small
+            >
+            <button @click="selectCommit(commit)">查看文件变更</button>
+          </li>
+        </ul>
+        <div class="pagination">
+          <button
+            :disabled="page <= 1 || commits.loading.value"
+            @click="page--"
+          >
+            上一页
+          </button>
+          <span>第 {{ page }} 页</span>
+          <button
+            :disabled="
+              page * 10 >= commits.data.value.total || commits.loading.value
+            "
+            @click="page++"
+          >
+            下一页
+          </button>
+        </div>
+        <section v-if="selected">
+          <h3>文件变更</h3>
+          <p class="task-id">{{ selected.sha }}</p>
+          <p v-if="selected.parse_status === 'merge_skipped'">
+            合并提交保留父提交关系；当前策略跳过其 diff。
+          </p>
+          <RequestError :error="files.error.value" />
+          <ul
+            v-if="files.data.value && !files.error.value"
+            class="repository-list"
+            data-testid="file-list"
+          >
+            <li v-for="file in files.data.value.items" :key="file.ordinal">
+              <p class="task-id">
+                {{ file.old_path ?? "（新增）" }} →
+                {{ file.new_path ?? "（删除）" }}
+              </p>
+              <small
+                >{{ file.change_type }} · 新增 {{ file.insertions ?? "—" }} /
+                删除 {{ file.deletions ?? "—" }} · 原 LOC
+                {{ file.old_loc ?? "—" }} ·
+                {{
+                  contentLabels[file.content_status] || file.content_status
+                }}</small
+              >
+            </li>
+          </ul>
+          <div v-if="files.data.value" class="pagination">
+            <button
+              :disabled="filePage <= 1 || files.loading.value"
+              @click="filePage--"
+            >
+              上一页文件</button
+            ><span
+              >共 {{ files.data.value.total }} 个文件，第
+              {{ filePage }} 页</span
+            >
+            <button
+              :disabled="
+                filePage * 20 >= files.data.value.total || files.loading.value
+              "
+              @click="filePage++"
+            >
+              下一页文件
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   </section>

@@ -81,7 +81,7 @@
 }
 ```
 
-第六阶段仅接受 `url`，未知字段（包括尚未实现的 `commit_limit`）返回 422。URL 必须先通过 SSRF、TLS 和 smart HTTP 可访问性校验。提交窗口将在解析阶段另行实现，不对当前克隆任务传入无效参数。
+当前A07保持url-only，未知字段（包括commit_limit）返回422；URL先通过SSRF/TLS/smart HTTP。第七阶段窗口在独立parse请求启用，见第12节，不给克隆任务传无效参数。
 
 ### 4.2 创建数据集
 
@@ -300,16 +300,26 @@ Worker 按 `status=queued` 原子领取、设置随机 execution_token 与 lease
 协调器确认 running lease 过期后写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor；cancel_requested 的过期执行收敛为 cancelled，不自动重试。自动 successor 当前只针对 TASK_LEASE_EXPIRED，投递/排队超限保留明确失败，用户可手动重试。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。
 
 
-## 9 第六阶段实际仓库契约（个人 wang）
+## 11 第六阶段仓库契约及第七阶段扩展（个人 wang）
 
-A07～A09 已接入登录权限与 Repository API，整个采集 change 仍待提交解析和 Fix 证据。A07 要求 Member/Admin、Idempotency-Key（1～128 可打印 ASCII）与 `{url}`，成功 202 `{repository_id,task_id,status}`。同用户同键/规范 URL 重放，不再联网；同键异 URL 返回 409 TASK_IDEMPOTENCY_CONFLICT；不同键/已存在规范 URL 返回 409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长及公开 smart HTTP，重定向一律拒绝。网络检查在数据库事务外，最终同事务创建 repository/task/outbox/audit。
+A07～A09已接入登录权限，第七阶段初次解析已实现；整个采集change仍待增量同步/Fix。A07要求Member/Admin、Idempotency-Key与{url}，202返回repository_id/task_id/status；同用户同键/规范URL重放不联网，同键异URL409 TASK_IDEMPOTENCY_CONFLICT，不同键/已有规范URL409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长/公开smart HTTP，重定向拒绝。网络检查在事务外，最终同事务创建repository/task/outbox/audit。
 
-A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}`（最大100），按 created_at desc/id asc。A09 返回单条对象：`{id,url,status,default_branch,head_sha,size_bytes,owner_id,created_at,task,commits_imported:false}`。task 复用 A29 的公开字段，指向最新 successor；不存在404 REPOSITORY_NOT_FOUND。所有已认证角色可查看共享目录，不返回本机路径、storage_key 或原始 Git 输出。
+A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}`（最大100），按created_at desc/id asc。A09返回仓库元数据、最新task、commits_imported和parse_status；第七阶段详情额外返回parse_window（HEAD/commit_limit/parser_version/processed/total/checkpoint_sha或null）。commits_imported仅完整解析窗口成功为true。不存在404 REPOSITORY_NOT_FOUND。所有已认证角色查看共享目录，不返回storage_key/命令输出。
 
-迁移 `0003_repositories` 新建 repository：UUID 主键；owner_id FK user RESTRICT；canonical_url VARCHAR(1024) ascii_bin UNIQUE；latest_task_id FK async_task RESTRICT；status CHECK queued/cloning/cloned/failed/cancelled；default_branch VARCHAR(255) NULL；head_sha CHAR(64) NULL；size_bytes BIGINT>=0；storage_key VARCHAR(192) NULL；created_at/updated_at UTC DATETIME(6)；created_at/id 索引。上文产品级 repository 表中的 raw url 和 checkpoint_sha 本批未创建；作者/提交/文件表尚待下一阶段。降级到 base 或较早版本在首条 DDL 前检查整条受影响路径，非空拒绝，保留认证/任务数据。
+迁移0003创建repository基本字段；0004增加parse_status（pending/queued/parsing/parsed/failed/cancelled）和parse_root_task_id FK task。产品级raw url字段不创建；checkpoint_sha实际在parse_checkpoint中。降级前检查整条受影响路径非空及已建立解析窗口，MySQL隐式提交前即拒绝，保留认证/任务/采集数据。
 
-任务类型 repository.clone：payload 保存 repository_id/规范 URL，total=null、processed 为当前 bare 字节数，最终100%；成功结果为 `{repository_id,default_branch,head_sha,size_bytes}`。成功只代表克隆，不代表提交解析完成。A10～A12 尚未实现。取消/重试遵循既有归属权限和幂等规则。
+repository.clone仍表示bare克隆成功，A10与A12待实现。repository.parse计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
 
 拒绝/失败码包括 REPOSITORY_UNSAFE_URL、UNSAFE_ADDRESS、REDIRECT_REJECTED、NOT_PUBLIC_GIT（422），DNS_UNAVAILABLE、NETWORK_UNAVAILABLE、STORAGE_UNAVAILABLE、STORAGE_UNSAFE、GIT_UNAVAILABLE（503），STORAGE_LOW（507），ALREADY_EXISTS（409），以及 Worker CLONE_FAILED、CLONE_TIMEOUT、SIZE_LIMIT、TRANSFER_LIMIT、OUTPUT_LIMIT、HEAD_UNAVAILABLE、INVALID_METADATA。上述缩写均带 REPOSITORY_ 前缀；响应始终带 request_id，错误不回显用户 URL、凭据或路径。
 
 详细启动、安全边界及排障见 [安全仓库克隆](development/安全仓库克隆与验收.md)。
+
+## 12 第七阶段解析契约
+
+`POST /repositories/{id}/parse`（A09关联操作）要求Member/Admin、Idempotency-Key与body `{commit_limit:null}`或正整数（最多10000000），未知字段/布尔/字符串拒绝。null为HEAD全部可达历史，N为时间/SHA排序后最近N；成功202 `{task_id,status}`。同用户/仓库/键重放，不同载荷409 TASK_IDEMPOTENCY_CONFLICT。仓库未cloned、已建立窗口而非原键重放返回409 REPOSITORY_PARSE_STATE_CONFLICT；另键不能静默重算，使用当前失败/取消任务retry。受理/每批次需要512MiB增长预算+2GiB余量。
+
+A11 `GET /repositories/{id}/commits` 返回稳定committer_time/SHA升序分页：id、sha、author{id,name_alias}、UTC双时间、message（列表最多4096字符及truncated标记）、parents/parent_count、parse_status/parser_version、file_count。数据库保留完整受限消息。`GET /repositories/{id}/commits/{sha}/files`为A11只读子资源，按ordinal稳定分页返回双路径、change_type、LA/LD/old_loc、is_binary/content_status/parser_version；不存在404 REPOSITORY_COMMIT_NOT_FOUND。普通查询不导出邮箱或大patch。全部沿用page>=1/page_size<=100及真实Viewer读权限。
+
+0004固定DDL：author_identity UUID、identity_key+identity_version UNIQUE、name_alias<=256、email_hash NULL；git_commit唯一(repository_id,sha)，author/repository外键RESTRICT、双UTC时间/分钟偏移、message MEDIUMTEXT、parents JSON/计数、状态/版本，事件索引(repository_id,committer_time,sha)；file_change外键commit RESTRICT、唯一(commit_id,ordinal)、双路径MEDIUMTEXT/路径bytes哈希、blob SHA、类型、非负可空计数、binary标志、内容状态、受限diff/行号JSON/版本；parse_checkpoint root_task_id PK FK task、repository_id UNIQUE FK repository、固定HEAD/窗口/版本/plan_hash、processed/total/last_sha，约束0<=processed<=total、窗口>0。
+
+状态与资源策略详见 [解析指导](development/提交解析与验收.md)。稳定码还包括PARSE_TIMEOUT/PARSE_FAILED/PARSE_RESOURCE_LIMIT及PARSE_PLAN_CONFLICT/PARSE_VERSION_CONFLICT（均REPOSITORY_前缀），只返回安全摘要和request_id。成功分批写与checkpoint/终态原子，回执未知保留数据；强推/多快照同步下批交付，不能由初次解析冒称完成。

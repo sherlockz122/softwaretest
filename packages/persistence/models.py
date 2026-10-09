@@ -10,11 +10,12 @@ from sqlalchemy.dialects.mysql import (
     DECIMAL,
     INTEGER,
     JSON,
+    MEDIUMTEXT,
     VARCHAR,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0003_repositories"
+SCHEMA_HEAD = "0004_commit_parsing"
 
 
 class Base(DeclarativeBase):
@@ -188,6 +189,10 @@ class Repository(Stamp, Base):
             name="ck_repository_status",
         ),
         CheckConstraint("size_bytes >= 0", name="ck_repository_size"),
+        CheckConstraint(
+            "parse_status IN ('pending','queued','parsing','parsed','failed','cancelled')",
+            name="ck_repository_parse_status",
+        ),
         Index("ix_repository_created_id", "created_at", "id"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
@@ -204,6 +209,111 @@ class Repository(Stamp, Base):
     latest_task_id: Mapped[str] = mapped_column(
         uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
     )
+    parse_status: Mapped[str] = mapped_column(
+        VARCHAR(24), default="pending", server_default="pending"
+    )
+    parse_root_task_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DATETIME(fsp=6), server_default=func.utc_timestamp(6), onupdate=func.utc_timestamp(6)
     )
+
+
+class AuthorIdentity(Stamp, Base):
+    __tablename__ = "author_identity"
+    __table_args__ = (
+        UniqueConstraint("identity_key", "identity_version", name="uq_author_identity"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    identity_key: Mapped[str] = mapped_column(hash_column())
+    name_alias: Mapped[str] = mapped_column(VARCHAR(256))
+    email_hash: Mapped[str | None] = mapped_column(hash_column())
+    identity_version: Mapped[str] = mapped_column(VARCHAR(64))
+
+
+class GitCommit(Stamp, Base):
+    __tablename__ = "git_commit"
+    __table_args__ = (
+        UniqueConstraint("repository_id", "sha", name="uq_commit_repository_sha"),
+        CheckConstraint("parent_count >= 0", name="ck_commit_parents"),
+        Index("ix_commit_event", "repository_id", "committer_time", "sha"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    sha: Mapped[str] = mapped_column(hash_column())
+    author_identity_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("author_identity.id", ondelete="RESTRICT")
+    )
+    author_time: Mapped[datetime] = mapped_column(DATETIME(fsp=6))
+    committer_time: Mapped[datetime] = mapped_column(DATETIME(fsp=6))
+    author_offset: Mapped[int] = mapped_column(INTEGER())
+    committer_offset: Mapped[int] = mapped_column(INTEGER())
+    message: Mapped[str] = mapped_column(MEDIUMTEXT())
+    parents: Mapped[list] = mapped_column(JSON())
+    parent_count: Mapped[int] = mapped_column(INTEGER())
+    parse_status: Mapped[str] = mapped_column(VARCHAR(32))
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+
+
+class FileChange(Stamp, Base):
+    __tablename__ = "file_change"
+    __table_args__ = (
+        UniqueConstraint("commit_id", "ordinal", name="uq_file_ordinal"),
+        CheckConstraint(
+            "ordinal >= 0 AND (insertions IS NULL OR insertions >= 0) "
+            "AND (deletions IS NULL OR deletions >= 0) AND (old_loc IS NULL OR old_loc >= 0)",
+            name="ck_file_counts",
+        ),
+        Index("ix_file_commit", "commit_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    commit_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("git_commit.id", ondelete="RESTRICT")
+    )
+    ordinal: Mapped[int] = mapped_column(INTEGER())
+    old_path: Mapped[str | None] = mapped_column(MEDIUMTEXT())
+    new_path: Mapped[str | None] = mapped_column(MEDIUMTEXT())
+    path_bytes_hash: Mapped[str] = mapped_column(hash_column())
+    old_blob: Mapped[str] = mapped_column(hash_column())
+    new_blob: Mapped[str] = mapped_column(hash_column())
+    change_type: Mapped[str] = mapped_column(VARCHAR(16))
+    insertions: Mapped[int | None] = mapped_column(BIGINT())
+    deletions: Mapped[int | None] = mapped_column(BIGINT())
+    old_loc: Mapped[int | None] = mapped_column(BIGINT())
+    is_binary: Mapped[bool] = mapped_column(BOOLEAN())
+    content_status: Mapped[str] = mapped_column(VARCHAR(32))
+    diff_text: Mapped[str | None] = mapped_column(MEDIUMTEXT())
+    line_numbers: Mapped[dict | None] = mapped_column(JSON())
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+
+
+class ParseCheckpoint(Stamp, Base):
+    __tablename__ = "parse_checkpoint"
+    __table_args__ = (
+        UniqueConstraint("repository_id", name="uq_checkpoint_repository"),
+        CheckConstraint(
+            "processed >= 0 AND (total IS NULL OR total >= processed) "
+            "AND (commit_limit IS NULL OR commit_limit > 0)",
+            name="ck_checkpoint_counts",
+        ),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    head_sha: Mapped[str | None] = mapped_column(hash_column())
+    commit_limit: Mapped[int | None] = mapped_column(BIGINT())
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+    plan_hash: Mapped[str | None] = mapped_column(hash_column())
+    total: Mapped[int | None] = mapped_column(BIGINT())
+    processed: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    last_sha: Mapped[str | None] = mapped_column(hash_column())

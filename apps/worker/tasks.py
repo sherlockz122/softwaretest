@@ -5,6 +5,8 @@ from uuid import UUID
 from apps.worker.main import app, settings
 from packages.platform.connections import Connections
 from packages.repositories.clone import CloneExecutor
+from packages.repositories.parser import ParseExecutor
+from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
 from packages.tasks.service import TaskService
 
@@ -23,9 +25,14 @@ def execute(task_id):
             return
         token, duration = claim
         if isinstance(duration, dict):
-            CloneExecutor(settings, RepositoryService(settings, connections)).run(
-                task_id, token, duration
-            )
+            if "parser_version" in duration:
+                ParseExecutor(settings, ParsingService(settings, connections)).run(
+                    task_id, token, duration
+                )
+            else:
+                CloneExecutor(settings, RepositoryService(settings, connections)).run(
+                    task_id, token, duration
+                )
             return
         started = time.monotonic()
         while True:

@@ -348,8 +348,8 @@ test("public repository lost-response replay, real Worker clone and persisted me
     if (route.request().method() !== "POST") return route.continue();
     keys.push(route.request().headers()["idempotency-key"]);
     const response = await route.fetch();
-    expect(response.status()).toBe(202);
     const body = await response.json();
+    expect(response.status(), body.code || "repository acceptance").toBe(202);
     if (first) {
       first = false;
       accepted = body.repository_id;
@@ -374,9 +374,55 @@ test("public repository lost-response replay, real Worker clone and persisted me
     /^[0-9a-f]{40}$/,
   );
   await shot(page, info, "repository-cloned");
-  await page.getByRole("link", { name: "查看克隆任务" }).click();
+  await page.getByRole("link", { name: "查看当前任务" }).click();
   await expect(page.getByTestId("task-status")).toHaveText("已完成");
   await page.getByRole("link", { name: "查看仓库详情" }).click();
+  let firstParse = true;
+  let parseTask;
+  const parseKeys = [];
+  let parseHeaders;
+  await page.route("**/api/v1/repositories/*/parse", async (route) => {
+    parseKeys.push(route.request().headers()["idempotency-key"]);
+    parseHeaders = route.request().headers();
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    const body = await response.json();
+    if (firstParse) {
+      firstParse = false;
+      parseTask = body.task_id;
+      await route.abort("failed");
+    } else {
+      expect(body.task_id).toBe(parseTask);
+      await route.fulfill({ response });
+    }
+  });
+  await page.getByRole("button", { name: "开始解析提交" }).click();
+  await expect.poll(() => firstParse).toBe(false);
+  // The poll may discover the accepted task before another click. Use the same
+  // browser request/key to prove uncertain-result replay independently of timing.
+  const replay = await page.request.post(
+    `/api/v1/repositories/${accepted}/parse`,
+    {
+      headers: parseHeaders,
+      data: { commit_limit: null },
+    },
+  );
+  expect(replay.status()).toBe(202);
+  expect((await replay.json()).task_id).toBe(parseTask);
+  await expect(page.getByTestId("parse-status")).toHaveText("解析完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("commit-list")).toContainText("个已入库提交");
+  await expect(page.getByTestId("commit-list").locator("li")).not.toHaveCount(
+    0,
+  );
+  await shot(page, info, "repository-parsed");
+  await page
+    .getByRole("button", { name: "查看文件变更", exact: true })
+    .first()
+    .click();
+  await expect(page.getByTestId("file-list").locator("li")).not.toHaveCount(0);
+  await shot(page, info, "repository-file-changes");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "登录", exact: true }),
@@ -390,6 +436,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
   await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
+  await expect(page.getByTestId("parse-status")).toHaveText("解析完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({

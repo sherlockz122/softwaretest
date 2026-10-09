@@ -66,7 +66,7 @@ async function create() {
     </div>
     <p>
       添加公开 HTTPS Git 仓库，完成克隆后可查看默认分支和
-      HEAD。提交解析将在后续阶段提供。
+      HEAD，并在仓库详情启动提交解析。
     </p>
     <form v-if="canCreate" class="create-task" @submit.prevent="create">
       <div>

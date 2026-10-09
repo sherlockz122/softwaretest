@@ -90,3 +90,9 @@ URL 限公开 HTTPS、443、ASCII DNS 名或 IPv4，拒绝凭据/查询/片段/�
 测试使用临时 HTTPS Git smart HTTP 服务和独立测试 CA，通过构造器注入 resolver/connector；生产无关闭 SSRF/TLS 的配置。真实原生 Git 克隆结果与源 HEAD 对照，另验 TLS 拒绝、DNS rebinding、取消/租约/数据库约束/提交不确定性。
 
 参考：[Git 配置](https://git-scm.com/docs/git-config)、[bare clone](https://git-scm.com/docs/git-clone)、[DNS 查询超时](https://dnspython.readthedocs.io/en/stable/resolver-class.html)。
+
+## 10 第七阶段解析切片
+
+初次解析通过独立POST /repositories/{id}/parse启动，A07仍只接受url；A11及其files子路由只读已提交批次。窗口固定克隆HEAD与可选最近N，排序committer time/SHA；一个仓库首期只有一个不可改写窗口，后续增量同步另做快照/祖先检查。0004增加作者、commit、file及root任务绑定checkpoint。每10提交的upsert/checkpoint同事务，成功与最终批次同事务，全部业务写入检查有效token/lease/latest/root。取消/资源失败保留批次，successor继续；不确定提交结果不删除数据。
+
+调整2.1实现方法为受监督原生Git遍历/读取 + PyDriller受限hunk行号解析，避免库遍历器自行发起不受deadline/输出约束的命令。邮箱规范化哈希入库、身份版本化；merge元数据保留/diff明确跳过，root/rename/delete/binary/编码/超限状态记录。完整固定参数、边界及未来覆盖度约束见 [解析指导](../../../docs/development/提交解析与验收.md)。该调整不减少解析验收场景，不引入Fix/SZZ或默认隐藏历史上限。

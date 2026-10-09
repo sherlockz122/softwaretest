@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from packages.persistence.models import AsyncTask, Repository
+from packages.persistence.models import AsyncTask, ParseCheckpoint, Repository
 from packages.repositories.safety import RepositoryError, URLPolicy, canonicalize
 from packages.repositories.storage import Storage
 from packages.repositories.transport import RepositoryProbe
@@ -95,7 +95,8 @@ class RepositoryService:
             "owner_id": repository.owner_id,
             "created_at": repository.created_at.isoformat(timespec="microseconds") + "Z",
             "task": public(task, timestamp),
-            "commits_imported": False,
+            "commits_imported": repository.parse_status == "parsed",
+            "parse_status": repository.parse_status,
         }
 
     def listing(self, page=1, page_size=20):
@@ -121,9 +122,27 @@ class RepositoryService:
             repository = db.get(Repository, repository_id)
             if not repository:
                 raise RepositoryError(404, "REPOSITORY_NOT_FOUND")
-            return self.visible(
+            result = self.visible(
                 repository, db.get(AsyncTask, repository.latest_task_id), database_now(db)
             )
+            point = (
+                db.get(ParseCheckpoint, repository.parse_root_task_id)
+                if repository.parse_root_task_id
+                else None
+            )
+            result["parse_window"] = (
+                {
+                    "head_sha": point.head_sha,
+                    "commit_limit": point.commit_limit,
+                    "parser_version": point.parser_version,
+                    "processed": point.processed,
+                    "total": point.total,
+                    "checkpoint_sha": point.last_sha,
+                }
+                if point
+                else None
+            )
+            return result
 
     def publish(self, task_id, token, metadata, storage_key):
         with Session(self.engine) as db, db.begin():

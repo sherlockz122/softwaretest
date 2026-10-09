@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     repository_storage_root: Path = Path("runtime/repositories")
     repository_max_bytes: int = Field(default=2 * 1024**3, ge=1024**2, le=100 * 1024**3)
     repository_timeout_seconds: int = Field(default=900, ge=10, le=3600)
+    repository_parse_timeout_seconds: int = Field(default=1800, ge=10, le=86400)
 
     @model_validator(mode="after")
     def task_timing(self):

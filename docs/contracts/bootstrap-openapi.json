@@ -51,6 +51,26 @@
         "title": "LoginBody",
         "type": "object"
       },
+      "ParseBody": {
+        "additionalProperties": false,
+        "properties": {
+          "commit_limit": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Limit"
+          }
+        },
+        "title": "ParseBody",
+        "type": "object"
+      },
       "RepositoryBody": {
         "additionalProperties": false,
         "properties": {
@@ -390,6 +410,219 @@
           }
         ],
         "summary": "Detail",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories/{repository_id}/commits": {
+      "get": {
+        "operationId": "commits_api_v1_repositories__repository_id__commits_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Commits",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories/{repository_id}/commits/{sha}/files": {
+      "get": {
+        "operationId": "files_api_v1_repositories__repository_id__commits__sha__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sha",
+            "required": true,
+            "schema": {
+              "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+              "title": "Sha",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Files",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories/{repository_id}/parse": {
+      "post": {
+        "operationId": "parse_api_v1_repositories__repository_id__parse_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Parse",
         "tags": [
           "repositories"
         ]

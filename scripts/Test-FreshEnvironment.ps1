@@ -26,6 +26,8 @@ if ($Browser) {
     if (-not $NodePath) { $NodePath = (Get-Command node -ErrorAction Stop).Source }
     if (-not $EvidenceDirectory) { $EvidenceDirectory = Join-Path $root ('runtime/acceptance/' + $runId) }
     $EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
+    $evidenceRoot = Join-Path $root 'runtime/acceptance'
+    if (-not $EvidenceDirectory.StartsWith($evidenceRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Evidence must stay under project runtime/acceptance; never fall back to another drive.' }
     $null = New-Item -ItemType Directory -Path $EvidenceDirectory -Force
 }
 Add-Content -LiteralPath $config -Value ('DG_REPOSITORY_DATA_DIR=' + (Join-Path $work 'repositories').Replace('\','/'))
@@ -58,6 +60,9 @@ try {
     & (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -FilePath $projectPython -ArgumentList @('-m','tests.fresh_probe','--config',$config,'--base-url',"http://127.0.0.1:$($ports[3])")
     if ($Browser) {
         $browserEnv = @{ DG_E2E_ENV_FILE=$config; DG_E2E_BASE_URL="http://127.0.0.1:$($ports[3])"; DG_E2E_PROJECT=$project; DG_DOCKER_EXE=$DockerPath; DG_PYTHON_EXE=$projectPython; DG_EVIDENCE_DIR=$EvidenceDirectory }
+        # Reuse the existing Windows browser; never implicitly require a C-drive
+        # Playwright download. Linux CI retains its explicitly installed Chromium.
+        if ($IsWindows -and -not $env:DG_BROWSER_CHANNEL) { $browserEnv.DG_BROWSER_CHANNEL='msedge' }
         $previousBrowserEnv = @{}
         foreach ($name in $browserEnv.Keys) { $previousBrowserEnv[$name]=[Environment]::GetEnvironmentVariable($name,'Process'); [Environment]::SetEnvironmentVariable($name,$browserEnv[$name],'Process') }
         Push-Location (Join-Path $root 'apps/web')
@@ -71,6 +76,11 @@ try {
 } finally {
     # Only this uniquely named acceptance project; never the wang development volumes.
     if ($project -notmatch '^dg-fresh-[0-9a-f]{12}$') { throw 'Disposable cleanup scope invalid' }
+    if ($Browser) {
+        # Local ignored evidence only; retain_evidence redacts generated config secrets.
+        & $DockerPath @base --profile full logs --no-color *> (Join-Path $EvidenceDirectory 'services.log')
+        if ($LASTEXITCODE -ne 0) { $acceptanceFailed = $true }
+    }
     try { Invoke-FreshCompose -Arguments @('--profile','full','--profile','maintenance','down','--volumes','--remove-orphans') }
     finally { Pop-Location }
 }

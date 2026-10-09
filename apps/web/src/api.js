@@ -1,6 +1,8 @@
 import { reactive } from "vue";
 
 const messages = {
+  REPOSITORY_PARSE_STATE_CONFLICT:
+    "仓库尚未克隆完成或已有解析窗口，请刷新详情或在当前任务重试。",
   REPOSITORY_UNSAFE_URL:
     "地址格式未通过，请使用无凭据的公开 HTTPS 仓库地址（443 端口）。",
   REPOSITORY_UNSAFE_ADDRESS: "仓库地址解析到不允许访问的网络位置。",
