@@ -61,7 +61,14 @@ jobs:
           docker compose --profile maintenance run --rm bootstrap
           docker compose --profile full up -d --wait --wait-timeout 180
       - name: Real backend and fault regression
-        run: .venv/bin/python -m pytest -q --junitxml=runtime/acceptance/ci/backend.xml > runtime/acceptance/ci/backend.log 2>&1
+        run: |
+          if .venv/bin/python -m pytest -q --junitxml=runtime/acceptance/ci/backend.xml > runtime/acceptance/ci/backend.log 2>&1; then
+            result=0
+          else
+            result=$?
+          fi
+          .venv/bin/python -m scripts.ci_result_summary runtime/acceptance/ci/backend.xml
+          exit "$result"
       - name: Independent browser E2E and new volumes
         shell: pwsh
         run: ./scripts/Test-FreshEnvironment.ps1 -Browser -DockerPath /usr/bin/docker -EvidenceDirectory "$PWD/runtime/acceptance/ci/browser"
