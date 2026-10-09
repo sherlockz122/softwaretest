@@ -13,6 +13,8 @@ COPY apps/__init__.py apps/__init__.py
 COPY apps/api apps/api
 COPY apps/worker apps/worker
 COPY packages packages
+COPY alembic.ini alembic.ini
+COPY migrations migrations
 ENV PATH="/app/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER dg
 CMD ["python", "-m", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

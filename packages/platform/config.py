@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     redis_password: SecretStr
     signing_key: SecretStr
     frontend_origin: str = "http://127.0.0.1:5173"
+    access_seconds: int = Field(default=900, ge=60, le=900)
+    session_seconds: int = Field(default=604800, ge=900, le=604800)
+    login_rate_limit: int = Field(default=5, ge=1, le=1000)
+    login_rate_prefix: str = "defectguard:auth:rate"
 
     @field_validator("environment")
     @classmethod

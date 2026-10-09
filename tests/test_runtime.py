@@ -1,5 +1,6 @@
 """Explicit platform acceptance against dedicated defectguard-wang containers."""
 
+import json
 import os
 import subprocess
 import time
@@ -26,6 +27,15 @@ def docker(*args):
     assert result.returncode == 0, (
         "Project Docker action failed; inspect local logs without secrets"
     )
+    return result.stdout.decode().strip()
+
+
+def raw_docker(*args):
+    result = subprocess.run(
+        [os.environ["DG_DOCKER_EXE"], *args], capture_output=True, timeout=180, check=False
+    )
+    assert result.returncode == 0, "Scoped Docker DNS acceptance action failed"
+    return result.stdout.decode().strip()
 
 
 def wait_ready():
@@ -55,6 +65,55 @@ def test_web_proxy_and_worker():
         response = client.get("/api/v1/no-such-resource")
         assert response.status_code == 404 and response.json()["code"] == "SYSTEM_NOT_FOUND"
     docker("exec", "-T", "worker", "python", "-m", "apps.worker.health")
+
+
+def test_proxy_recovers_after_api_address_changes():
+    wait_ready()
+    docker("exec", "-T", "web", "nginx", "-t")
+    web_id = docker("ps", "-q", "web")
+    api_id = docker("ps", "-q", "api")
+    networks = json.loads(
+        raw_docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", api_id)
+    )
+    assert len(networks) == 1
+    network, details = next(iter(networks.items()))
+    assert network.startswith("defectguard-wang_")
+    old_address = details["IPAddress"]
+    image = docker("images", "-q", "redis")
+    blocker = "dg-stage3-dns-" + uuid4().hex
+    # Reserve only the former API address, forcing Docker to assign a new one.
+    # Existing Redis image, no new pull, ports, mounts, application secrets or volumes.
+    docker("rm", "--stop", "--force", "api")
+    created = False
+    try:
+        raw_docker(
+            "run",
+            "--pull",
+            "never",
+            "-d",
+            "--name",
+            blocker,
+            "--network",
+            network,
+            "--ip",
+            old_address,
+            image,
+            "sleep",
+            "300",
+        )
+        created = True
+        docker("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "api")
+        new_api_id = docker("ps", "-q", "api")
+        updated = json.loads(
+            raw_docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", new_api_id)
+        )
+        assert updated[network]["IPAddress"] != old_address
+        assert docker("ps", "-q", "web") == web_id
+        wait_ready()
+    finally:
+        if created:
+            raw_docker("rm", "-f", blocker)
+        docker("up", "-d", "--no-deps", "--wait", "--wait-timeout", "120", "api")
 
 
 def test_dependency_failure_and_restart_persistence():

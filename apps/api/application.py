@@ -6,8 +6,11 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
+from apps.api.auth import router
+from packages.auth.security import AuthError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
 
@@ -18,7 +21,10 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.connections = connection_factory(settings)
+        app.state.settings = settings
         try:
+            if hasattr(app.state.connections, "require_schema"):
+                app.state.connections.require_schema()
             yield
         finally:
             app.state.connections.close()
@@ -81,6 +87,20 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
         return error(request, 422, "SYSTEM_INVALID_INPUT", "请求参数无效")
+
+    @app.exception_handler(AuthError)
+    async def auth_error(request: Request, exc: AuthError):
+        response = error(request, exc.status, exc.code, "认证请求未通过，请检查凭据、权限或会话")
+        response.headers["Cache-Control"] = "no-store"
+        if exc.status == 429:
+            response.headers["Retry-After"] = "60"
+        return response
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(request: Request, exc: SQLAlchemyError):
+        return error(request, 503, "SYSTEM_DEPENDENCY_UNAVAILABLE", "基础服务暂不可用")
+
+    app.include_router(router)
 
     @app.get("/api/v1/health", tags=["health"])
     def health():

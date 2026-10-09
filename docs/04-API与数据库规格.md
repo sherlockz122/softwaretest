@@ -223,9 +223,9 @@ erDiagram
 
 ## 10 框架首批实施契约（bootstrap-application）
 
-第二批健康接口已落地：A34 `/health` 仅表示进程存活，补充 `/health/ready` 检查 MySQL/Redis 基础连接；503 为 `SYSTEM_DEPENDENCY_UNAVAILABLE`。业务迁移版本及任务可用性门槛将在后续实施时加入。响应带 UUID X-Request-ID，统一错误及配置细则见 [工程说明](development/工程启动与验收.md)。本节下述认证/业务表/任务仍未实现。
+第三批已实现 A01～A04 与认证迁移 `0001_auth`。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和此迁移版本；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md)。任务表、outbox 和任务可用性仍待下一阶段实施。
 
-本节在 `wang` 个人开发分支生效，定义后续认证和可靠任务的接口及迁移约束。尚无业务表迁移；OpenAPI 后续必须与本节对齐，变更须同步规格。
+本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。认证表已迁移；任务部分保持计划契约。OpenAPI 与已实现部分对齐，变更须同步规格。
 
 ### 10.1 认证 A01～A04
 
@@ -243,7 +243,7 @@ erDiagram
 }
 ```
 
-refresh 不放入 JSON，使用 cookie `dg_refresh`：HttpOnly、SameSite=Strict、Path=/api/v1/auth，HTTPS 使用 Secure；仅 loopback 本地 HTTP 开发允许关闭 Secure。refresh 随机强度至少 256 bit，只在 DB 保存 SHA-256。会话固定有效期默认 7 天，刷新不延长绝对到期；用行锁及 generation 轮转 refresh/CSRF 值，旧 refresh 返回 401，不允许两个并发刷新都成功。
+refresh 不放入 JSON，使用 cookie `dg_refresh`：HttpOnly、SameSite=Strict、Path=/api/v1/auth，HTTPS 使用 Secure；仅 development/test loopback 本地 HTTP 允许关闭 Secure，production HTTP 返回 400 AUTH_HTTPS_REQUIRED。refresh 随机强度至少 256 bit，只在 DB 保存 SHA-256。会话固定有效期默认 7 天，刷新不延长绝对到期；cookie Max-Age 和 access 的 expires_in 不超过剩余会话寿命（access 最长 900 秒）。用行锁及 generation 轮转 refresh/CSRF 值，旧 refresh 返回 401，不允许两个并发刷新都成功。
 
 JWT 包含 `sub/sid/iat/exp/iss/aud`，允许的签名算法由服务端固定，禁止信任输入 alg；生产配置禁止默认密钥。受保护请求检查用户活动状态和 session 未撤销/未过期。禁用、退出后现有 access 也立即失效。
 

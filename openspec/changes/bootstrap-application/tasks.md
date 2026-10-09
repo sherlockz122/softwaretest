@@ -13,9 +13,9 @@
 第 1 组证据：docs/reports/2026-10-09-第二阶段工程基础报告.md；11 项测试、实际五组件、浏览器正常/故障界面通过。当前 readiness 仅基础连接，认证/业务迁移/可靠任务及 E2E-BOOT 保持未完成。
 
 ## 2. 最小认证（US-22，NFR-01/04）
-- [ ] 2.1 实施 user/auth_session/审计迁移和显式预置账号；INT-MIGRATION 验证约束、升级与空库回滚
-- [ ] 2.2 实施 A01～A04、密码哈希、JWT 会话校验、refresh 轮转及 CSRF；SEC-AUTH 验证正常、失效、重复 refresh、退出和跨站请求
-- [ ] 2.3 实施角色和任务操作者检查；SEC-RBAC 验证 Viewer 发起/取消任务和 Member 操作他人任务被拒绝
+- [x] 2.1 实施 user/auth_session/审计迁移和显式预置账号；INT-MIGRATION 验证约束、升级、空库回滚、非空拒绝回滚和版本拒绝，证据见第三阶段报告
+- [x] 2.2 实施 A01～A04、密码哈希、JWT 会话校验、refresh 轮转及 CSRF；SEC-AUTH 验证正常、失效、并发 refresh、退出、共享限流、绝对寿命和跨站请求，证据见第三阶段报告
+- [ ] 2.3 接入角色和任务操作者检查到实际任务接口；SEC-RBAC 验证 Viewer 发起/取消任务和 Member 操作他人任务被拒绝（第三阶段先验收角色/归属校验基础，实际接口需第 3 组实现）
 
 ## 3. 可靠任务（US-02/12/21，NFR-02）
 - [ ] 3.1 实施 async_task/task_outbox 迁移与诊断创建 A35；INT-OUTBOX 验证幂等键、同键异载荷和事务回滚

@@ -25,9 +25,9 @@ onMounted(check)
   <main>
     <header><span class="brand">DefectGuard</span><span>即时软件缺陷预测</span></header>
     <section>
-      <p class="eyebrow">开发环境 · 第二阶段</p>
+      <p class="eyebrow">开发环境 · 工程基础</p>
       <h1>开发环境连接检查</h1>
-      <p>本页检查 API、MySQL 和 Redis 的基础连接，帮助开始后续开发。</p>
+      <p>本页检查 API、MySQL、Redis 和数据库迁移版本，帮助开始后续开发。</p>
       <div role="status" aria-live="polite" class="status">
         <el-tag v-if="state === 'loading'" type="info">正在检查连接</el-tag>
         <el-tag v-else-if="state === 'ready'" type="success">基础服务连接正常</el-tag>
@@ -37,8 +37,8 @@ onMounted(check)
       <p v-if="state === 'unavailable'">请确认 API、MySQL 和 Redis 已启动，配置与运行说明一致。</p>
       <p v-if="requestId" class="request">请求编号：{{ requestId }}</p>
       <hr>
-      <h2>下一步：认证与可靠任务</h2>
-      <p>登录、数据库业务表、任务创建和预测功能尚未实现。当前连接检查不代表业务验收完成。</p>
+      <h2>下一步：可靠任务与操作页面</h2>
+      <p>认证接口和认证表迁移已实现；登录页面、任务创建和预测功能待后续开发。当前连接检查不代表业务验收完成。</p>
     </section>
   </main>
 </template>

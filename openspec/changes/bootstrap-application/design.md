@@ -22,7 +22,7 @@ Python 使用项目 `.venv`；启动命令显式绑定项目解释器。密钥�
 
 ### 2 最小权限
 
-细则以 `docs/04` 第 10 节为准。预置账号由显式部署配置创建；缺少用户名/密码/签名密钥时拒绝不安全启动。密码使用 Argon2id。短期 access JWT 包含 session ID，所有受保护请求检查活动用户和未撤销会话，不仅验证签名。refresh 为随机不透明令牌，仅哈希入库，通过 HttpOnly cookie 传输并轮转。cookie 端点校验 CSRF 与 Origin；默认不公开注册、不保存可用默认密码。
+细则以 `docs/04` 第 10 节为准。预置账号由显式初始化配置创建；seed 缺少用户名/密码时拒绝，服务缺少签名密钥时拒绝启动，常规启动不自动 seed。密码使用 Argon2id。短期 access JWT 包含 session ID，所有受保护请求检查活动用户和未撤销会话，不仅验证签名。refresh 为随机不透明令牌，仅哈希入库，通过 HttpOnly cookie 传输并轮转。cookie 端点校验 CSRF 与 Origin；默认不公开注册、不保存可用默认密码。
 
 ### 3 数据库与可靠投递
 
@@ -55,7 +55,7 @@ queued 可到 running/cancelled/failed；running 可到 succeeded/failed/cancel_
 
 ## Migration Plan
 
-首次迁移创建五张基础表、索引和约束，之后显式 seed 预置用户。先在空的专用开发数据库验证升级/回滚；禁止在已有业务数据上直接执行 downgrade。未知不兼容数据库版本启动失败并给出安全提示。当前准备批次只确定契约，不执行数据库迁移。
+按实施批次拆分迁移：第三阶段 `0001_auth` 创建 user/auth_session/operation_log，随后显式 seed；下一阶段增加 async_task/task_outbox。先在随机命名的专用临时开发库验证升级/空库回滚；认证或审计表非空时 downgrade 拒绝删除。已有本机平台标记表保留。API 启动和 readiness 校验当前已实现的精确版本，缺失/不兼容版本给出安全提示。bootstrap 用户名/密码仅初始化命令必填，常规服务启动不要求或自动创建账号。实际验收证据见第三阶段报告。
 
 ## Verification
 
