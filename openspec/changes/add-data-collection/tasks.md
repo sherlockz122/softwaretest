@@ -1,7 +1,7 @@
 # Tasks
 
 ## 0. 前置框架
-- [ ] 0.1 确认 bootstrap-application 实际运行验收已通过；复用认证、async_task/outbox 与 A29～A32，不重复实现
+- [x] 0.1 确认 bootstrap-application 实际运行验收已通过；第五阶段本机与 Linux CI 共 60 项通过，见第五阶段报告；复用认证、async_task/outbox 与 A29～A32，不重复实现。仅完成前置确认，采集实施任务仍未完成
 
 ## 1. 仓库克隆
 - [ ] 1.1 定义 repository、author_identity 模型、迁移和唯一约束，增加采集 task payload 并复用框架任务表

@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前已完成可运行工程、最小认证、可靠任务和登录/任务页面，独立新环境的页面到真实 Worker 链路已验收。已配置 wang 专用 CI、OpenAPI 漂移检查和本机测试证据索引；远程 CI 结果在阶段报告单独登记。下一批进入 `add-data-collection` 的安全采集与标签基础。见 [页面使用与质量验收](docs/development/页面使用与质量验收.md)、[第五阶段报告](docs/reports/2026-10-09-第五阶段页面与持续验收报告.md)、[后续整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
+当前已完成可运行工程、最小认证、可靠任务和登录/任务页面，独立新环境的页面到真实 Worker 链路已验收。本机与 Linux CI 均通过 60 项测试，已接入 OpenAPI 漂移检查和本机测试证据索引；框架 change 已归档至 [当前规格](openspec/specs/application-foundation/spec.md)。下一批进入 `add-data-collection` 的安全采集与标签基础。见 [页面使用与质量验收](docs/development/页面使用与质量验收.md)、[第五阶段报告](docs/reports/2026-10-09-第五阶段页面与持续验收报告.md)、[后续整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 
