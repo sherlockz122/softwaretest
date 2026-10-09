@@ -223,4 +223,18 @@ def test_real_sync_worker_kill_retains_base_candidate_and_atomic_resume(live, tm
             == 84
         )
     for key in (old_key, candidate_key):
-        assert (settings.repository_storage_root / key).is_dir()
+        # Linux storage is deliberately 0700 for UID 10001. The hosted runner
+        # must verify retained snapshots as the application user, not by asking
+        # an unrelated host UID to traverse that private directory.
+        docker(
+            "exec",
+            "-T",
+            "worker",
+            "python",
+            "-c",
+            "import sys; from packages.platform.config import load_settings; "
+            "from packages.repositories.storage import Storage,safe_path; "
+            "p=safe_path(Storage(load_settings()).root/sys.argv[1]); "
+            "assert p.is_dir() and (p/'HEAD').is_file()",
+            key,
+        )
