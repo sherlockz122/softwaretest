@@ -25,6 +25,7 @@ async function logout() {
       <RouterLink class="brand" to="/tasks">DefectGuard</RouterLink
       ><span>即时软件缺陷预测</span>
       <nav aria-label="主要导航">
+        <RouterLink to="/repositories">仓库目录</RouterLink>
         <RouterLink to="/tasks">任务中心</RouterLink
         ><RouterLink to="/health">连接检查</RouterLink>
       </nav>

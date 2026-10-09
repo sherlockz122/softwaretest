@@ -17,7 +17,18 @@ x-app-env: &app-env
   DG_SIGNING_KEY: ${DG_SIGNING_KEY:?Set DG_SIGNING_KEY in .env}
   DG_FRONTEND_ORIGIN: http://127.0.0.1:18080
   DG_LOGIN_RATE_LIMIT: ${DG_LOGIN_RATE_LIMIT:-5}
+  DG_REPOSITORY_STORAGE_ROOT: /app/runtime/repositories
+  DG_REPOSITORY_MAX_BYTES: ${DG_REPOSITORY_MAX_BYTES:-2147483648}
+  DG_REPOSITORY_TIMEOUT_SECONDS: ${DG_REPOSITORY_TIMEOUT_SECONDS:-900}
 services:
+  repository-init:
+    profiles: ["full", "worker"]
+    image: defectguard-app:stage2
+    user: "0:0"
+    command: ["python", "-m", "packages.repositories.initialize"]
+    environment: *app-env
+    volumes: ["${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"]
+    logging: *logging
   mysql:
     image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
     environment:
@@ -55,9 +66,11 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.app
     environment: *app-env
+    volumes: ["${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"]
     command: ["python", "-m", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
     ports: ["127.0.0.1:18000:8000"]
     depends_on:
+      repository-init: {condition: service_completed_successfully}
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
     healthcheck:
@@ -74,8 +87,10 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.app
     environment: *app-env
+    volumes: ["${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"]
     command: ["python", "-m", "celery", "-A", "apps.worker.main:app", "worker", "--loglevel=WARNING", "--concurrency=1", "--hostname=defectguard@%h"]
     depends_on:
+      repository-init: {condition: service_completed_successfully}
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
     healthcheck:

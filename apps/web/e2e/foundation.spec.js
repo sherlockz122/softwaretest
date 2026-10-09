@@ -333,3 +333,109 @@ test("pagination and Viewer controls follow API data and route query", async ({
     page.getByRole("link", { name: "00000000-0000-4000-8000-000000000001" }),
   ).toBeVisible();
 });
+
+test("public repository lost-response replay, real Worker clone and persisted metadata", async ({
+  page,
+}, info) => {
+  test.setTimeout(120000);
+  await login(page);
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await expect(page.getByText("尚未添加仓库。")).toBeVisible();
+  let first = true;
+  let accepted;
+  const keys = [];
+  await page.route("**/api/v1/repositories", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    keys.push(route.request().headers()["idempotency-key"]);
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    const body = await response.json();
+    if (first) {
+      first = false;
+      accepted = body.repository_id;
+      await route.abort("failed");
+    } else {
+      expect(body.repository_id).toBe(accepted);
+      await route.fulfill({ response });
+    }
+  });
+  await page
+    .getByLabel("仓库 HTTPS 地址")
+    .fill("https://github.com/octocat/Hello-World.git");
+  await page.getByRole("button", { name: "添加仓库", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("连接失败");
+  await page.getByRole("button", { name: "添加仓库", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
+  expect(keys[0]).toBe(keys[1]);
+  await expect(page.getByTestId("repository-status")).toHaveText("已克隆", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("repository-head")).toHaveText(
+    /^[0-9a-f]{40}$/,
+  );
+  await shot(page, info, "repository-cloned");
+  await page.getByRole("link", { name: "查看克隆任务" }).click();
+  await expect(page.getByTestId("task-status")).toHaveText("已完成");
+  await page.getByRole("link", { name: "查看仓库详情" }).click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "登录", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("用户名", { exact: true })
+    .fill(config.DG_BOOTSTRAP_USERNAME);
+  await page
+    .getByLabel("密码", { exact: true })
+    .fill(config.DG_BOOTSTRAP_PASSWORD);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
+  await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
+});
+
+test("unsafe repository address rejected without catalog mutation", async ({
+  page,
+}, info) => {
+  await login(page);
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await page
+    .getByLabel("仓库 HTTPS 地址")
+    .fill("https://127.0.0.1/team/private");
+  await page.getByRole("button", { name: "添加仓库", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("不允许访问");
+  await expect(page.getByRole("alert")).toContainText("请求编号");
+  await expect(page).toHaveURL(/\/repositories$/);
+  await shot(page, info, "repository-unsafe-rejected");
+});
+
+test("repository Viewer controls and mobile detail remain readable", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/auth/login", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.user.role = "Viewer"; // UI fixture; backend RBAC uses real users.
+    await route.fulfill({ response, json: data });
+  });
+  await login(page);
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "添加仓库", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Viewer 可查看仓库；添加需要 Member 或 Admin。"),
+  ).toBeVisible();
+  await page
+    .getByRole("link", {
+      name: "https://github.com/octocat/hello-world.git",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await shot(page, info, "mobile-repository");
+});

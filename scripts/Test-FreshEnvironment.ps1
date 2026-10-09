@@ -2,6 +2,8 @@
 param([string] $DockerPath = 'D:\Develop\DockerDesktop\resources\bin\docker.exe', [switch] $Rebuild, [switch] $Browser, [string] $NodePath = '', [string] $EvidenceDirectory = '')
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$projectPython = if ($IsWindows) { Join-Path $root '.venv/Scripts/python.exe' } else { Join-Path $root '.venv/bin/python' }
+& (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -FilePath $projectPython -ExpectedGrowthGiB $(if ($Rebuild) { 4 } else { 2 }) -ArgumentList @('-c','pass')
 $runId = [Guid]::NewGuid().ToString('N')
 $project = 'dg-fresh-' + $runId.Substring(0,12)
 $work = Join-Path $root ('runtime/fresh/' + $runId)
@@ -26,6 +28,7 @@ if ($Browser) {
     $EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
     $null = New-Item -ItemType Directory -Path $EvidenceDirectory -Force
 }
+Add-Content -LiteralPath $config -Value ('DG_REPOSITORY_DATA_DIR=' + (Join-Path $work 'repositories').Replace('\','/'))
 $override = Join-Path $work 'compose.override.yaml'
 @"
 services:

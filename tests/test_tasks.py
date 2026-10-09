@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.application import create_app
 from packages.auth.security import PASSWORD_HASHER, CurrentUser
-from packages.persistence.models import AsyncTask, OperationLog, TaskOutbox, User
+from packages.persistence.models import SCHEMA_HEAD, AsyncTask, OperationLog, TaskOutbox, User
 from packages.platform.connections import Connections
 from packages.tasks.delivery import Dispatcher
 from packages.tasks.service import TaskError, TaskService
@@ -110,7 +110,7 @@ def test_task_database_constraints_and_nonempty_downgrade(task_env):
     with pytest.raises(RuntimeError, match="Downgrade refused"):
         migrate(connections.engine, "downgrade", "0001_auth")
     with connections.engine.connect() as db:
-        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002_tasks"
+        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == SCHEMA_HEAD
         assert db.execute(text("SELECT COUNT(*) FROM async_task")).scalar() == 1
         assert db.execute(text("SELECT COUNT(*) FROM task_outbox")).scalar() == 1
     migrate(connections.engine, "check")

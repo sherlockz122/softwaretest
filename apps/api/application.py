@@ -10,11 +10,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from apps.api.auth import router
+from apps.api.repositories import router as repositories_router
 from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
+from packages.repositories.safety import RepositoryError
 from packages.tasks.service import TaskError
 
 logger = logging.getLogger("defectguard")
@@ -100,6 +102,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def task_error(request: Request, exc: TaskError):
         return error(request, exc.status, exc.code, "任务请求未通过，请检查输入、权限或当前状态")
 
+    @app.exception_handler(RepositoryError)
+    async def repository_error(request: Request, exc: RepositoryError):
+        return error(
+            request, exc.status, exc.code, "仓库请求未完成，请检查 URL、连接、容量或已有仓库"
+        )
+
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
         response = error(request, exc.status, exc.code, "认证请求未通过，请检查凭据、权限或会话")
@@ -114,6 +122,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
 
     app.include_router(router)
     app.include_router(tasks_router)
+    app.include_router(repositories_router)
     if settings.environment != "production":
         app.include_router(diagnostic_router)
 

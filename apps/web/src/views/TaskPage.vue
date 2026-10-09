@@ -58,8 +58,14 @@ onUnmounted(() => clearInterval(poll));
         <dd>{{ task.data.value.stage }}</dd>
         <dt>进度</dt>
         <dd>
-          {{ task.data.value.progress }}%（{{ task.data.value.processed }} /
-          {{ task.data.value.total ?? "—" }}）
+          <template v-if="task.data.value.type === 'repository.clone'"
+            >当前仓库 {{ task.data.value.processed }} 字节；完成后进度为
+            100%。</template
+          >
+          <template v-else>
+            {{ task.data.value.progress }}%（{{ task.data.value.processed }} /
+            {{ task.data.value.total ?? "—" }}）
+          </template>
         </dd>
         <dt>最近心跳</dt>
         <dd>{{ date(task.data.value.heartbeat_at) }}</dd>
@@ -87,6 +93,11 @@ onUnmounted(() => clearInterval(poll));
       </div>
       <div v-if="task.data.value.result" class="result">
         <h2>执行结果</h2>
+        <RouterLink
+          v-if="task.data.value.result.repository_id"
+          :to="'/repositories/' + task.data.value.result.repository_id"
+          >查看仓库详情</RouterLink
+        >
         <pre>{{ JSON.stringify(task.data.value.result, null, 2) }}</pre>
       </div>
       <TaskActions

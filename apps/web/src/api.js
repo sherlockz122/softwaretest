@@ -1,6 +1,20 @@
 import { reactive } from "vue";
 
 const messages = {
+  REPOSITORY_UNSAFE_URL:
+    "地址格式未通过，请使用无凭据的公开 HTTPS 仓库地址（443 端口）。",
+  REPOSITORY_UNSAFE_ADDRESS: "仓库地址解析到不允许访问的网络位置。",
+  REPOSITORY_REDIRECT_REJECTED:
+    "仓库地址发生重定向，请填写最终仓库 HTTPS 地址。",
+  REPOSITORY_DNS_UNAVAILABLE: "仓库域名解析暂不可用，请稍后重试。",
+  REPOSITORY_NETWORK_UNAVAILABLE:
+    "仓库 HTTPS 连接或证书校验未通过，请检查连接后重试。",
+  REPOSITORY_NOT_PUBLIC_GIT: "该地址未提供可匿名访问的 Git 仓库。",
+  REPOSITORY_ALREADY_EXISTS: "此仓库已经添加，请在仓库目录查看已有记录。",
+  REPOSITORY_STORAGE_LOW:
+    "项目磁盘无法容纳预计增长，请先补充空间；任务不会转移到其他盘。",
+  REPOSITORY_STORAGE_UNAVAILABLE: "仓库存储目录不可用，请检查项目启动配置。",
+  REPOSITORY_NOT_FOUND: "仓库不存在，请返回仓库目录。",
   AUTH_INVALID_CREDENTIALS: "用户名或密码不正确，请重新输入。",
   AUTH_RATE_LIMITED: "登录尝试过于频繁，请稍后再试。",
   AUTH_FORBIDDEN: "当前账号没有此操作权限。",

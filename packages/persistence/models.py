@@ -14,7 +14,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0002_tasks"
+SCHEMA_HEAD = "0003_repositories"
 
 
 class Base(DeclarativeBase):
@@ -177,3 +177,33 @@ class TaskOutbox(Stamp, Base):
     delivery_token: Mapped[str | None] = mapped_column(uuid_column())
     sent_at: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6))
     last_error_code: Mapped[str | None] = mapped_column(VARCHAR(64))
+
+
+class Repository(Stamp, Base):
+    __tablename__ = "repository"
+    __table_args__ = (
+        UniqueConstraint("canonical_url", name="uq_repository_url"),
+        CheckConstraint(
+            "status IN ('queued','cloning','cloned','failed','cancelled')",
+            name="ck_repository_status",
+        ),
+        CheckConstraint("size_bytes >= 0", name="ck_repository_size"),
+        Index("ix_repository_created_id", "created_at", "id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(uuid_column(), ForeignKey("user.id", ondelete="RESTRICT"))
+    canonical_url: Mapped[str] = mapped_column(
+        VARCHAR(1024, charset="ascii", collation="ascii_bin")
+    )
+    status: Mapped[str] = mapped_column(VARCHAR(24), default="queued")
+    default_branch: Mapped[str | None] = mapped_column(VARCHAR(255))
+    head_sha: Mapped[str | None] = mapped_column(hash_column())
+    size_bytes: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    storage_key: Mapped[str | None] = mapped_column(VARCHAR(192))
+    latest_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), server_default=func.utc_timestamp(6), onupdate=func.utc_timestamp(6)
+    )

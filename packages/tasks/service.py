@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from packages.auth.security import AuthError, CurrentUser, authorize_task_owner, require_role
-from packages.persistence.models import AsyncTask, OperationLog, TaskOutbox, User
+from packages.persistence.models import AsyncTask, OperationLog, Repository, TaskOutbox, User
 
 STATES = {"queued", "running", "cancel_requested", "succeeded", "failed", "cancelled"}
 
@@ -31,9 +31,9 @@ def database_now(db):
     return db.scalar(select(func.utc_timestamp(6)))
 
 
-def payload_hash(scope, payload):
+def payload_hash(scope, payload, kind="diagnostic"):
     canonical = json.dumps(
-        {"version": 1, "type": "diagnostic", "scope": scope, "payload": payload},
+        {"version": 1, "type": kind, "scope": scope, "payload": payload},
         sort_keys=True,
         separators=(",", ":"),
         allow_nan=False,
@@ -98,10 +98,11 @@ class TaskService:
             raise AuthError(401, "AUTH_REQUIRED")
         return require_role(CurrentUser(row.id, row.username, row.role), "Member")
 
-    def new_task(self, db, actor_id, key, payload, scope, request_id, parent=None):
+    def new_task(self, db, actor_id, key, payload, scope, request_id, parent=None, kind=None):
         task_id = str(uuid4())
+        kind = kind or (parent.type if parent else "diagnostic")
         canonical = json.dumps(
-            {"version": 1, "type": "diagnostic", "scope": scope, "payload": payload},
+            {"version": 1, "type": kind, "scope": scope, "payload": payload},
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
@@ -109,7 +110,7 @@ class TaskService:
         task = AsyncTask(
             id=task_id,
             actor_id=actor_id,
-            type="diagnostic",
+            type=kind,
             scope_key=scope,
             idempotency_key=key,
             payload_hash=hashlib.sha256(canonical.encode()).hexdigest(),
@@ -119,12 +120,17 @@ class TaskService:
             retry_count=parent.retry_count + 1 if parent else 0,
             queued_deadline=database_now(db) + timedelta(seconds=self.settings.task_queue_seconds),
             request_id=request_id,
-            total=payload["duration_seconds"],
+            total=payload["duration_seconds"] if kind == "diagnostic" else None,
         )
         db.add(task)
         db.flush()
         db.add(TaskOutbox(task_id=task.id, next_attempt_at=database_now(db)))
         audit(db, task, "task.retry" if parent else "task.create")
+        if parent and kind == "repository.clone":
+            repository = db.get(Repository, payload["repository_id"], with_for_update=True)
+            if not repository:
+                raise TaskError(404, "REPOSITORY_NOT_FOUND")
+            repository.latest_task_id, repository.status = task.id, "queued"
         return task
 
     @staticmethod
@@ -187,7 +193,7 @@ class TaskService:
             return public(task, database_now(db))
 
     def listing(self, kind=None, status=None, page=1, page_size=20):
-        if kind not in {None, "diagnostic"} or status not in STATES | {None}:
+        if kind not in {None, "diagnostic", "repository.clone"} or status not in STATES | {None}:
             raise TaskError(422, "TASK_INVALID_INPUT")
         with Session(self.engine) as db, db.begin():
             conditions = []
@@ -241,7 +247,7 @@ class TaskService:
             if parent.status not in {"failed", "cancelled"}:
                 raise TaskError(409, "TASK_STATE_CONFLICT")
             existing = db.scalar(select(AsyncTask).where(AsyncTask.retry_of == parent.id))
-            scope = user.id + ":diagnostic:retry:" + parent.id
+            scope = user.id + ":" + parent.type + ":retry:" + parent.id
             if existing:
                 if existing.scope_key == scope and existing.idempotency_key == key:
                     return self.acknowledgement(existing)
@@ -258,6 +264,10 @@ class TaskService:
         task.version += 1
         task.error_code = code
         task.error_message = "任务未完成，请根据任务编号检查或重试" if code else None
+        if task.type == "repository.clone":
+            repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
+            if repository and repository.latest_task_id == task.id:
+                repository.status = "cloned" if status == "succeeded" else status
 
     def claim(self, task_id):
         with Session(self.engine) as db, db.begin():
@@ -265,19 +275,29 @@ class TaskService:
             timestamp = database_now(db)
             if not task or task.status != "queued" or task.queued_deadline <= timestamp:
                 return None
-            if task.type != "diagnostic":
+            if task.type not in {"diagnostic", "repository.clone"}:
                 self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
                 audit(db, task, "task.failed")
                 return None
-            task.status, task.stage = "running", "diagnostic"
+            task.status, task.stage = "running", task.type
             task.started_at = task.heartbeat_at = timestamp
             task.execution_token = str(uuid4())
             task.lease_until = timestamp + timedelta(seconds=self.settings.task_lease_seconds)
             task.version += 1
             audit(db, task, "task.start")
-            return task.execution_token, task.payload["duration_seconds"]
+            if task.type == "repository.clone":
+                repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
+                if not repository or repository.latest_task_id != task.id:
+                    self.terminal(db, task, "failed", "REPOSITORY_STATE_CONFLICT")
+                    return None
+                repository.status = "cloning"
+            return task.execution_token, (
+                task.payload["duration_seconds"] if task.type == "diagnostic" else task.payload
+            )
 
-    def checkpoint(self, task_id, token, progress=0, processed=0, complete=False, error=None):
+    def checkpoint(
+        self, task_id, token, progress=0, processed=0, complete=False, error=None, stage=None
+    ):
         with Session(self.engine) as db, db.begin():
             task = self.locked(db, task_id)
             timestamp = database_now(db)
@@ -296,8 +316,12 @@ class TaskService:
                 self.terminal(db, task, "failed", "TASK_EXECUTION_FAILED")
                 audit(db, task, "task.failed")
                 return False
-            task.processed = min(max(0, processed), task.total)
+            task.processed = (
+                min(max(0, processed), task.total) if task.total is not None else max(0, processed)
+            )
             task.progress = min(99, max(0, progress))
+            if stage is not None:
+                task.stage = stage
             task.heartbeat_at = timestamp
             if complete:
                 task.progress, task.processed = 100, task.total
@@ -345,7 +369,7 @@ class TaskService:
                             task.actor_id,
                             "auto:" + task.id,
                             task.payload,
-                            task.actor_id + ":diagnostic:retry:" + task.id,
+                            task.actor_id + ":" + task.type + ":retry:" + task.id,
                             task.request_id,
                             task,
                         )

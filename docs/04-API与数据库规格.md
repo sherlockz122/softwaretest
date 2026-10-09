@@ -57,7 +57,7 @@
 | A32 | `POST /tasks/{id}/cancel` | 请求取消任务 | Member |
 | A33 | `GET /operations` | 操作审计 | Admin |
 | A34 | `GET /health` | 最小存活状态 | Public |
-| A35 | `POST /tasks/diagnostics` | 开发环境受限诊断任务 | Member，仅 development/test |
+| A35 | `POST /tasks/diagnostic` | 开发环境受限诊断任务 | Member，仅 development/test |
 
 ## 4 关键请求与响应
 
@@ -67,8 +67,7 @@
 
 ```json
 {
-  "url": "https://github.com/example/project.git",
-  "commit_limit": 1000
+  "url": "https://github.com/example/project.git"
 }
 ```
 
@@ -82,7 +81,7 @@
 }
 ```
 
-`commit_limit` 用于技术探针和受控演示，不改变仓库身份。URL 必须先通过 SSRF 与 Git 可访问性校验。
+第六阶段仅接受 `url`，未知字段（包括尚未实现的 `commit_limit`）返回 422。URL 必须先通过 SSRF、TLS 和 smart HTTP 可访问性校验。提交窗口将在解析阶段另行实现，不对当前克隆任务传入无效参数。
 
 ### 4.2 创建数据集
 
@@ -223,7 +222,7 @@ erDiagram
 
 ## 10 框架首批实施契约（bootstrap-application）
 
-第三批已实现 A01～A04 与认证迁移 `0001_auth`；第四阶段通过 `0002_tasks` 实现任务表/outbox、A29～A32/A35、实际权限和可靠执行。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和当前精确迁移版本 `0002_tasks`；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md) 和 [可靠任务与验收](development/可靠任务与运行验收.md)。
+第三批已实现 A01～A04 与认证迁移 `0001_auth`；第四阶段通过 `0002_tasks` 实现任务表/outbox、A29～A32/A35、实际权限和可靠执行。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和当前精确迁移版本 `0003_repositories`；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md) 和 [可靠任务与验收](development/可靠任务与运行验收.md)。
 
 本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。第四阶段完成任务后端，第五阶段完成操作页面。已实现接口导出至 `docs/contracts/bootstrap-openapi.json`，CI 检查实际代码与基线是否漂移；变更须同步规格。
 
@@ -299,3 +298,18 @@ outbox 与 task 同事务插入。投递器以短事务锁/租约领取到期 pe
 Worker 按 `status=queued` 原子领取、设置随机 execution_token 与 lease_until；重复消息领取失败即安全结束。心跳间隔 10 秒，执行租约 45 秒，扫描间隔 15 秒。任何业务写入、checkpoint 和成功/失败写回须在检查当前 status、execution_token、lease_until 尚有效的同一事务中完成；不能仅在进程内检查后无条件写入。
 
 协调器确认 running lease 过期后写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor；cancel_requested 的过期执行收敛为 cancelled，不自动重试。自动 successor 当前只针对 TASK_LEASE_EXPIRED，投递/排队超限保留明确失败，用户可手动重试。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。
+
+
+## 9 第六阶段实际仓库契约（个人 wang）
+
+A07～A09 已接入登录权限与 Repository API，整个采集 change 仍待提交解析和 Fix 证据。A07 要求 Member/Admin、Idempotency-Key（1～128 可打印 ASCII）与 `{url}`，成功 202 `{repository_id,task_id,status}`。同用户同键/规范 URL 重放，不再联网；同键异 URL 返回 409 TASK_IDEMPOTENCY_CONFLICT；不同键/已存在规范 URL 返回 409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长及公开 smart HTTP，重定向一律拒绝。网络检查在数据库事务外，最终同事务创建 repository/task/outbox/audit。
+
+A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}`（最大100），按 created_at desc/id asc。A09 返回单条对象：`{id,url,status,default_branch,head_sha,size_bytes,owner_id,created_at,task,commits_imported:false}`。task 复用 A29 的公开字段，指向最新 successor；不存在404 REPOSITORY_NOT_FOUND。所有已认证角色可查看共享目录，不返回本机路径、storage_key 或原始 Git 输出。
+
+迁移 `0003_repositories` 新建 repository：UUID 主键；owner_id FK user RESTRICT；canonical_url VARCHAR(1024) ascii_bin UNIQUE；latest_task_id FK async_task RESTRICT；status CHECK queued/cloning/cloned/failed/cancelled；default_branch VARCHAR(255) NULL；head_sha CHAR(64) NULL；size_bytes BIGINT>=0；storage_key VARCHAR(192) NULL；created_at/updated_at UTC DATETIME(6)；created_at/id 索引。上文产品级 repository 表中的 raw url 和 checkpoint_sha 本批未创建；作者/提交/文件表尚待下一阶段。降级到 base 或较早版本在首条 DDL 前检查整条受影响路径，非空拒绝，保留认证/任务数据。
+
+任务类型 repository.clone：payload 保存 repository_id/规范 URL，total=null、processed 为当前 bare 字节数，最终100%；成功结果为 `{repository_id,default_branch,head_sha,size_bytes}`。成功只代表克隆，不代表提交解析完成。A10～A12 尚未实现。取消/重试遵循既有归属权限和幂等规则。
+
+拒绝/失败码包括 REPOSITORY_UNSAFE_URL、UNSAFE_ADDRESS、REDIRECT_REJECTED、NOT_PUBLIC_GIT（422），DNS_UNAVAILABLE、NETWORK_UNAVAILABLE、STORAGE_UNAVAILABLE、STORAGE_UNSAFE、GIT_UNAVAILABLE（503），STORAGE_LOW（507），ALREADY_EXISTS（409），以及 Worker CLONE_FAILED、CLONE_TIMEOUT、SIZE_LIMIT、TRANSFER_LIMIT、OUTPUT_LIMIT、HEAD_UNAVAILABLE、INVALID_METADATA。上述缩写均带 REPOSITORY_ 前缀；响应始终带 request_id，错误不回显用户 URL、凭据或路径。
+
+详细启动、安全边界及排障见 [安全仓库克隆](development/安全仓库克隆与验收.md)。

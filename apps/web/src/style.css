@@ -203,6 +203,11 @@ td:first-child {
   overflow-wrap: anywhere;
   color: #536978;
 }
+.repository-list li {
+  overflow-wrap: anywhere;
+  padding: 12px 0;
+  line-height: 1.6;
+}
 .task-facts {
   display: grid;
   grid-template-columns: 120px 1fr;

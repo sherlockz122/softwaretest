@@ -1,5 +1,6 @@
 """Shared configuration. Validation messages never include secret values."""
 
+from pathlib import Path
 from urllib.parse import quote
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
@@ -37,6 +38,9 @@ class Settings(BaseSettings):
     task_max_retries: int = Field(default=3, ge=0, le=10)
     scheduler_interval_seconds: float = Field(default=1, ge=0.1, le=30)
     coordinator_interval_seconds: float = Field(default=15, ge=0.1, le=60)
+    repository_storage_root: Path = Path("runtime/repositories")
+    repository_max_bytes: int = Field(default=2 * 1024**3, ge=1024**2, le=100 * 1024**3)
+    repository_timeout_seconds: int = Field(default=900, ge=10, le=3600)
 
     @model_validator(mode="after")
     def task_timing(self):

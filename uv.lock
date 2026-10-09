@@ -293,6 +293,7 @@ dependencies = [
     { name = "argon2-cffi" },
     { name = "celery", extra = ["redis"] },
     { name = "cryptography" },
+    { name = "dnspython" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
@@ -315,6 +316,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25,<26" },
     { name = "celery", extras = ["redis"], specifier = ">=5.5,<6" },
     { name = "cryptography", specifier = ">=44" },
+    { name = "dnspython", specifier = ">=2.6,<3" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "pydantic-settings", specifier = ">=2.6,<3" },
     { name = "pyjwt", specifier = ">=2.10,<3" },
@@ -329,6 +331,15 @@ dev = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "pytest", specifier = ">=8,<10" },
     { name = "ruff", specifier = ">=0.9,<1" },
+]
+
+[[package]]
+name = "dnspython"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/4a/50822184bd67cc6493f0fb6a880749158fcd31ab3fa07409acfd91f9fc85/dnspython-2.9.0.tar.gz", hash = "sha256:b44dc6b18f07a8b1c56676a19fbfdb5209415b046a9cece286baafa87ff3f7f1", size = 423560, upload-time = "2026-10-09T00:07:24.352Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/02/cdcc9b7c051786a103c3b09e1003a82fa0c66bcb91ffbdabcfbf7b4163b9/dnspython-2.9.0-py3-none-any.whl", hash = "sha256:9a4aedb833c3c1b49214d04d44d3032ab7a9135f7c1d29a549b4ff78fd82fda9", size = 354822, upload-time = "2026-10-09T00:07:22.622Z" },
 ]
 
 [[package]]

@@ -11,6 +11,9 @@ $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($projectRoot))
 $freeGiB = $drive.AvailableFreeSpace / 1GB
 if ($freeGiB -lt 2) { throw 'Critical disk space: less than 2 GiB free; protect database and writes.' }
+if ($ExpectedGrowthGiB -gt 0 -and $freeGiB -lt (2 + $ExpectedGrowthGiB)) {
+    throw ('Project disk cannot accommodate expected growth: {0:N2} GiB free; need {1:N2} GiB (growth plus emergency reserve). Stop and notify the user; never fall back to another drive.' -f $freeGiB, (2 + $ExpectedGrowthGiB))
+}
 if ($StrictStorage -and $freeGiB -lt ($ReserveGiB + $ExpectedGrowthGiB)) {
     throw ('Storage guard rejected command: {0:N2} GiB free; need {1:N2} GiB (reserve plus expected growth).' -f $freeGiB, ($ReserveGiB + $ExpectedGrowthGiB))
 }

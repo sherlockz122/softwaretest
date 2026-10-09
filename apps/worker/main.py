@@ -3,6 +3,7 @@
 from celery import Celery
 
 from packages.platform.config import load_settings
+from packages.platform.worker_logging import protect_broker_logs  # noqa: F401
 
 settings = load_settings()
 app = Celery("defectguard", broker=settings.broker_url, include=["apps.worker.tasks"])
