@@ -60,6 +60,15 @@ jobs:
           docker compose --profile maintenance run --rm migrate
           docker compose --profile maintenance run --rm bootstrap
           docker compose --profile full up -d --wait --wait-timeout 180
+      - name: Container address change regression
+        run: |
+          if .venv/bin/python -m pytest -q tests/test_runtime.py::test_proxy_recovers_after_api_address_changes --junitxml=runtime/acceptance/ci/dns.xml > runtime/acceptance/ci/dns.log 2>&1; then
+            result=0
+          else
+            result=$?
+          fi
+          .venv/bin/python -m scripts.ci_result_summary runtime/acceptance/ci/dns.xml
+          exit "$result"
       - name: Real backend and fault regression
         run: |
           if .venv/bin/python -m pytest -q --junitxml=runtime/acceptance/ci/backend.xml > runtime/acceptance/ci/backend.log 2>&1; then

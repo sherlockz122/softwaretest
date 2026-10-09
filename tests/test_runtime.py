@@ -34,7 +34,15 @@ def raw_docker(*args):
     result = subprocess.run(
         [os.environ["DG_DOCKER_EXE"], *args], capture_output=True, timeout=180, check=False
     )
-    assert result.returncode == 0, "Scoped Docker DNS acceptance action failed"
+    if result.returncode != 0:
+        # Classify known environment failures without dumping commands, stdout or secrets.
+        diagnostic = result.stderr.decode(errors="replace").lower()
+        category = "unknown"
+        if "user configured subnets" in diagnostic:
+            category = "static_ip_requires_explicit_subnet"
+        elif "address already in use" in diagnostic:
+            category = "address_already_in_use"
+        pytest.fail("Scoped Docker DNS acceptance action failed: " + category)
     return result.stdout.decode().strip()
 
 

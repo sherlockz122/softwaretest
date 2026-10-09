@@ -29,6 +29,10 @@ def main():
                     f"{outcome.upper()}: {identifier(case.get('classname'))}"
                     f".{identifier(case.get('name'))}"
                 )
+                # Source locations are useful without serializing assertion values.
+                body = case.find(outcome).text or ""
+                for file, line in re.findall(r"(?m)^([A-Za-z0-9_/.-]+\.py):(\d+):", body):
+                    print(f"  location: {identifier(file)}:{line}")
                 break
     print(f"JUnit: {len(cases)} cases, {failed} failed/error, {skipped} skipped")
 
