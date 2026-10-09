@@ -46,11 +46,15 @@ Assert-Restored
 Write-Output 'PASS nonzero exit and environment restore'
 $rejected = $false
 $output = @()
-try { $output = @(& $wrapper -FilePath $python -ExpectedGrowthGiB 1000000 -ArgumentList @('-c','print("MUST_NOT_RUN")')) }
+try { $output = @(& $wrapper -FilePath $python -StrictStorage -ExpectedGrowthGiB 1000000 -ArgumentList @('-c','print("MUST_NOT_RUN")')) }
 catch { if ($_.Exception.Message -notmatch 'Storage guard rejected command') { throw }; $rejected = $true }
 if (-not $rejected -or $output.Count) { throw 'Low capacity did not block child execution' }
 Assert-Restored
 Write-Output 'PASS insufficient capacity rejects before command; environment unchanged'
+$output = @(& $wrapper -FilePath $python -ExpectedGrowthGiB 1000000 -ArgumentList @('-c','print("ADVISORY_ALLOWED")') -WarningAction SilentlyContinue)
+if ($output -notcontains 'ADVISORY_ALLOWED') { throw 'Advisory capacity should not block development' }
+Assert-Restored
+Write-Output 'PASS advisory capacity allows command; environment restored'
 $storage = (& (Join-Path $PSScriptRoot 'Measure-ProjectStorage.ps1')) | ConvertFrom-Json
 if ($storage.project_root -ne $projectRoot -or $storage.project_logical_bytes -le 0 -or $storage.venv_logical_bytes -le 0) { throw 'Storage report invalid' }
 Write-Output 'PASS read-only storage report'

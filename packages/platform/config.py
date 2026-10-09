@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -29,6 +29,20 @@ class Settings(BaseSettings):
     session_seconds: int = Field(default=604800, ge=900, le=604800)
     login_rate_limit: int = Field(default=5, ge=1, le=1000)
     login_rate_prefix: str = "defectguard:auth:rate"
+    task_queue_seconds: int = Field(default=600, ge=1, le=86400)
+    task_lease_seconds: int = Field(default=45, ge=2, le=3600)
+    task_heartbeat_seconds: float = Field(default=10, ge=0.1, le=60)
+    delivery_lease_seconds: int = Field(default=30, ge=1, le=300)
+    delivery_max_attempts: int = Field(default=8, ge=1, le=20)
+    task_max_retries: int = Field(default=3, ge=0, le=10)
+    scheduler_interval_seconds: float = Field(default=1, ge=0.1, le=30)
+    coordinator_interval_seconds: float = Field(default=15, ge=0.1, le=60)
+
+    @model_validator(mode="after")
+    def task_timing(self):
+        if self.task_heartbeat_seconds >= self.task_lease_seconds:
+            raise ValueError("heartbeat must be shorter than lease")
+        return self
 
     @field_validator("environment")
     @classmethod
@@ -87,5 +101,5 @@ def load_settings(**overrides) -> Settings:
     try:
         return Settings(**overrides)
     except ValidationError as exc:
-        fields = sorted({str(error["loc"][0]) for error in exc.errors()})
+        fields = sorted({str((error["loc"] or ("task_timing",))[0]) for error in exc.errors()})
         raise ConfigurationError("SYSTEM_CONFIGURATION_INVALID: " + ", ".join(fields)) from None

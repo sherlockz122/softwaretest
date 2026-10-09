@@ -2,15 +2,20 @@
 param(
     [Parameter(Mandatory = $true)][string] $FilePath,
     [string[]] $ArgumentList = @(),
-    [ValidateRange(6, 1000000)][double] $ReserveGiB = 6,
-    [ValidateRange(0, 1000000)][double] $ExpectedGrowthGiB = 0
+    [ValidateRange(0, 1000000)][double] $ReserveGiB = 20,
+    [ValidateRange(0, 1000000)][double] $ExpectedGrowthGiB = 0,
+    [switch] $StrictStorage
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($projectRoot))
 $freeGiB = $drive.AvailableFreeSpace / 1GB
-if ($freeGiB -lt ($ReserveGiB + $ExpectedGrowthGiB)) {
+if ($freeGiB -lt 2) { throw 'Critical disk space: less than 2 GiB free; protect database and writes.' }
+if ($StrictStorage -and $freeGiB -lt ($ReserveGiB + $ExpectedGrowthGiB)) {
     throw ('Storage guard rejected command: {0:N2} GiB free; need {1:N2} GiB (reserve plus expected growth).' -f $freeGiB, ($ReserveGiB + $ExpectedGrowthGiB))
+}
+if (-not $StrictStorage -and $freeGiB -lt ($ReserveGiB + $ExpectedGrowthGiB)) {
+    Write-Warning ('Storage advisory: {0:N2} GiB free; suggested reserve plus growth {1:N2} GiB. Command continues.' -f $freeGiB, ($ReserveGiB + $ExpectedGrowthGiB))
 }
 if (-not [IO.Path]::IsPathRooted($FilePath) -or -not (Test-Path -LiteralPath $FilePath -PathType Leaf)) {
     throw 'FilePath must be an existing absolute executable path.'

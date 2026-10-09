@@ -223,9 +223,9 @@ erDiagram
 
 ## 10 框架首批实施契约（bootstrap-application）
 
-第三批已实现 A01～A04 与认证迁移 `0001_auth`。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和此迁移版本；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md)。任务表、outbox 和任务可用性仍待下一阶段实施。
+第三批已实现 A01～A04 与认证迁移 `0001_auth`；第四阶段通过 `0002_tasks` 实现任务表/outbox、A29～A32/A35、实际权限和可靠执行。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和当前精确迁移版本 `0002_tasks`；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md) 和 [可靠任务与验收](development/可靠任务与运行验收.md)。
 
-本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。认证表已迁移；任务部分保持计划契约。OpenAPI 与已实现部分对齐，变更须同步规格。
+本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。认证表已迁移；任务后端已按第四阶段实现，操作页面仍待开发。OpenAPI 与已实现部分对齐，变更须同步规格。
 
 ### 10.1 认证 A01～A04
 
@@ -276,7 +276,7 @@ A35 只接受 `{"duration_seconds":1}`；时长为整数 0～30，默认 1，未
 
 queued 取消原子转 cancelled，204；重复 cancelled 取消 204。running 首次取消转 cancel_requested，202 返回 task_id/status；重复请求仍返回 202。已 succeeded/failed 取消 `409 TASK_STATE_CONFLICT`。cancel_requested 后 Worker 的成功提交必须失败并走取消检查点；若完成先提交，则取消返回 409。
 
-failed/cancelled 可手动 retry；新任务初始 queued，202 返回新 task_id 和 retry_of。succeeded/running/queued/cancel_requested 不可 retry，返回 409。原任务最多一个直接 successor：同幂等键重放返回原 successor，不同 key 并发重试已有 successor 返回 `409 TASK_RETRY_EXISTS`，如要再次重试应请求失败的 successor。自动恢复只针对可重试失败，原请求链默认最多 3 次；不对用户主动取消自动恢复。业务任务、outbox 和 audit 在同一 MySQL 事务保存。
+failed/cancelled 可手动 retry；新任务初始 queued，202 返回新 task_id 和 retry_of。succeeded/running/queued/cancel_requested 不可 retry，返回 409。原任务最多一个直接 successor：同作用域同幂等键重放返回原 successor 的当前状态，不同 key 并发重试已有 successor 返回 `409 TASK_RETRY_EXISTS`，如要再次重试应请求失败的 successor。当前自动恢复只针对 running 租约过期 `TASK_LEASE_EXPIRED`，原请求链默认最多 3 次；取消、队列超时和投递超限不自动创建后继。业务任务、outbox 和 audit 在同一 MySQL 事务保存。
 
 ### 10.4 首批 MySQL 字段、外键和约束
 
@@ -298,4 +298,4 @@ outbox 与 task 同事务插入。投递器以短事务锁/租约领取到期 pe
 
 Worker 按 `status=queued` 原子领取、设置随机 execution_token 与 lease_until；重复消息领取失败即安全结束。心跳间隔 10 秒，执行租约 45 秒，扫描间隔 15 秒。任何业务写入、checkpoint 和成功/失败写回须在检查当前 status、execution_token、lease_until 尚有效的同一事务中完成；不能仅在进程内检查后无条件写入。
 
-协调器确认 lease 过期后条件写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。
+协调器确认 running lease 过期后写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor；cancel_requested 的过期执行收敛为 cancelled，不自动重试。自动 successor 当前只针对 TASK_LEASE_EXPIRED，投递/排队超限保留明确失败，用户可手动重试。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。

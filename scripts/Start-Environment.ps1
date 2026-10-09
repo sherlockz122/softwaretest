@@ -23,7 +23,7 @@ try {
     $arguments += @('up','-d','--wait','--wait-timeout','180')
     if ($Build) { $arguments += '--build' }
     if ($Mode -eq 'services') { $arguments += @('mysql','redis') }
-    if ($Mode -eq 'worker') { $arguments += 'worker' }
+    if ($Mode -eq 'worker') { $arguments += @('worker','scheduler') }
     $growth = if ($Build) { 1.5 } elseif ($Mode -eq 'services') { 1.5 } else { 0.5 }
     & $wrapper -FilePath $DockerPath -ExpectedGrowthGiB $growth -ArgumentList $arguments
 } finally { Pop-Location }

@@ -8,7 +8,7 @@ import jwt
 import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ from packages.auth.security import (
     require_role,
 )
 from packages.auth.service import now
-from packages.persistence.models import AuthSession, OperationLog, User
+from packages.persistence.models import SCHEMA_HEAD, AuthSession, OperationLog, User
 from packages.platform.config import ConfigurationError
 from packages.platform.connections import Connections
 from tests.auth_support import migrate, scratch_database
@@ -346,7 +346,7 @@ def test_schema_upgrade_constraints_downgrade_and_guard():
         with engine.connect() as connection:
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0001_auth"
+                == SCHEMA_HEAD
             )
         migrate(engine, "downgrade", "base")
         assert not connections.ready()
@@ -401,6 +401,9 @@ def test_schema_upgrade_constraints_downgrade_and_guard():
         with Session(engine) as db:
             assert db.scalar(select(func.count()).select_from(User)) == 1
             assert db.scalar(select(User)).password_hash.startswith("$argon2id$")
+        assert inspect(engine).has_table("async_task")
+        assert inspect(engine).has_table("task_outbox")
+        assert connections.ready()
         connections.close()
 
 

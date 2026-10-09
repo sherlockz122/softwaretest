@@ -2,7 +2,7 @@
 
 ## Context
 
-采用 DG-BL-2026-09-26 的模块化单体和 MySQL 8/Celery/Redis/Vue 3。用户已确认最小认证前置及事务 outbox。2026-10-09 本机 D 盘只余约 12.12GiB，因此将原有安装之外的首轮新增工作集预算控制在 4GiB，并保留至少 6GiB 余量；预算是规划值，不是假装已通过压测的硬配额。
+采用 DG-BL-2026-09-26 的模块化单体和 MySQL 8/Celery/Redis/Vue 3。用户已确认最小认证前置及事务 outbox。2026-10-09 用户释放 D 盘空间后可用约 85.06GiB，明确要求质量优先、取消严格存储预算。旧 4GiB 上限不再生效；常规建议保留 20GiB 并仅提示，低于 2GiB 时保护写入。依赖和实验按验证需要配置，不无节制浪费。
 
 ## Goals / Non-Goals
 
@@ -44,18 +44,18 @@ queued 可到 running/cancelled/failed；running 可到 succeeded/failed/cancel_
 
 可移植默认将 runtime/data/artifacts 和缓存配置在项目所在盘；本机全部在 D 盘。项目命令包装器只为当前命令设置 TEMP/TMP、pip/uv/npm 缓存，退出后恢复，不修改系统变量。Compose 的 MySQL/Redis 具名卷落在已配置的 D 盘 Docker 数据磁盘，volume 的挂载与内容在实际实现时验收。
 
-开发默认单 Worker/单采集并发；后续仓库阶段最多一个小仓库，采样 1000 提交并另检查完整克隆字节数。仅设置 commit_limit 不会限制 Git 完整历史大小。未通过容量探针不扩大数据/安装深度模型。保留日志限制和可核查数据清单，禁止自动全局 prune 或删除其他软件缓存。
+开发先保持单 Worker，依据 CPU/内存和故障验收调整并发。取消小仓库/1000 提交的全局限制，采集阶段先验证正确性再扩展多个仓库与历史窗口；实际克隆字节、运行时间与可用空间分别测量。保留日志轮转和可核查数据清单，禁止自动全局 prune 或删除其他软件缓存。
 
 ## Risks / Trade-offs
 
 - outbox/租约增加实现复杂度，因此先用诊断任务做故障注入，再移植采集流程。
-- D 盘余量不足以承诺八模型全量运行；深度模型和大仓库前必须重新检查，必要时由用户扩容。
+- 当前容量足以按既定中小规模路线推进八模型；深度模型和大仓库仍须评估 CPU/内存/显存与实际增长。
 - 应用余量检查不能严格约束 Docker 的全局镜像写入或其他程序占用；每次 pull/build 前还需显式测量。
 - 本轮 artifacts complete 仅表示规格文件齐全；未通过业务 E2E 时 tasks 不得勾选实施完成或归档。
 
 ## Migration Plan
 
-按实施批次拆分迁移：第三阶段 `0001_auth` 创建 user/auth_session/operation_log，随后显式 seed；下一阶段增加 async_task/task_outbox。先在随机命名的专用临时开发库验证升级/空库回滚；认证或审计表非空时 downgrade 拒绝删除。已有本机平台标记表保留。API 启动和 readiness 校验当前已实现的精确版本，缺失/不兼容版本给出安全提示。bootstrap 用户名/密码仅初始化命令必填，常规服务启动不要求或自动创建账号。实际验收证据见第三阶段报告。
+按实施批次拆分迁移：第三阶段 `0001_auth` 创建 user/auth_session/operation_log，随后显式 seed；第四阶段 `0002_tasks` 增加 async_task/task_outbox。使用随机命名专用开发库及独立新配置/新卷验证升级、空库回滚和非空拒绝回滚。MySQL DDL 隐式提交，跨两个版本回退至 base 时先检查全部受影响表，再删除任何任务表，避免中途拒绝造成部分删表。已有本机平台标记表及认证数据保留。API 启动和 readiness 校验精确版本 `0002_tasks`，缺失/不兼容版本给出安全提示。bootstrap 用户名/密码仅初始化命令必填，常规服务启动不要求或自动创建账号。实际验收证据见第三、第四阶段报告。
 
 ## Verification
 

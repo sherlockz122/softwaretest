@@ -85,6 +85,43 @@ services:
       start_period: 10s
     init: true
     logging: *logging
+  scheduler:
+    profiles: ["full", "worker"]
+    image: defectguard-app:stage2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.app
+    environment: *app-env
+    command: ["python", "-m", "apps.worker.scheduler"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-m", "apps.worker.scheduler_health"]
+      interval: 10s
+      timeout: 8s
+      retries: 6
+    init: true
+    logging: *logging
+  migrate:
+    profiles: ["maintenance"]
+    image: defectguard-app:stage2
+    environment: *app-env
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      mysql: {condition: service_healthy}
+    logging: *logging
+  bootstrap:
+    profiles: ["maintenance"]
+    image: defectguard-app:stage2
+    environment:
+      <<: *app-env
+      DG_BOOTSTRAP_USERNAME: ${DG_BOOTSTRAP_USERNAME:-}
+      DG_BOOTSTRAP_PASSWORD: ${DG_BOOTSTRAP_PASSWORD:-}
+    command: ["python", "-m", "packages.auth.bootstrap"]
+    depends_on:
+      mysql: {condition: service_healthy}
+    logging: *logging
   web:
     profiles: ["full"]
     image: defectguard-web:stage2

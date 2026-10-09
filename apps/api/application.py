@@ -10,9 +10,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from apps.api.auth import router
+from apps.api.tasks import diagnostic_router
+from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
+from packages.tasks.service import TaskError
 
 logger = logging.getLogger("defectguard")
 
@@ -86,7 +89,16 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
-        return error(request, 422, "SYSTEM_INVALID_INPUT", "请求参数无效")
+        code = (
+            "TASK_INVALID_INPUT"
+            if request.url.path.startswith("/api/v1/tasks")
+            else "SYSTEM_INVALID_INPUT"
+        )
+        return error(request, 422, code, "请求参数无效")
+
+    @app.exception_handler(TaskError)
+    async def task_error(request: Request, exc: TaskError):
+        return error(request, exc.status, exc.code, "任务请求未通过，请检查输入、权限或当前状态")
 
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
@@ -101,6 +113,9 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         return error(request, 503, "SYSTEM_DEPENDENCY_UNAVAILABLE", "基础服务暂不可用")
 
     app.include_router(router)
+    app.include_router(tasks_router)
+    if settings.environment != "production":
+        app.include_router(diagnostic_router)
 
     @app.get("/api/v1/health", tags=["health"])
     def health():
