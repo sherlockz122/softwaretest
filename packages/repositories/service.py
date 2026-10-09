@@ -98,6 +98,7 @@ class RepositoryService:
             "commits_imported": repository.parse_status == "parsed",
             "parse_status": repository.parse_status,
             "sync_status": repository.sync_status,
+            "fix_status": repository.fix_status,
         }
 
     def listing(self, page=1, page_size=20):
@@ -152,6 +153,13 @@ class RepositoryService:
             )
             result["sync_window"] = SyncService.visible(sync_point) if sync_point else None
             result["history_coverage"] = "recent_window" if point and point.commit_limit else "full"
+            from packages.mining.fix import FixService
+            from packages.persistence.models import FixRun
+
+            fix_run = (
+                db.get(FixRun, repository.fix_root_task_id) if repository.fix_root_task_id else None
+            )
+            result["fix_run"] = FixService.visible(fix_run) if fix_run else None
             return result
 
     def publish(self, task_id, token, metadata, storage_key):

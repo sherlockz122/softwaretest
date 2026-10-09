@@ -1,6 +1,12 @@
 import { reactive } from "vue";
 
 const messages = {
+  FIX_STATE_CONFLICT: "请先完成解析，并等待当前任务结束后再运行 Fix 识别。",
+  FIX_VERSION_CONFLICT: "分析规则或基线发生变化，请检查本轮记录。",
+  FIX_PLAN_CONFLICT: "分析计划与已保存数据不一致，已停止写入。",
+  FIX_REVIEW_CONFLICT: "复核记录已被更新，请刷新后重新确认。",
+  FIX_RULE_UNSUPPORTED: "此规则版本尚未支持，请使用当前可用规则。",
+  FIX_RUN_NOT_FOUND: "此轮分析不存在，请刷新分析列表。",
   REPOSITORY_SYNC_STATE_CONFLICT:
     "仓库需先完成解析；已有同步、失败或待复核窗口时，请查看当前任务。",
   REPOSITORY_SYNC_BASE_CONFLICT:

@@ -5,6 +5,8 @@ import { client } from "../api";
 import { useLatest } from "../latest";
 import { active, operationKeys, date } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
+import FixPanel from "../components/FixPanel.vue";
+const fixPanel = ref(null);
 const route = useRoute();
 const repo = useLatest((id, signal) =>
   client.request("/repositories/" + encodeURIComponent(id), { signal }),
@@ -53,6 +55,7 @@ async function refresh() {
       files.load({ id, sha: selected.value.sha, page: filePage.value }),
     );
   await Promise.all(queries);
+  await fixPanel.value?.refresh();
 }
 watch(filePage, (value) => {
   if (selected.value)
@@ -380,6 +383,13 @@ onUnmounted(() => clearInterval(poll));
         <small>错误编号：{{ repo.data.value.task.error.code }}</small>
         <small>请求编号：{{ repo.data.value.task.error.request_id }}</small>
       </div>
+      <FixPanel
+        ref="fixPanel"
+        :repo="repo.data.value"
+        :can-write="canParse"
+        :busy="active.has(repo.data.value.task.status)"
+        :reload="() => repo.load(route.params.id)"
+      />
       <h2>提交记录</h2>
       <RequestError :error="commits.error.value" />
       <div

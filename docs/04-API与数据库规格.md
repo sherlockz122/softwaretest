@@ -308,7 +308,13 @@ A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}
 
 迁移0003创建repository基本字段；0004增加parse_status（pending/queued/parsing/parsed/failed/cancelled）和parse_root_task_id FK task。产品级raw url字段不创建；checkpoint_sha实际在parse_checkpoint中。降级前检查整条受影响路径非空及已建立解析窗口，MySQL隐式提交前即拒绝，保留认证/任务/采集数据。
 
-repository.clone仍表示bare克隆成功，第八阶段A10已实现，A12待实现。repository.parse计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
+repository.clone仍表示bare克隆成功，第八阶段A10和第九阶段A12已实现。repository.parse/fix计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
+
+## 第九阶段A12与0006实际契约
+
+A12 POST fix-detection接受rule_version（当前fix-evidence-v1）及严格include_medium布尔，默认true，Idempotency-Key/202；Member/Admin写入，Viewer只读。关联GET fix-runs及fix-runs/{run_id}/evidence有界分页；PATCH fix-evidence/{assessment_id}/review要求status、expected_revision、非空理由，冲突409，同用户相同已接受决策可重放。不接受路径、任意regex、Issue URL或confirmed_bug。A09增加fix_status和安全fix_run；任务类型repository.fix，解析/同步/Fix互斥。详细路径/返回与错误见 [Fix指导](development/Fix证据与验收.md) 和 [实际OpenAPI](contracts/bootstrap-openapi.json)。
+
+0006冻结DDL新增repository.fix_status/root，fix_run（根任务/仓库/接受HEAD及私有存储/解析及规则版本、摘要、政策、覆盖度、计划/计数）、fix_assessment（轮次+commit唯一、规则判定、内容覆盖、复核revision/actor/note/time）、defect_evidence（判定+ordinal唯一、fix_commit_id/type/value/confidence/rule_version/source）及issue_observation（轮次+Issue编号唯一/冻结snapshot）。逻辑证据的review_status由所属assessment关联返回，原证据不随复核改写；OperationLog保存完整复核历史，公开查询最近20条。FK RESTRICT、计数/状态/等级CHECK和索引实际MySQL验证；旧0005数据保留，非空降级第一条DDL前检查整个受影响路径和已建根任务。
 
 拒绝/失败码包括 REPOSITORY_UNSAFE_URL、UNSAFE_ADDRESS、REDIRECT_REJECTED、NOT_PUBLIC_GIT（422），DNS_UNAVAILABLE、NETWORK_UNAVAILABLE、STORAGE_UNAVAILABLE、STORAGE_UNSAFE、GIT_UNAVAILABLE（503），STORAGE_LOW（507），ALREADY_EXISTS（409），以及 Worker CLONE_FAILED、CLONE_TIMEOUT、SIZE_LIMIT、TRANSFER_LIMIT、OUTPUT_LIMIT、HEAD_UNAVAILABLE、INVALID_METADATA。上述缩写均带 REPOSITORY_ 前缀；响应始终带 request_id，错误不回显用户 URL、凭据或路径。
 

@@ -104,3 +104,28 @@
 #### Scenario: 误报语境
 - WHEN 关键词出现在文档修正、拼写修正、否定语境或回滚中
 - THEN 规则按照已声明排除条件处理并保留判定依据
+
+#### Scenario: 固定接受快照与规则重算
+- WHEN Member运行Fix识别或改变版本化政策重算
+- THEN 系统固定已接受HEAD、解析及规则版本/摘要、覆盖度和政策，按可达已解析集合生成独立轮次
+- AND 不纳入未接受同步批次、不覆盖旧证据和复核，不将有限覆盖或无证据认定clean
+
+#### Scenario: Issue观测不确定与资源边界
+- WHEN Issue确认失败、限流、返回PR、不安全连接、重定向或超出查询/响应预算
+- THEN 系统保存受限的low线索且不伪造high证据
+- AND 公开HTTPS接口验证全部地址及证书、固定peer、不发送凭据或执行远程写入
+
+#### Scenario: Fix批次与外部观测恢复
+- WHEN 已提交批次后取消/空间不足/Worker强杀或Issue观测/最终事务回执丢失
+- THEN 已提交判定/复核及首次冻结观测保留，successor使用同根任务和计划继续
+- AND 有效token/status/lease/latest/root下批次与checkpoint同事务，旧执行不能写入
+
+#### Scenario: 人工复核并发与审计
+- WHEN Member提交确认、拒绝或恢复待复核及理由
+- THEN 系统检查expected_revision并同事务保存状态/revision/actor/理由/审计，保留原规则证据
+- AND 相同已接受决策可安全重放，其它冲突409，Viewer拒绝写入，不自动生成SZZ标签
+
+#### Scenario: Fix查询与页面恢复
+- WHEN 已认证用户查看Fix轮次和证据或遇到查询/写回执错误
+- THEN 系统提供有界稳定分页、覆盖度和复核历史，页面刷新关联查询、同键跟踪实际任务并隔离迟到响应
+- AND 公开响应不含私有路径、token、作者邮箱或Issue原始载荷

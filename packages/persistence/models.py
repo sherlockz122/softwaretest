@@ -15,7 +15,7 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0005_repository_sync"
+SCHEMA_HEAD = "0006_fix_evidence"
 
 
 class Base(DeclarativeBase):
@@ -199,6 +199,10 @@ class Repository(Stamp, Base):
             "'failed','cancelled')",
             name="ck_repository_sync_status",
         ),
+        CheckConstraint(
+            "fix_status IN ('pending','queued','detecting','detected','failed','cancelled')",
+            name="ck_repository_fix_status",
+        ),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
     id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
@@ -224,6 +228,12 @@ class Repository(Stamp, Base):
         VARCHAR(24), default="pending", server_default="pending"
     )
     sync_root_task_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    fix_status: Mapped[str] = mapped_column(
+        VARCHAR(24), default="pending", server_default="pending"
+    )
+    fix_root_task_id: Mapped[str | None] = mapped_column(
         uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
     )
     updated_at: Mapped[datetime] = mapped_column(
@@ -363,3 +373,98 @@ class SyncWindow(Stamp, Base):
     total: Mapped[int | None] = mapped_column(BIGINT())
     processed: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
     last_sha: Mapped[str | None] = mapped_column(hash_column())
+
+
+class FixRun(Stamp, Base):
+    __tablename__ = "fix_run"
+    __table_args__ = (
+        CheckConstraint(
+            "processed >= 0 AND (total IS NULL OR total >= processed)", name="ck_fix_counts"
+        ),
+        Index("ix_fix_repository", "repository_id", "created_at", "root_task_id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    head_sha: Mapped[str | None] = mapped_column(hash_column())
+    storage_key: Mapped[str] = mapped_column(VARCHAR(192))
+    parser_version: Mapped[str] = mapped_column(VARCHAR(64))
+    history_coverage: Mapped[str] = mapped_column(VARCHAR(24))
+    rule_version: Mapped[str] = mapped_column(VARCHAR(64))
+    rule_hash: Mapped[str] = mapped_column(hash_column())
+    include_medium: Mapped[bool] = mapped_column(BOOLEAN())
+    plan_hash: Mapped[str | None] = mapped_column(hash_column())
+    total: Mapped[int | None] = mapped_column(BIGINT())
+    processed: Mapped[int] = mapped_column(BIGINT(), default=0, server_default="0")
+    last_sha: Mapped[str | None] = mapped_column(hash_column())
+
+
+class FixAssessment(Stamp, Base):
+    __tablename__ = "fix_assessment"
+    __table_args__ = (
+        UniqueConstraint("root_task_id", "commit_id", name="uq_fix_assessment"),
+        CheckConstraint(
+            "review_status IN ('unreviewed','confirmed','rejected') AND review_revision >= 0",
+            name="ck_fix_review",
+        ),
+        Index("ix_fix_assessment_run", "root_task_id", "sha"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("fix_run.root_task_id", ondelete="RESTRICT")
+    )
+    commit_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("git_commit.id", ondelete="RESTRICT")
+    )
+    sha: Mapped[str] = mapped_column(hash_column())
+    rule_candidate: Mapped[bool] = mapped_column(BOOLEAN())
+    disposition: Mapped[str] = mapped_column(VARCHAR(32))
+    content_complete: Mapped[bool] = mapped_column(BOOLEAN())
+    review_status: Mapped[str] = mapped_column(
+        VARCHAR(24), default="unreviewed", server_default="unreviewed"
+    )
+    review_revision: Mapped[int] = mapped_column(INTEGER(), default=0, server_default="0")
+    review_actor_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("user.id", ondelete="RESTRICT")
+    )
+    review_note: Mapped[str | None] = mapped_column(VARCHAR(300))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6))
+
+
+class DefectEvidence(Stamp, Base):
+    __tablename__ = "defect_evidence"
+    __table_args__ = (
+        UniqueConstraint("assessment_id", "ordinal", name="uq_defect_evidence"),
+        CheckConstraint(
+            "ordinal >= 0 AND confidence IN ('high','medium','low')", name="ck_evidence_confidence"
+        ),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    assessment_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("fix_assessment.id", ondelete="RESTRICT")
+    )
+    fix_commit_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("git_commit.id", ondelete="RESTRICT")
+    )
+    ordinal: Mapped[int] = mapped_column(INTEGER())
+    type: Mapped[str] = mapped_column(VARCHAR(32))
+    value: Mapped[str] = mapped_column(VARCHAR(300))
+    confidence: Mapped[str] = mapped_column(VARCHAR(16))
+    rule_version: Mapped[str] = mapped_column(VARCHAR(64))
+    source: Mapped[dict] = mapped_column(JSON())
+
+
+class IssueObservation(Stamp, Base):
+    __tablename__ = "issue_observation"
+    __table_args__ = ({"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},)
+    root_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("fix_run.root_task_id", ondelete="RESTRICT"), primary_key=True
+    )
+    number: Mapped[int] = mapped_column(BIGINT(), primary_key=True)
+    snapshot: Mapped[dict] = mapped_column(JSON())

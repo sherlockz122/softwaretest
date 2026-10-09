@@ -448,6 +448,81 @@ test("public repository lost-response replay, real Worker clone and persisted me
     "已入库 0 / 0 个新提交",
   );
   await shot(page, info, "repository-synced");
+  let fixTask;
+  let fixHeaders;
+  await page.route("**/api/v1/repositories/*/fix-detection", async (route) => {
+    fixHeaders = route.request().headers();
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    fixTask = (await response.json()).task_id;
+    await route.abort("failed");
+  });
+  await page
+    .getByRole("button", { name: "运行 Fix 识别", exact: true })
+    .click();
+  await expect.poll(() => fixTask).toBeTruthy();
+  const fixReplay = await page.request.post(
+    `/api/v1/repositories/${accepted}/fix-detection`,
+    {
+      headers: fixHeaders,
+      data: { rule_version: "fix-evidence-v1", include_medium: true },
+    },
+  );
+  expect(fixReplay.status()).toBe(202);
+  expect((await fixReplay.json()).task_id).toBe(fixTask);
+  await expect(page.getByTestId("fix-status")).toHaveText("识别完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("fix-assessment")).toHaveCount(3);
+  const assessment = page.getByTestId("fix-assessment").first();
+  await assessment
+    .getByLabel("复核理由", { exact: true })
+    .fill("browser review rationale");
+  let raced = false;
+  await page.route(
+    "**/api/v1/repositories/*/fix-evidence/*/review",
+    async (route) => {
+      if (!raced) {
+        raced = true;
+        const original = route.request().postDataJSON();
+        const concurrent = await page.request.patch(route.request().url(), {
+          headers: route.request().headers(),
+          data: {
+            ...original,
+            status: "rejected",
+            note: "concurrent browser review",
+          },
+        });
+        expect(concurrent.status()).toBe(200);
+      }
+      await route.continue();
+    },
+  );
+  await assessment
+    .getByRole("button", { name: "确认修复", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("复核记录已被更新");
+  await expect(assessment).toContainText("人工拒绝");
+  await assessment
+    .getByRole("button", { name: "确认修复", exact: true })
+    .click();
+  await expect(assessment).toContainText("人工确认");
+  await assessment.getByText("复核记录（最近20次）", { exact: true }).click();
+  await expect(assessment).toContainText("concurrent browser review");
+  await shot(page, info, "repository-fix-reviewed");
+  await page.unroute("**/api/v1/repositories/*/fix-detection");
+  await page.getByLabel("纳入中等级关键词候选").uncheck();
+  await page
+    .getByRole("button", { name: "运行 Fix 识别", exact: true })
+    .click();
+  await expect(page.getByTestId("fix-status")).toHaveText("识别完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("fix-runs").locator("li")).toHaveCount(2);
+  await page.getByRole("button", { name: "查看此轮证据", exact: true }).click();
+  await expect(page.getByTestId("fix-assessment").first()).toContainText(
+    "人工确认",
+  );
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "登录", exact: true }),
@@ -463,6 +538,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
   await expect(page.getByTestId("parse-status")).toHaveText("解析完成");
   await expect(page.getByTestId("sync-status")).toHaveText("同步完成");
+  await expect(page.getByTestId("fix-status")).toHaveText("识别完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({
@@ -507,6 +583,13 @@ test("repository Viewer controls and mobile detail remain readable", async ({
   await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
   await expect(
     page.getByRole("button", { name: "同步默认分支", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("fix-panel")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "运行 Fix 识别", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "确认修复", exact: true }),
   ).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -564,4 +647,30 @@ test("history review UI preserves accepted HEAD and blocks another sync", async 
     /^[0-9a-f]{40}$/,
   );
   await shot(page, info, "repository-review-required");
+});
+
+test("Fix query failure can recover through repository refresh", async ({
+  page,
+}, info) => {
+  await login(page);
+  let available = false;
+  await page.route("**/api/v1/repositories/*/fix-runs?*", (route) =>
+    available ? route.continue() : route.abort("failed"),
+  );
+  await page.getByRole("link", { name: "仓库目录", exact: true }).click();
+  await page
+    .getByRole("link", {
+      name: "https://github.com/octocat/hello-world.git",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByTestId("fix-panel").getByRole("alert")).toContainText(
+    "连接失败",
+  );
+  available = true;
+  await page.getByRole("button", { name: "刷新详情", exact: true }).click();
+  await expect(page.getByTestId("fix-runs").locator("li")).toHaveCount(2);
+  await expect(page.getByTestId("fix-panel").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByTestId("fix-assessment")).toHaveCount(3);
+  await shot(page, info, "fix-query-recovered");
 });

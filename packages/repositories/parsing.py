@@ -167,6 +167,9 @@ class ParsingService:
     def plan(self, task_id, token, reader, head, commit_limit):
         return reader.plan(head, commit_limit)
 
+    def record(self, task_id, token, reader, sha):
+        return reader.record(sha)
+
     def finish(self, db, task, repo, point, end):
         task.result_json = {
             "repository_id": repo.id,

@@ -100,3 +100,7 @@ URL 限公开 HTTPS、443、ASCII DNS 名或 IPv4，拒绝凭据/查询/片段/�
 0005新增sync_window和repository独立sync_status/root。A10以{}请求，先完成初次解析；新目录完整安全clone、原HEAD祖先及默认分支检查、rev-list new ^base、复用每10提交事务。候选第一次绑定窗口后不改变，重试不再联网；最后批次才推进正式HEAD/存储引用。无变化0/0成功；强推/分支改变/历史消失以成功检查结果requires_review暂停并保留候选，不导入分叉，不删旧历史，没有自动重新基线。初次窗口唯一及历史sync窗口保留，最近N覆盖度不提升。资源预算是新clone/index峰值加解析512MiB及2GiB余量，D不足提前拒绝不转C。A09返回当前窗口/覆盖度，A10子资源分页查询历史窗口。未来Fix/SZZ/数据集需区分接受HEAD与部分批次并集，人工复核恢复/归档清理另有审计设计。复验见 [同步指导](../../../docs/development/增量同步与验收.md)。
 
 调整2.1实现方法为受监督原生Git遍历/读取 + PyDriller受限hunk行号解析，避免库遍历器自行发起不受deadline/输出约束的命令。邮箱规范化哈希入库、身份版本化；merge元数据保留/diff明确跳过，root/rename/delete/binary/编码/超限状态记录。完整固定参数、边界及未来覆盖度约束见 [解析指导](../../../docs/development/提交解析与验收.md)。该调整不减少解析验收场景，不引入Fix/SZZ或默认隐藏历史上限。
+
+## 12. 第九阶段Fix证据（2026-10-10）
+
+A12异步repository.fix固定接受HEAD/解析版本/覆盖度及fix-evidence-v1摘要/medium政策，Git可达集合交已解析数据，不使用未接受同步批次。0006添加fix_run/assessment/defect_evidence/issue_observation及repository状态/root；每10判定/证据/checkpoint/进度原子，真实Worker恢复保留已复核批次。只读公开GitHub适配精确bug标签且本仓库关闭关系为high；普通引用、PR、限流/不可用为low；观测首次发布冻结，网络不持数据库锁，回执未知不重取，重算另建轮次。人工复核revision/非空理由/审计同事务，相同已接受决策安全重放，冲突409；不覆盖规则原判定，也不输出clean/SZZ标签。新轮与解析/同步活动任务互斥，requires_review不解除。API/page/容量/规则边界详见 [Fix指导](../../../docs/development/Fix证据与验收.md)。SZZ独立change，防止事后Issue/复核信息泄漏。

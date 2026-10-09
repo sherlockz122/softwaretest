@@ -1,10 +1,12 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.auth import current_user
+from packages.mining.fix import FixService
+from packages.mining.fix_rules import RULE_VERSION
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
 from packages.repositories.sync import SyncService
@@ -24,6 +26,19 @@ class ParseBody(BaseModel):
 
 class SyncBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class FixBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    rule_version: Literal["fix-evidence-v1"] = RULE_VERSION
+    include_medium: bool = Field(default=True, strict=True)
+
+
+class FixReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["confirmed", "rejected", "unreviewed"]
+    expected_revision: int = Field(ge=0, strict=True)
+    note: str = Field(min_length=1, max_length=300, pattern=r"\S")
 
 
 def service(request):
@@ -118,4 +133,57 @@ def sync_windows(
 ):
     return SyncService(request.app.state.settings, request.app.state.connections).windows(
         str(repository_id), page, page_size
+    )
+
+
+def fixing(request):
+    return FixService(request.app.state.settings, request.app.state.connections)
+
+
+@router.post("/{repository_id:uuid}/fix-detection", status_code=202)
+def detect_fix(
+    repository_id: UUID,
+    body: FixBody,
+    request: Request,
+    user=Depends(current_user),
+    key: str = Header(alias="Idempotency-Key"),
+):
+    return fixing(request).create(
+        user, str(repository_id), key, body.model_dump(), request.state.request_id
+    )
+
+
+@router.get("/{repository_id:uuid}/fix-runs")
+def fix_runs(
+    repository_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return fixing(request).runs(str(repository_id), page, page_size)
+
+
+@router.get("/{repository_id:uuid}/fix-runs/{run_id:uuid}/evidence")
+def fix_evidence(
+    repository_id: UUID,
+    run_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return fixing(request).results(str(repository_id), str(run_id), page, page_size)
+
+
+@router.patch("/{repository_id:uuid}/fix-evidence/{assessment_id:uuid}/review")
+def review_fix(
+    repository_id: UUID,
+    assessment_id: UUID,
+    body: FixReviewBody,
+    request: Request,
+    user=Depends(current_user),
+):
+    return fixing(request).review(
+        user, str(repository_id), str(assessment_id), body.model_dump(), request.state.request_id
     )

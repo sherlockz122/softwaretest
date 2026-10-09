@@ -380,7 +380,7 @@ class ParseExecutor:
                 records = []
                 for sha in plan[processed : processed + BATCH_SIZE]:
                     tick()
-                    records.append(reader.record(sha))
+                    records.append(self.service.record(task_id, token, reader, sha))
                 if not self.service.batch(
                     task_id,
                     token,
