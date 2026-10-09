@@ -6,9 +6,11 @@
 - [x] 0.3 验收项目命令存储保护，写准备阶段报告；审核提交范围后仅推送 wang（证据见 docs/reports/2026-10-09-第一批准备任务阶段报告.md，远程核查见交付消息）
 
 ## 1. 可运行工程
-- [ ] 1.1 配置 Python 根工程与 uv 锁、前端 Vue/npm 锁；PLATFORM-ENV 验证项目 Python 3.11 与前端构建
-- [ ] 1.2 配置本地 MySQL/Redis 与五组件 Compose，D 盘卷、容器日志轮转与启动说明；PLATFORM-ENV 验证隔离端口及健康状态
-- [ ] 1.3 配置统一错误/request_id、最小健康检查及配置校验；PLATFORM-ENV 验证缺失 secret 拒绝启动
+- [x] 1.1 配置 Python 根工程与 uv 锁、前端 Vue/npm 锁；PLATFORM-ENV 验证项目 Python 3.11 与前端构建
+- [x] 1.2 配置本地 MySQL/Redis 与五组件 Compose，D 盘卷、容器日志轮转与启动说明；PLATFORM-ENV 验证隔离端口及健康状态
+- [x] 1.3 配置统一错误/request_id、最小健康检查及配置校验；PLATFORM-ENV 验证缺失 secret 拒绝启动
+
+第 1 组证据：docs/reports/2026-10-09-第二阶段工程基础报告.md；11 项测试、实际五组件、浏览器正常/故障界面通过。当前 readiness 仅基础连接，认证/业务迁移/可靠任务及 E2E-BOOT 保持未完成。
 
 ## 2. 最小认证（US-22，NFR-01/04）
 - [ ] 2.1 实施 user/auth_session/审计迁移和显式预置账号；INT-MIGRATION 验证约束、升级与空库回滚

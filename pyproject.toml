@@ -1,0 +1,32 @@
+[project]
+name = "defectguard"
+version = "0.1.0"
+description = "DefectGuard application foundation"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic-settings>=2.6,<3",
+  "sqlalchemy>=2.0,<3", "pymysql>=1.1,<2", "cryptography>=44",
+  "alembic>=1.14,<2", "redis>=5,<8", "celery[redis]>=5.5,<6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.9,<1"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+  "integration: requires this project's running MySQL and Redis",
+  "runtime: explicitly enabled Docker restart and live HTTP acceptance",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

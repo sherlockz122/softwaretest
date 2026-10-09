@@ -1,0 +1,105 @@
+name: defectguard-wang
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+x-app-env: &app-env
+  DG_ENVIRONMENT: ${DG_ENVIRONMENT:-development}
+  DG_MYSQL_HOST: mysql
+  DG_MYSQL_PORT: "3306"
+  DG_MYSQL_DATABASE: ${DG_MYSQL_DATABASE:-defectguard}
+  DG_MYSQL_USER: ${DG_MYSQL_USER:-defectguard}
+  DG_MYSQL_PASSWORD: ${DG_MYSQL_PASSWORD:?Set DG_MYSQL_PASSWORD in .env}
+  DG_REDIS_HOST: redis
+  DG_REDIS_PORT: "6379"
+  DG_REDIS_PASSWORD: ${DG_REDIS_PASSWORD:?Set DG_REDIS_PASSWORD in .env}
+  DG_SIGNING_KEY: ${DG_SIGNING_KEY:?Set DG_SIGNING_KEY in .env}
+  DG_FRONTEND_ORIGIN: http://127.0.0.1:18080
+services:
+  mysql:
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    environment:
+      MYSQL_DATABASE: ${DG_MYSQL_DATABASE:-defectguard}
+      MYSQL_USER: ${DG_MYSQL_USER:-defectguard}
+      MYSQL_PASSWORD: ${DG_MYSQL_PASSWORD:?Set DG_MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DG_MYSQL_ROOT_PASSWORD:?Set DG_MYSQL_ROOT_PASSWORD in .env}
+    ports: ["127.0.0.1:${DG_MYSQL_PORT:-13306}:3306"]
+    command: ["--innodb-buffer-pool-size=128M", "--innodb-redo-log-capacity=100M"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -u$$MYSQL_USER -D$$MYSQL_DATABASE -e 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    logging: *logging
+  redis:
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    environment:
+      REDIS_PASSWORD: ${DG_REDIS_PASSWORD:?Set DG_REDIS_PASSWORD in .env}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction"]
+    ports: ["127.0.0.1:${DG_REDIS_PORT:-16379}:6379"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *logging
+  api:
+    profiles: ["full"]
+    image: defectguard-app:stage2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.app
+    environment: *app-env
+    command: ["python", "-m", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    ports: ["127.0.0.1:18000:8000"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready',timeout=6)"]
+      interval: 10s
+      timeout: 8s
+      retries: 6
+    init: true
+    logging: *logging
+  worker:
+    profiles: ["full", "worker"]
+    image: defectguard-app:stage2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.app
+    environment: *app-env
+    command: ["python", "-m", "celery", "-A", "apps.worker.main:app", "worker", "--loglevel=WARNING", "--concurrency=1", "--hostname=defectguard@%h"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-m", "apps.worker.health"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+    init: true
+    logging: *logging
+  web:
+    profiles: ["full"]
+    image: defectguard-web:stage2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    ports: ["127.0.0.1:18080:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: *logging
+volumes:
+  mysql-data:
+  redis-data:

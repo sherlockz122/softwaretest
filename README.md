@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前处于开发准备阶段，已完成需求与技术基线统一，尚未开始应用代码实现。先实施 `bootstrap-application` 建立可运行工程、最小认证和可靠任务，再实施 `add-data-collection` 的仓库采集。首批准备任务的范围与验收见 [阶段报告](docs/reports/2026-10-09-第一批准备任务阶段报告.md)。
+当前已完成准备与工程基础：API、Vue 前端、MySQL、Redis 和真实 Celery Worker 可按说明启动，依赖已锁定，健康/配置检查已验收。最小认证、业务迁移及可靠任务尚待实现，再进入 `add-data-collection`。见 [工程启动与验收](docs/development/工程启动与验收.md)、[第二阶段报告](docs/reports/2026-10-09-第二阶段工程基础报告.md) 和 [后续整体规划](docs/development/后续整体规划与空间预算.md)。
 
 ## 当前分支范围
 

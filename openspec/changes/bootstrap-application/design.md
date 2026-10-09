@@ -16,6 +16,8 @@
 
 沿用 `apps/api`、`apps/worker`、`apps/web` 与按需创建的 `packages/domain`、`packages/persistence`。Python 单一根配置和 uv 锁，前端独立 npm 锁。API/Worker/投递器/协调器复用同一 Python 包；原生开发只容器化 MySQL/Redis，全容器 Compose 为演示路径。端口默认绑定 127.0.0.1，MySQL/Redis 不复用本机已有实例。
 
+Windows 补充：API/Web 可原生开发；Celery 官方不支持原生 Windows，因此需要 Worker 时使用共享应用镜像的 Linux 容器。第二批先提供 `packages/platform` 配置和连接基础；domain/persistence 业务包及 migration 在第 2～3 组引入，不创建虚假的业务表。
+
 Python 使用项目 `.venv`；启动命令显式绑定项目解释器。密钥从未提交 `.env` 注入。依赖精确版本在实施任务中解析并锁定，不在本文凭空指定。内置诊断 API 仅 development/test 开启，后续生产配置关闭。
 
 ### 2 最小权限

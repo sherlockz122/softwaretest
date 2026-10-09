@@ -223,7 +223,9 @@ erDiagram
 
 ## 10 框架首批实施契约（bootstrap-application）
 
-本节在 `wang` 个人开发分支生效，定义下一批框架实现的接口和迁移约束。本次准备阶段没有应用代码或已执行的迁移；OpenAPI 后续必须与本节对齐，变更须同步规格。
+第二批健康接口已落地：A34 `/health` 仅表示进程存活，补充 `/health/ready` 检查 MySQL/Redis 基础连接；503 为 `SYSTEM_DEPENDENCY_UNAVAILABLE`。业务迁移版本及任务可用性门槛将在后续实施时加入。响应带 UUID X-Request-ID，统一错误及配置细则见 [工程说明](development/工程启动与验收.md)。本节下述认证/业务表/任务仍未实现。
+
+本节在 `wang` 个人开发分支生效，定义后续认证和可靠任务的接口及迁移约束。尚无业务表迁移；OpenAPI 后续必须与本节对齐，变更须同步规格。
 
 ### 10.1 认证 A01～A04
 
