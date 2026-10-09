@@ -1,0 +1,71 @@
+name: Wang quality
+on:
+  push:
+    branches: [wang]
+  pull_request:
+    branches: [wang]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wang-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/runtime/cache/uv
+      npm_config_cache: ${{ github.workspace }}/runtime/cache/npm
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/runtime/cache/playwright
+      DG_DOCKER_EXE: /usr/bin/docker
+      DG_RUN_RUNTIME_TESTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.13.0"
+      - name: Locked dependencies
+        run: |
+          mkdir -p runtime/acceptance/ci
+          python -m pip install uv==0.12.19
+          uv sync --frozen
+          uv lock --check
+          npm ci --prefix apps/web
+          npm install --prefix runtime/tools @fission-ai/openspec@1.13.2 --no-audit --no-fund
+          node apps/web/node_modules/@playwright/test/cli.js install --with-deps --only-shell chromium
+      - name: Fresh CI configuration
+        shell: pwsh
+        run: ./scripts/New-LocalConfig.ps1 -BootstrapUsername ci-admin
+      - name: Static, specification and contract checks
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check apps packages migrations scripts tests
+          npm run lint --prefix apps/web
+          npm run format:check --prefix apps/web
+          node runtime/tools/node_modules/@fission-ai/openspec/bin/openspec.js validate --all --strict
+          .venv/bin/python -m scripts.check_contracts
+          npm test --prefix apps/web
+          npm run build --prefix apps/web
+          npm audit --prefix apps/web --audit-level=high
+      - name: Build and prepare real services
+        run: |
+          docker compose --profile full build api web
+          docker compose up -d --wait --wait-timeout 180 mysql redis
+          docker compose --profile maintenance run --rm migrate
+          docker compose --profile maintenance run --rm bootstrap
+          docker compose --profile full up -d --wait --wait-timeout 180
+      - name: Real backend and fault regression
+        run: .venv/bin/python -m pytest -q --junitxml=runtime/acceptance/ci/backend.xml > runtime/acceptance/ci/backend.log 2>&1
+      - name: Independent browser E2E and new volumes
+        shell: pwsh
+        run: ./scripts/Test-FreshEnvironment.ps1 -Browser -DockerPath /usr/bin/docker -EvidenceDirectory "$PWD/runtime/acceptance/ci/browser"
+      # No upload-artifact: local evidence is retained on the developer workstation.
+      - name: Stop this runner deployment
+        if: always()
+        run: docker compose --profile full down --volumes --remove-orphans

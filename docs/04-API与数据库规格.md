@@ -225,7 +225,7 @@ erDiagram
 
 第三批已实现 A01～A04 与认证迁移 `0001_auth`；第四阶段通过 `0002_tasks` 实现任务表/outbox、A29～A32/A35、实际权限和可靠执行。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和当前精确迁移版本 `0002_tasks`；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md) 和 [可靠任务与验收](development/可靠任务与运行验收.md)。
 
-本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。认证表已迁移；任务后端已按第四阶段实现，操作页面仍待开发。OpenAPI 与已实现部分对齐，变更须同步规格。
+本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。第四阶段完成任务后端，第五阶段完成操作页面。已实现接口导出至 `docs/contracts/bootstrap-openapi.json`，CI 检查实际代码与基线是否漂移；变更须同步规格。
 
 ### 10.1 认证 A01～A04
 

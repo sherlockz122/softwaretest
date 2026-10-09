@@ -59,4 +59,8 @@ queued 可到 running/cancelled/failed；running 可到 succeeded/failed/cancel_
 
 ## Verification
 
+第五阶段页面采用 Vue Router 的 /login、/tasks、/tasks/:id 和 /health，refresh 通过单个在途 Promise 合并。access/CSRF 保持内存；刷新页面重新登录后回到任务地址。注销使页面会话版本递增，迟到响应不能恢复会话。列表/详情请求使用 AbortController 与查询版本，页面离开停止轮询。创建/重试不确定结果保留原幂等键；输入变化才建立新操作。按钮显式禁用并展示原因，数据库状态为唯一事实来源。
+
+CI 仅触发 wang push、目标 wang 的 PR 及手动运行，使用新随机配置的专用 Compose 环境。保留 JUnit、摘要、OpenAPI 和安全截图；认证 trace/HAR/storageState 禁用。采集入口容量检查由 add-data-collection 自己接入；框架归档范围包含现有 pull/build 和验收入口，不能为尚未实现采集制造空入口。
+
 PLATFORM-ENV、SEC-AUTH、SEC-RBAC、INT-MIGRATION、INT-OUTBOX、REL-LEASE、REL-CANCEL、E2E-BOOT、STORAGE-GUARD 与 tasks 一一对应。验收必须实际连接 MySQL/Redis/Celery，不能以 eager mode 替代 Worker 故障验证。前端覆盖刷新、加载、空态、认证失效、任务失败和重复点击。
