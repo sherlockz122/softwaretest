@@ -5,17 +5,20 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
-from apps.api.auth import router as auth_router
-from apps.api.errors import error
-from apps.api.security import AuthRejection
-from apps.api.tasks import diagnostics_router
+from apps.api.auth import router
+from apps.api.repositories import router as repositories_router
+from apps.api.repositories import szz_router
+from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
-from packages.persistence.db import create_session_factory
+from packages.auth.security import AuthError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
-from packages.tasks.domain import TaskRejection
+from packages.repositories.safety import RepositoryError
+from packages.tasks.service import TaskError
 
 logger = logging.getLogger("defectguard")
 
@@ -24,22 +27,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.connections = connection_factory(settings)
-        app.state.session_factory = create_session_factory(settings)
-        stop_event, loop_threads = None, []
-        if settings.task_loops_enabled:
-            # 投递器与协调器驻留 API 进程：Worker 停机时仍能标记租约过期并恢复。
-            from apps.worker.main import create_celery_app
-            from packages.tasks.loops import start_task_loops, stop_task_loops
-
-            celery_app = create_celery_app(settings)
-            stop_event, loop_threads = start_task_loops(
-                app.state.session_factory, settings, celery_app
-            )
+        app.state.settings = settings
         try:
+            if hasattr(app.state.connections, "require_schema"):
+                app.state.connections.require_schema()
             yield
         finally:
-            if stop_event is not None:
-                stop_task_loops(stop_event, loop_threads)
             app.state.connections.close()
 
     app = FastAPI(
@@ -50,7 +43,6 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         redoc_url=None,
         openapi_url="/api/openapi.json" if settings.environment != "production" else None,
     )
-    app.state.settings = settings
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
@@ -65,6 +57,14 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         ],
         expose_headers=["X-Request-ID"],
     )
+
+    def error(request: Request, status: int, code: str, message: str):
+        request_id = getattr(request.state, "request_id", str(uuid4()))
+        return JSONResponse(
+            status_code=status,
+            content={"code": code, "message": message, "request_id": request_id},
+            headers={"X-Request-ID": request_id},
+        )
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -92,20 +92,41 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
-        return error(request, 422, "SYSTEM_INVALID_INPUT", "请求参数无效")
+        code = (
+            "TASK_INVALID_INPUT"
+            if request.url.path.startswith("/api/v1/tasks")
+            else "SYSTEM_INVALID_INPUT"
+        )
+        return error(request, 422, code, "请求参数无效")
 
-    @app.exception_handler(AuthRejection)
-    async def auth_rejection(request: Request, exc: AuthRejection):
-        return error(request, exc.status, exc.code, exc.message)
+    @app.exception_handler(TaskError)
+    async def task_error(request: Request, exc: TaskError):
+        return error(request, exc.status, exc.code, "任务请求未通过，请检查输入、权限或当前状态")
 
-    @app.exception_handler(TaskRejection)
-    async def task_rejection(request: Request, exc: TaskRejection):
-        return error(request, exc.status, exc.code, exc.message)
+    @app.exception_handler(RepositoryError)
+    async def repository_error(request: Request, exc: RepositoryError):
+        return error(
+            request, exc.status, exc.code, "仓库请求未完成，请检查 URL、连接、容量或已有仓库"
+        )
 
-    app.include_router(auth_router)
+    @app.exception_handler(AuthError)
+    async def auth_error(request: Request, exc: AuthError):
+        response = error(request, exc.status, exc.code, "认证请求未通过，请检查凭据、权限或会话")
+        response.headers["Cache-Control"] = "no-store"
+        if exc.status == 429:
+            response.headers["Retry-After"] = "60"
+        return response
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_error(request: Request, exc: SQLAlchemyError):
+        return error(request, 503, "SYSTEM_DEPENDENCY_UNAVAILABLE", "基础服务暂不可用")
+
+    app.include_router(router)
     app.include_router(tasks_router)
-    # A35 诊断入口：production 由路由守卫返回 404（可观测行为与未挂载一致）。
-    app.include_router(diagnostics_router)
+    app.include_router(repositories_router)
+    app.include_router(szz_router)
+    if settings.environment != "production":
+        app.include_router(diagnostic_router)
 
     @app.get("/api/v1/health", tags=["health"])
     def health():

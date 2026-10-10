@@ -3,8 +3,33 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
-  "scripts": { "dev": "vite --host 127.0.0.1", "build": "vite build" },
-  "dependencies": { "vue": "^3.5.0", "element-plus": "^2.9.0" },
-  "devDependencies": { "vite": "^7.0.0", "@vitejs/plugin-vue": "^6.0.0" }
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "format:check": "prettier --check src e2e *.js package.json"
+  },
+  "dependencies": {
+    "element-plus": "^2.9.0",
+    "vue": "^3.5.0",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/test-utils": "2.4.6",
+    "eslint": "10.12.0",
+    "eslint-plugin-vue": "10.11.1",
+    "globals": "17.13.0",
+    "jsdom": "27.4.0",
+    "prettier": "3.9.9",
+    "vite": "^7.0.0",
+    "vitest": "5.0.3"
+  }
 }

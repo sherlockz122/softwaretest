@@ -1,252 +1,447 @@
-"""任务创建/取消/重试与查询：业务任务、outbox 与审计在同一 MySQL 事务保存。"""
+"""Database is the authority for requests, execution leases and task outcomes."""
 
-import uuid
+import hashlib
+import json
+import re
 from datetime import timedelta
+from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from packages.domain.models import AsyncTask, TaskOutbox, User
-from packages.platform.config import Settings
-from packages.security.tokens import now_utc
-from packages.tasks.domain import (
-    TaskRejection,
-    add_audit_log,
-    canonical_payload_hash,
-    fetch_task_or_none,
-    serialize_task,
-)
+from packages.auth.security import AuthError, CurrentUser, authorize_task_owner, require_role
+from packages.persistence.models import AsyncTask, OperationLog, Repository, TaskOutbox, User
 
-NOT_FOUND = (404, "TASK_NOT_FOUND", "任务不存在")
-STATE_CONFLICT = (409, "TASK_STATE_CONFLICT", "任务状态不允许该操作")
+STATES = {"queued", "running", "cancel_requested", "succeeded", "failed", "cancelled"}
 
 
+class TaskError(Exception):
+    def __init__(self, status, code):
+        self.status, self.code = status, code
 
-def create_task(
-    session: Session,
-    settings: Settings,
-    *,
-    actor_id: str,
-    task_type: str,
-    scope_key: str,
-    idempotency_key: str,
-    payload: dict,
-    api_version: str,
-    request_id: str | None,
-) -> AsyncTask:
-    """幂等创建：唯一键 (type,scope_key,idempotency_key) 在事务中裁决；
-    同键同载荷返回原任务，同键异载荷 409。"""
-    payload_hash = canonical_payload_hash(api_version, scope_key, payload)
-    existing = session.execute(
-        select(AsyncTask).where(
-            AsyncTask.type == task_type,
-            AsyncTask.scope_key == scope_key,
-            AsyncTask.idempotency_key == idempotency_key,
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        if existing.payload_hash != payload_hash:
-            raise TaskRejection(409, "TASK_IDEMPOTENCY_CONFLICT", "幂等键对应不同请求内容")
-        return existing
 
-    task_id = str(uuid.uuid4())
-    task = AsyncTask(
-        id=task_id,
-        actor_id=actor_id,
-        type=task_type,
-        scope_key=scope_key,
-        idempotency_key=idempotency_key,
-        payload_hash=payload_hash,
-        payload=payload,
-        status="queued",
-        stage="queued",
-        progress=0,
-        processed=0,
-        retry_count=0,
-        root_task_id=task_id,
-        queued_deadline=now_utc() + timedelta(seconds=settings.task_queue_timeout_seconds),
-        request_id=request_id,
+def key_valid(key):
+    if not key or not re.fullmatch(r"[\x21-\x7e]{1,128}", key):
+        raise TaskError(422, "TASK_INVALID_INPUT")
+    return key
+
+
+def database_now(db):
+    return db.scalar(select(func.utc_timestamp(6)))
+
+
+def payload_hash(scope, payload, kind="diagnostic"):
+    canonical = json.dumps(
+        {"version": 1, "type": kind, "scope": scope, "payload": payload},
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     )
-    session.add(task)
-    session.add(
-        TaskOutbox(
-            task_id=task_id,
-            event_type="execute",
-            status="pending",
-            attempts=0,
-            next_attempt_at=now_utc(),
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def audit(db, task, action, actor_id=None):
+    db.add(
+        OperationLog(
+            actor_id=actor_id or task.actor_id,
+            action=action,
+            object_type="async_task",
+            object_id=task.id,
+            result="succeeded",
+            request_id=task.request_id,
+            detail_json={},
         )
     )
-    add_audit_log(session, actor_id=actor_id, action="task.create", task=task,
-                  result="succeeded", request_id=request_id)
-    try:
-        session.commit()
-    except IntegrityError as exc:
-        # 并发同键创建：唯一键兜底，失败方按已存在任务裁决。
-        session.rollback()
-        if "uq_task_idempotency" not in str(exc):
-            raise
-        existing = session.execute(
-            select(AsyncTask).where(
-                AsyncTask.type == task_type,
-                AsyncTask.scope_key == scope_key,
-                AsyncTask.idempotency_key == idempotency_key,
+
+
+def public(task, timestamp):
+    def iso(value):
+        return value.isoformat(timespec="microseconds") + "Z" if value else None
+
+    return {
+        "id": task.id,
+        "type": task.type,
+        "status": task.status,
+        "stage": task.stage,
+        "progress": float(task.progress),
+        "processed": task.processed,
+        "total": task.total,
+        "heartbeat_at": iso(task.heartbeat_at),
+        "created_at": iso(task.created_at),
+        "started_at": iso(task.started_at),
+        "finished_at": iso(task.finished_at),
+        "health": "stale"
+        if task.status in {"running", "cancel_requested"}
+        and (task.lease_until is None or task.lease_until <= timestamp)
+        else "healthy",
+        "retry_of": task.retry_of,
+        "result": task.result_json,
+        "error": {
+            "code": task.error_code,
+            "message": task.error_message,
+            "request_id": task.request_id,
+        }
+        if task.error_code
+        else None,
+    }
+
+
+class TaskService:
+    def __init__(self, settings, connections):
+        self.settings, self.engine = settings, connections.engine
+
+    def actor(self, db, user):
+        # Shared user lock keeps authorization current without serializing all creators.
+        row = db.scalar(select(User).where(User.id == user.id).with_for_update(read=True))
+        if not row or not row.is_active:
+            raise AuthError(401, "AUTH_REQUIRED")
+        return require_role(CurrentUser(row.id, row.username, row.role), "Member")
+
+    def new_task(self, db, actor_id, key, payload, scope, request_id, parent=None, kind=None):
+        task_id = str(uuid4())
+        kind = kind or (parent.type if parent else "diagnostic")
+        canonical = json.dumps(
+            {"version": 1, "type": kind, "scope": scope, "payload": payload},
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        task = AsyncTask(
+            id=task_id,
+            actor_id=actor_id,
+            type=kind,
+            scope_key=scope,
+            idempotency_key=key,
+            payload_hash=hashlib.sha256(canonical.encode()).hexdigest(),
+            payload=payload,
+            root_task_id=parent.root_task_id if parent else task_id,
+            retry_of=parent.id if parent else None,
+            retry_count=parent.retry_count + 1 if parent else 0,
+            queued_deadline=database_now(db) + timedelta(seconds=self.settings.task_queue_seconds),
+            request_id=request_id,
+            total=payload["duration_seconds"] if kind == "diagnostic" else None,
+        )
+        db.add(task)
+        db.flush()
+        db.add(TaskOutbox(task_id=task.id, next_attempt_at=database_now(db)))
+        audit(db, task, "task.retry" if parent else "task.create")
+        if parent and kind in {
+            "repository.clone",
+            "repository.parse",
+            "repository.sync",
+            "repository.fix",
+            "repository.szz",
+        }:
+            repository = db.get(Repository, payload["repository_id"], with_for_update=True)
+            if not repository:
+                raise TaskError(404, "REPOSITORY_NOT_FOUND")
+            if repository.latest_task_id != parent.id:
+                raise TaskError(409, "REPOSITORY_STATE_CONFLICT")
+            repository.latest_task_id = task.id
+            if kind == "repository.clone":
+                repository.status = "queued"
+            elif kind == "repository.szz":
+                repository.szz_status = "queued"
+            elif kind == "repository.fix":
+                repository.fix_status = "queued"
+            elif kind == "repository.sync":
+                repository.sync_status = "queued"
+            else:
+                repository.parse_status = "queued"
+        return task
+
+    @staticmethod
+    def acknowledgement(task):
+        result = {"task_id": task.id, "status": task.status}
+        if task.retry_of:
+            result["retry_of"] = task.retry_of
+        return result
+
+    def create(self, user, key, payload, request_id):
+        key_valid(key)
+        scope = user.id + ":diagnostic"
+        try:
+            with Session(self.engine) as db, db.begin():
+                self.actor(db, user)
+                existing = db.scalar(
+                    select(AsyncTask).where(
+                        AsyncTask.type == "diagnostic",
+                        AsyncTask.scope_key == scope,
+                        AsyncTask.idempotency_key == key,
+                    )
+                )
+                if existing:
+                    if existing.payload_hash != payload_hash(scope, payload):
+                        raise TaskError(409, "TASK_IDEMPOTENCY_CONFLICT")
+                    return self.acknowledgement(existing)
+                return self.acknowledgement(
+                    self.new_task(db, user.id, key, payload, scope, request_id)
+                )
+        except IntegrityError as exc:
+            if exc.orig.args[0] != 1062:
+                raise
+            # A concurrent insert committed first. Read in a fresh transaction/snapshot.
+            with Session(self.engine) as db:
+                existing = db.scalar(
+                    select(AsyncTask).where(
+                        AsyncTask.type == "diagnostic",
+                        AsyncTask.scope_key == scope,
+                        AsyncTask.idempotency_key == key,
+                    )
+                )
+                if not existing:
+                    raise
+                if existing.payload_hash != payload_hash(scope, payload):
+                    raise TaskError(409, "TASK_IDEMPOTENCY_CONFLICT") from None
+                return self.acknowledgement(existing)
+
+    @staticmethod
+    def locked(db, task_id):
+        task = db.scalar(select(AsyncTask).where(AsyncTask.id == task_id).with_for_update())
+        if task is None:
+            raise TaskError(404, "TASK_NOT_FOUND")
+        return task
+
+    def detail(self, task_id):
+        with Session(self.engine) as db:
+            task = db.get(AsyncTask, task_id)
+            if task is None:
+                raise TaskError(404, "TASK_NOT_FOUND")
+            return public(task, database_now(db))
+
+    def listing(self, kind=None, status=None, page=1, page_size=20):
+        if kind not in {
+            None,
+            "diagnostic",
+            "repository.clone",
+            "repository.parse",
+            "repository.sync",
+            "repository.fix",
+            "repository.szz",
+        } or status not in STATES | {None}:
+            raise TaskError(422, "TASK_INVALID_INPUT")
+        with Session(self.engine) as db, db.begin():
+            conditions = []
+            if kind:
+                conditions.append(AsyncTask.type == kind)
+            if status:
+                conditions.append(AsyncTask.status == status)
+            total = db.scalar(select(func.count()).select_from(AsyncTask).where(*conditions))
+            tasks = db.scalars(
+                select(AsyncTask)
+                .where(*conditions)
+                .order_by(AsyncTask.created_at.desc(), AsyncTask.id.asc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            ).all()
+            timestamp = database_now(db)
+            return {
+                "items": [public(task, timestamp) for task in tasks],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
+
+    def cancel(self, user, task_id, request_id):
+        with Session(self.engine) as db, db.begin():
+            actor = self.actor(db, user)
+            task = self.locked(db, task_id)
+            authorize_task_owner(actor, task.actor_id)
+            if task.status == "cancelled":
+                return 204, None
+            if task.status in {"succeeded", "failed"}:
+                raise TaskError(409, "TASK_STATE_CONFLICT")
+            if task.status == "queued":
+                self.terminal(db, task, "cancelled")
+                task.request_id = request_id
+                audit(db, task, "task.cancel", user.id)
+                return 204, None
+            if task.status == "running":
+                task.status, task.stage = "cancel_requested", "cancelling"
+                task.version += 1
+                task.request_id = request_id
+                audit(db, task, "task.cancel_requested", user.id)
+            return 202, self.acknowledgement(task)
+
+    def retry(self, user, task_id, key, request_id):
+        key_valid(key)
+        with Session(self.engine) as db, db.begin():
+            actor = self.actor(db, user)
+            parent = self.locked(db, task_id)
+            authorize_task_owner(actor, parent.actor_id)
+            if parent.status not in {"failed", "cancelled"}:
+                raise TaskError(409, "TASK_STATE_CONFLICT")
+            existing = db.scalar(select(AsyncTask).where(AsyncTask.retry_of == parent.id))
+            scope = user.id + ":" + parent.type + ":retry:" + parent.id
+            if existing:
+                if existing.scope_key == scope and existing.idempotency_key == key:
+                    return self.acknowledgement(existing)
+                raise TaskError(409, "TASK_RETRY_EXISTS")
+            return self.acknowledgement(
+                self.new_task(db, user.id, key, parent.payload, scope, request_id, parent)
             )
-        ).scalar_one()
-        if existing.payload_hash != payload_hash:
-            raise TaskRejection(
-                409, "TASK_IDEMPOTENCY_CONFLICT", "幂等键对应不同请求内容"
-            ) from None
-        return existing
-    return task
 
+    @staticmethod
+    def terminal(db, task, status, code=None):
+        task.status, task.stage = status, status
+        task.finished_at = database_now(db)
+        task.lease_until = None
+        task.version += 1
+        task.error_code = code
+        task.error_message = "任务未完成，请根据任务编号检查或重试" if code else None
+        if task.type in {
+            "repository.clone",
+            "repository.parse",
+            "repository.sync",
+            "repository.fix",
+            "repository.szz",
+        }:
+            repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
+            if repository and repository.latest_task_id == task.id:
+                if task.type == "repository.clone":
+                    repository.status = "cloned" if status == "succeeded" else status
+                elif task.type == "repository.szz":
+                    repository.szz_status = "traced" if status == "succeeded" else status
+                elif task.type == "repository.fix":
+                    repository.fix_status = "detected" if status == "succeeded" else status
+                elif task.type == "repository.sync":
+                    repository.sync_status = (
+                        (
+                            "requires_review"
+                            if repository.sync_status == "requires_review"
+                            else "synced"
+                        )
+                        if status == "succeeded"
+                        else status
+                    )
+                else:
+                    repository.parse_status = "parsed" if status == "succeeded" else status
 
-def cancel_task(session: Session, task: AsyncTask, *, actor_id: str,
-                request_id: str | None) -> tuple[int, str]:
-    """协作取消：queued 原子转 cancelled；running 转 cancel_requested；
-    终态 409；重复请求幂等。行锁与完成写回串行化。"""
-    status = session.execute(
-        select(AsyncTask.status).where(AsyncTask.id == task.id).with_for_update()
-    ).scalar_one()
-    if status == "queued":
-        session.execute(
-            AsyncTask.__table__.update()
-            .where(AsyncTask.id == task.id, AsyncTask.status == "queued")
-            .values(status="cancelled", stage="cancelled", finished_at=now_utc(),
-                    version=AsyncTask.version + 1)
-        )
-        add_audit_log(session, actor_id=actor_id, action="task.cancel", task=task,
-                      result="succeeded", request_id=request_id)
-        session.commit()
-        return 204, "cancelled"
-    if status == "cancelled":
-        return 204, "cancelled"
-    if status == "running":
-        session.execute(
-            AsyncTask.__table__.update()
-            .where(AsyncTask.id == task.id, AsyncTask.status == "running")
-            .values(status="cancel_requested", version=AsyncTask.version + 1)
-        )
-        add_audit_log(session, actor_id=actor_id, action="task.cancel", task=task,
-                      result="succeeded", request_id=request_id)
-        session.commit()
-        return 202, "cancel_requested"
-    if status == "cancel_requested":
-        return 202, "cancel_requested"
-    raise TaskRejection(*STATE_CONFLICT)
+    def claim(self, task_id):
+        with Session(self.engine) as db, db.begin():
+            task = db.scalar(select(AsyncTask).where(AsyncTask.id == task_id).with_for_update())
+            timestamp = database_now(db)
+            if not task or task.status != "queued" or task.queued_deadline <= timestamp:
+                return None
+            if task.type not in {
+                "diagnostic",
+                "repository.clone",
+                "repository.parse",
+                "repository.sync",
+                "repository.fix",
+                "repository.szz",
+            }:
+                self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
+                audit(db, task, "task.failed")
+                return None
+            task.status, task.stage = "running", task.type
+            task.started_at = task.heartbeat_at = timestamp
+            task.execution_token = str(uuid4())
+            task.lease_until = timestamp + timedelta(seconds=self.settings.task_lease_seconds)
+            task.version += 1
+            audit(db, task, "task.start")
+            if task.type in {
+                "repository.clone",
+                "repository.parse",
+                "repository.sync",
+                "repository.fix",
+                "repository.szz",
+            }:
+                repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
+                if not repository or repository.latest_task_id != task.id:
+                    self.terminal(db, task, "failed", "REPOSITORY_STATE_CONFLICT")
+                    return None
+                if task.type == "repository.clone":
+                    repository.status = "cloning"
+                elif task.type == "repository.szz":
+                    repository.szz_status = "tracing"
+                elif task.type == "repository.fix":
+                    repository.fix_status = "detecting"
+                elif task.type == "repository.sync":
+                    repository.sync_status = "syncing"
+                else:
+                    repository.parse_status = "parsing"
+            return task.execution_token, (
+                task.payload["duration_seconds"] if task.type == "diagnostic" else task.payload
+            )
 
+    def checkpoint(
+        self, task_id, token, progress=0, processed=0, complete=False, error=None, stage=None
+    ):
+        with Session(self.engine) as db, db.begin():
+            task = self.locked(db, task_id)
+            timestamp = database_now(db)
+            if (
+                task.execution_token != token
+                or task.status not in {"running", "cancel_requested"}
+                or task.lease_until is None
+                or task.lease_until <= timestamp
+            ):
+                return False
+            if task.status == "cancel_requested":
+                self.terminal(db, task, "cancelled")
+                audit(db, task, "task.cancelled")
+                return False
+            if error:
+                self.terminal(db, task, "failed", "TASK_EXECUTION_FAILED")
+                audit(db, task, "task.failed")
+                return False
+            task.processed = (
+                min(max(0, processed), task.total) if task.total is not None else max(0, processed)
+            )
+            task.progress = min(99, max(0, progress))
+            if stage is not None:
+                task.stage = stage
+            task.heartbeat_at = timestamp
+            if complete:
+                task.progress, task.processed = 100, task.total
+                task.result_json = {
+                    "duration_seconds": task.payload["duration_seconds"],
+                    "ok": True,
+                }
+                self.terminal(db, task, "succeeded")
+                audit(db, task, "task.succeeded")
+            else:
+                task.lease_until = timestamp + timedelta(seconds=self.settings.task_lease_seconds)
+                task.version += 1
+            return True
 
-def add_successor(
-    session: Session,
-    settings: Settings,
-    original: AsyncTask,
-    *,
-    actor_id: str,
-    idempotency_key: str,
-    request_id: str | None,
-    action: str,
-) -> AsyncTask:
-    """向会话加入 successor（retry_of 唯一，与 outbox/审计同事务，不提交）。
-    调用方须已行锁原任务。"""
-    task_id = str(uuid.uuid4())
-    successor = AsyncTask(
-        id=task_id,
-        actor_id=original.actor_id,
-        type=original.type,
-        scope_key=original.scope_key,
-        idempotency_key=idempotency_key,
-        payload_hash=original.payload_hash,
-        payload=original.payload,
-        status="queued",
-        stage="queued",
-        progress=0,
-        processed=0,
-        retry_of=original.id,
-        root_task_id=original.root_task_id,
-        retry_count=original.retry_count + 1,
-        queued_deadline=now_utc() + timedelta(seconds=settings.task_queue_timeout_seconds),
-        request_id=request_id,
-    )
-    session.add(successor)
-    session.add(
-        TaskOutbox(
-            task_id=task_id,
-            event_type="execute",
-            status="pending",
-            attempts=0,
-            next_attempt_at=now_utc(),
-        )
-    )
-    add_audit_log(session, actor_id=actor_id, action=action, task=successor,
-           result="succeeded", request_id=request_id)
-    return successor
-
-
-def retry_task(session: Session, settings: Settings, task: AsyncTask, *,
-               actor_id: str, idempotency_key: str,
-               request_id: str | None) -> AsyncTask:
-    """手动重试：仅 failed/cancelled；同幂等键重放返回原 successor；
-    已有 successor 且键不同 409 TASK_RETRY_EXISTS。"""
-    status = session.execute(
-        select(AsyncTask.status).where(AsyncTask.id == task.id).with_for_update()
-    ).scalar_one()
-    if status not in ("failed", "cancelled"):
-        raise TaskRejection(*STATE_CONFLICT)
-    # 锁定读而非快照读：并发重试时第二个请求能看到已提交的 successor。
-    existing = session.execute(
-        select(AsyncTask).where(AsyncTask.retry_of == task.id).with_for_update()
-    ).scalar_one_or_none()
-    if existing is not None:
-        if existing.idempotency_key != idempotency_key:
-            raise TaskRejection(409, "TASK_RETRY_EXISTS", "该任务已有重试任务")
-        return existing
-    successor = add_successor(
-        session, settings, task, actor_id=actor_id, idempotency_key=idempotency_key,
-        request_id=request_id, action="task.retry",
-    )
-    try:
-        session.commit()
-    except IntegrityError as exc:
-        # 唯一索引兜底：任何交错下原任务最多一个直接 successor。
-        session.rollback()
-        if "uq_async_task_retry_of" not in str(exc):
-            raise
-        raise TaskRejection(409, "TASK_RETRY_EXISTS", "该任务已有重试任务") from None
-    return successor
-
-
-def list_tasks(session: Session, *, task_type: str | None, status: str | None,
-               page: int, page_size: int) -> tuple[list[AsyncTask], int]:
-    query = select(AsyncTask)
-    count_query = select(func.count()).select_from(AsyncTask)
-    if task_type is not None:
-        query = query.where(AsyncTask.type == task_type)
-        count_query = count_query.where(AsyncTask.type == task_type)
-    if status is not None:
-        query = query.where(AsyncTask.status == status)
-        count_query = count_query.where(AsyncTask.status == status)
-    total = session.execute(count_query).scalar_one()
-    rows = session.execute(
-        query.order_by(AsyncTask.created_at.desc(), AsyncTask.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).scalars().all()
-    return list(rows), total
-
-
-def get_task_or_404(session: Session, task_id: str) -> AsyncTask:
-    task = fetch_task_or_none(session, task_id)
-    if task is None:
-        raise TaskRejection(*NOT_FOUND)
-    return task
-
-
-def assert_can_operate(task: AsyncTask, user: User) -> None:
-    # Member 仅能取消/重试自己发起的任务，Admin 可操作全部。
-    if user.role != "Admin" and task.actor_id != user.id:
-        raise TaskRejection(403, "AUTH_FORBIDDEN", "权限不足")
-
-
-def serialize_task_list(rows: list[AsyncTask]) -> list[dict]:
-    return [serialize_task(row) for row in rows]
+    def reconcile(self, limit=20):
+        with Session(self.engine) as db, db.begin():
+            timestamp = database_now(db)
+            tasks = db.scalars(
+                select(AsyncTask)
+                .where(
+                    or_(
+                        (AsyncTask.status == "queued") & (AsyncTask.queued_deadline <= timestamp),
+                        AsyncTask.status.in_(["running", "cancel_requested"])
+                        & (AsyncTask.lease_until <= timestamp),
+                    )
+                )
+                .order_by(AsyncTask.created_at)
+                .limit(limit)
+                .with_for_update(skip_locked=True)
+            ).all()
+            for task in tasks:
+                old_status = task.status
+                if old_status == "cancel_requested":
+                    self.terminal(db, task, "cancelled")
+                    audit(db, task, "task.cancelled")
+                    continue
+                code = "TASK_QUEUE_TIMEOUT" if old_status == "queued" else "TASK_LEASE_EXPIRED"
+                self.terminal(db, task, "failed", code)
+                audit(db, task, "task.failed")
+                if old_status == "running" and task.retry_count < self.settings.task_max_retries:
+                    # Parent row lock and UNIQUE retry_of arbitrate with concurrent manual retry.
+                    if not db.scalar(select(AsyncTask.id).where(AsyncTask.retry_of == task.id)):
+                        self.new_task(
+                            db,
+                            task.actor_id,
+                            "auto:" + task.id,
+                            task.payload,
+                            task.actor_id + ":" + task.type + ":retry:" + task.id,
+                            task.request_id,
+                            task,
+                        )
+            return len(tasks)

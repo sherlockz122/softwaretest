@@ -57,7 +57,7 @@
 | A32 | `POST /tasks/{id}/cancel` | 请求取消任务 | Member |
 | A33 | `GET /operations` | 操作审计 | Admin |
 | A34 | `GET /health` | 最小存活状态 | Public |
-| A35 | `POST /tasks/diagnostics` | 开发环境受限诊断任务 | Member，仅 development/test |
+| A35 | `POST /tasks/diagnostic` | 开发环境受限诊断任务 | Member，仅 development/test |
 
 ## 4 关键请求与响应
 
@@ -67,8 +67,7 @@
 
 ```json
 {
-  "url": "https://github.com/example/project.git",
-  "commit_limit": 1000
+  "url": "https://github.com/example/project.git"
 }
 ```
 
@@ -82,7 +81,7 @@
 }
 ```
 
-`commit_limit` 用于技术探针和受控演示，不改变仓库身份。URL 必须先通过 SSRF 与 Git 可访问性校验。
+当前A07保持url-only，未知字段（包括commit_limit）返回422；URL先通过SSRF/TLS/smart HTTP。第七阶段窗口在独立parse请求启用，见第12节，不给克隆任务传无效参数。
 
 ### 4.2 创建数据集
 
@@ -223,9 +222,9 @@ erDiagram
 
 ## 10 框架首批实施契约（bootstrap-application）
 
-第二批健康接口已落地：A34 `/health` 仅表示进程存活，补充 `/health/ready` 检查 MySQL/Redis 基础连接；503 为 `SYSTEM_DEPENDENCY_UNAVAILABLE`。业务迁移版本及任务可用性门槛将在后续实施时加入。响应带 UUID X-Request-ID，统一错误及配置细则见 [工程说明](development/工程启动与验收.md)。本节下述认证/业务表/任务仍未实现。
+第三批已实现 A01～A04 与认证迁移 `0001_auth`；第四阶段通过 `0002_tasks` 实现任务表/outbox、A29～A32/A35、实际权限和可靠执行。A34 `/health` 仅表示进程存活，`/health/ready` 检查 MySQL/Redis 和当前精确迁移版本 `0003_repositories`；不可用返回 503 `SYSTEM_DEPENDENCY_UNAVAILABLE`。API 启动时版本缺失/不兼容即拒绝启动。响应带 UUID X-Request-ID，细则见 [认证与迁移](development/认证与数据库迁移.md) 和 [可靠任务与验收](development/可靠任务与运行验收.md)。
 
-本节在 `wang` 个人开发分支生效，定义后续认证和可靠任务的接口及迁移约束。尚无业务表迁移；OpenAPI 后续必须与本节对齐，变更须同步规格。
+本节在 `wang` 个人开发分支生效，定义认证和可靠任务的接口及迁移约束。第四阶段完成任务后端，第五阶段完成操作页面。已实现接口导出至 `docs/contracts/bootstrap-openapi.json`，CI 检查实际代码与基线是否漂移；变更须同步规格。
 
 ### 10.1 认证 A01～A04
 
@@ -243,7 +242,7 @@ erDiagram
 }
 ```
 
-refresh 不放入 JSON，使用 cookie `dg_refresh`：HttpOnly、SameSite=Strict、Path=/api/v1/auth，HTTPS 使用 Secure；仅 loopback 本地 HTTP 开发允许关闭 Secure。refresh 随机强度至少 256 bit，只在 DB 保存 SHA-256。会话固定有效期默认 7 天，刷新不延长绝对到期；用行锁及 generation 轮转 refresh/CSRF 值，旧 refresh 返回 401，不允许两个并发刷新都成功。
+refresh 不放入 JSON，使用 cookie `dg_refresh`：HttpOnly、SameSite=Strict、Path=/api/v1/auth，HTTPS 使用 Secure；仅 development/test loopback 本地 HTTP 允许关闭 Secure，production HTTP 返回 400 AUTH_HTTPS_REQUIRED。refresh 随机强度至少 256 bit，只在 DB 保存 SHA-256。会话固定有效期默认 7 天，刷新不延长绝对到期；cookie Max-Age 和 access 的 expires_in 不超过剩余会话寿命（access 最长 900 秒）。用行锁及 generation 轮转 refresh/CSRF 值，旧 refresh 返回 401，不允许两个并发刷新都成功。
 
 JWT 包含 `sub/sid/iat/exp/iss/aud`，允许的签名算法由服务端固定，禁止信任输入 alg；生产配置禁止默认密钥。受保护请求检查用户活动状态和 session 未撤销/未过期。禁用、退出后现有 access 也立即失效。
 
@@ -276,7 +275,7 @@ A35 只接受 `{"duration_seconds":1}`；时长为整数 0～30，默认 1，未
 
 queued 取消原子转 cancelled，204；重复 cancelled 取消 204。running 首次取消转 cancel_requested，202 返回 task_id/status；重复请求仍返回 202。已 succeeded/failed 取消 `409 TASK_STATE_CONFLICT`。cancel_requested 后 Worker 的成功提交必须失败并走取消检查点；若完成先提交，则取消返回 409。
 
-failed/cancelled 可手动 retry；新任务初始 queued，202 返回新 task_id 和 retry_of。succeeded/running/queued/cancel_requested 不可 retry，返回 409。原任务最多一个直接 successor：同幂等键重放返回原 successor，不同 key 并发重试已有 successor 返回 `409 TASK_RETRY_EXISTS`，如要再次重试应请求失败的 successor。自动恢复只针对可重试失败，原请求链默认最多 3 次；不对用户主动取消自动恢复。业务任务、outbox 和 audit 在同一 MySQL 事务保存。
+failed/cancelled 可手动 retry；新任务初始 queued，202 返回新 task_id 和 retry_of。succeeded/running/queued/cancel_requested 不可 retry，返回 409。原任务最多一个直接 successor：同作用域同幂等键重放返回原 successor 的当前状态，不同 key 并发重试已有 successor 返回 `409 TASK_RETRY_EXISTS`，如要再次重试应请求失败的 successor。当前自动恢复只针对 running 租约过期 `TASK_LEASE_EXPIRED`，原请求链默认最多 3 次；取消、队列超时和投递超限不自动创建后继。业务任务、outbox 和 audit 在同一 MySQL 事务保存。
 
 ### 10.4 首批 MySQL 字段、外键和约束
 
@@ -298,4 +297,50 @@ outbox 与 task 同事务插入。投递器以短事务锁/租约领取到期 pe
 
 Worker 按 `status=queued` 原子领取、设置随机 execution_token 与 lease_until；重复消息领取失败即安全结束。心跳间隔 10 秒，执行租约 45 秒，扫描间隔 15 秒。任何业务写入、checkpoint 和成功/失败写回须在检查当前 status、execution_token、lease_until 尚有效的同一事务中完成；不能仅在进程内检查后无条件写入。
 
-协调器确认 lease 过期后条件写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。
+协调器确认 running lease 过期后写 failed/TASK_LEASE_EXPIRED，再按恢复上限创建 successor；cancel_requested 的过期执行收敛为 cancelled，不自动重试。自动 successor 当前只针对 TASK_LEASE_EXPIRED，投递/排队超限保留明确失败，用户可手动重试。queued 等待默认 10 分钟超时写 failed/TASK_QUEUE_TIMEOUT，明确涵盖 Redis 丢消息。租约过期、用户取消、投递未知结果和进程 kill 的验证不得只用单元 mock 或 Celery eager mode 替代实际故障注入。
+
+
+## 11 第六阶段仓库契约及第七阶段扩展（个人 wang）
+
+A07～A09已接入登录权限，第七阶段初次解析已实现；整个采集change仍待Fix。A07要求Member/Admin、Idempotency-Key与{url}，202返回repository_id/task_id/status；同用户同键/规范URL重放不联网，同键异URL409 TASK_IDEMPOTENCY_CONFLICT，不同键/已有规范URL409 REPOSITORY_ALREADY_EXISTS。接收前检查预计增长/公开smart HTTP，重定向拒绝。网络检查在事务外，最终同事务创建repository/task/outbox/audit。
+
+A08 GET `/repositories?page=1&page_size=20` 返回 `{items,total,page,page_size}`（最大100），按created_at desc/id asc。A09返回仓库元数据、最新task、commits_imported和parse_status；第七阶段详情额外返回parse_window（HEAD/commit_limit/parser_version/processed/total/checkpoint_sha或null）。commits_imported仅完整解析窗口成功为true。不存在404 REPOSITORY_NOT_FOUND。所有已认证角色查看共享目录，不返回storage_key/命令输出。
+
+迁移0003创建repository基本字段；0004增加parse_status（pending/queued/parsing/parsed/failed/cancelled）和parse_root_task_id FK task。产品级raw url字段不创建；checkpoint_sha实际在parse_checkpoint中。降级前检查整条受影响路径非空及已建立解析窗口，MySQL隐式提交前即拒绝，保留认证/任务/采集数据。
+
+repository.clone仍表示bare克隆成功，第八阶段A10和第九阶段A12已实现。repository.parse/fix计数单位为提交，total在扫描完成前为null；最后批次与100%/成功同事务。取消/重试遵循既有归属权限，公开task不返回payload/token。
+
+## 第九阶段A12与0006实际契约
+
+A12 POST fix-detection接受rule_version（当前fix-evidence-v1）及严格include_medium布尔，默认true，Idempotency-Key/202；Member/Admin写入，Viewer只读。关联GET fix-runs及fix-runs/{run_id}/evidence有界分页；PATCH fix-evidence/{assessment_id}/review要求status、expected_revision、非空理由，冲突409，同用户相同已接受决策可重放。不接受路径、任意regex、Issue URL或confirmed_bug。A09增加fix_status和安全fix_run；任务类型repository.fix，解析/同步/Fix互斥。详细路径/返回与错误见 [Fix指导](development/Fix证据与验收.md) 和 [实际OpenAPI](contracts/bootstrap-openapi.json)。
+
+0006冻结DDL新增repository.fix_status/root，fix_run（根任务/仓库/接受HEAD及私有存储/解析及规则版本、摘要、政策、覆盖度、计划/计数）、fix_assessment（轮次+commit唯一、规则判定、内容覆盖、复核revision/actor/note/time）、defect_evidence（判定+ordinal唯一、fix_commit_id/type/value/confidence/rule_version/source）及issue_observation（轮次+Issue编号唯一/冻结snapshot）。逻辑证据的review_status由所属assessment关联返回，原证据不随复核改写；OperationLog保存完整复核历史，公开查询最近20条。FK RESTRICT、计数/状态/等级CHECK和索引实际MySQL验证；旧0005数据保留，非空降级第一条DDL前检查整个受影响路径和已建根任务。
+
+拒绝/失败码包括 REPOSITORY_UNSAFE_URL、UNSAFE_ADDRESS、REDIRECT_REJECTED、NOT_PUBLIC_GIT（422），DNS_UNAVAILABLE、NETWORK_UNAVAILABLE、STORAGE_UNAVAILABLE、STORAGE_UNSAFE、GIT_UNAVAILABLE（503），STORAGE_LOW（507），ALREADY_EXISTS（409），以及 Worker CLONE_FAILED、CLONE_TIMEOUT、SIZE_LIMIT、TRANSFER_LIMIT、OUTPUT_LIMIT、HEAD_UNAVAILABLE、INVALID_METADATA。上述缩写均带 REPOSITORY_ 前缀；响应始终带 request_id，错误不回显用户 URL、凭据或路径。
+
+详细启动、安全边界及排障见 [安全仓库克隆](development/安全仓库克隆与验收.md)。
+
+## 12 第七阶段解析契约
+
+`POST /repositories/{id}/parse`（A09关联操作）要求Member/Admin、Idempotency-Key与body `{commit_limit:null}`或正整数（最多10000000），未知字段/布尔/字符串拒绝。null为HEAD全部可达历史，N为时间/SHA排序后最近N；成功202 `{task_id,status}`。同用户/仓库/键重放，不同载荷409 TASK_IDEMPOTENCY_CONFLICT。仓库未cloned、已建立窗口而非原键重放返回409 REPOSITORY_PARSE_STATE_CONFLICT；另键不能静默重算，使用当前失败/取消任务retry。受理/每批次需要512MiB增长预算+2GiB余量。
+
+A11 `GET /repositories/{id}/commits` 返回稳定committer_time/SHA升序分页：id、sha、author{id,name_alias}、UTC双时间、message（列表最多4096字符及truncated标记）、parents/parent_count、parse_status/parser_version、file_count。数据库保留完整受限消息。`GET /repositories/{id}/commits/{sha}/files`为A11只读子资源，按ordinal稳定分页返回双路径、change_type、LA/LD/old_loc、is_binary/content_status/parser_version；不存在404 REPOSITORY_COMMIT_NOT_FOUND。普通查询不导出邮箱或大patch。全部沿用page>=1/page_size<=100及真实Viewer读权限。
+
+0004固定DDL：author_identity UUID、identity_key+identity_version UNIQUE、name_alias<=256、email_hash NULL；git_commit唯一(repository_id,sha)，author/repository外键RESTRICT、双UTC时间/分钟偏移、message MEDIUMTEXT、parents JSON/计数、状态/版本，事件索引(repository_id,committer_time,sha)；file_change外键commit RESTRICT、唯一(commit_id,ordinal)、双路径MEDIUMTEXT/路径bytes哈希、blob SHA、类型、非负可空计数、binary标志、内容状态、受限diff/行号JSON/版本；parse_checkpoint root_task_id PK FK task、repository_id UNIQUE FK repository、固定HEAD/窗口/版本/plan_hash、processed/total/last_sha，约束0<=processed<=total、窗口>0。
+
+状态与资源策略详见 [解析指导](development/提交解析与验收.md)。稳定码还包括PARSE_TIMEOUT/PARSE_FAILED/PARSE_RESOURCE_LIMIT及PARSE_PLAN_CONFLICT/PARSE_VERSION_CONFLICT（均REPOSITORY_前缀），只返回安全摘要和request_id。成功分批写与checkpoint/终态原子，回执未知保留数据；强推/多快照同步下批交付，不能由初次解析冒称完成。
+
+
+## 13 第八阶段增量同步契约
+
+A10 POST `/repositories/{id}/sync`：Member/Admin、Idempotency-Key、严格空对象{}，先完成初次解析；202返回task_id/status。同用户/仓库/键重放；另键已有活动/失败/取消/待复核窗口409 REPOSITORY_SYNC_STATE_CONFLICT，失败/取消走A31同根重试。不接收URL/ref/路径/窗口重选。受理及候选不存在时预算2*repository_max_bytes+512MiB及2GiB余量。
+
+A09增加sync_status、sync_window及history_coverage；GET `/repositories/{id}/sync-windows`是A10只读子资源，Viewer，created_at desc/root_task_id asc，page/page_size最大100。窗口返回root_task_id、base_head_sha/head_sha/default_branch、relation、parser_version、processed/total/checkpoint_sha和created_at，不返回存储路径/token/邮箱。A11仍可读已提交批次并集，不代表已完成同步的HEAD。
+
+0005冻结DDL：repository.sync_status CHECK pending/queued/syncing/synced/requires_review/failed/cancelled，sync_root_task_id FK async_task RESTRICT；sync_window root_task_id PK FK task、repository_id FK RESTRICT、base/head SHA、两份存储引用/分支、非负size、relation CHECK pending/initial/unchanged/fast_forward/requires_review、parser_version/plan_hash/processed/total/last_sha、计数CHECK、repository/created/root索引。首次checkpoint UNIQUE不变，升迁保留现存数据；降级前整路径及已建窗口检查，在任何DDL前拒绝非空。
+
+repository.sync复用租约/取消/重试/outbox；克隆期processed单位字节，parsing后单位新提交。无变化0/0成功；强推/分支变化/历史消失task succeeded且result.disposition=requires_review，repository.sync_status=requires_review，保存候选但正式HEAD/数据不变；没有自动解除/重新基线。成功导入最后一批、checkpoint和HEAD/引用在同事务。SYNC_BASE_CONFLICT、SYNC_STATE_CONFLICT、PARSE_VERSION_CONFLICT均REPOSITORY_前缀；外网安全错误继续复用克隆契约。详见 [同步指导](development/增量同步与验收.md)。
+
+## 第十阶段A13/A14实际扩展
+
+A13要求fix_run_id，algorithm_version固定baseline-szz-v1，as_of可null或带时区UTC截止且未来拒绝；202/幂等/Member+。A14分页行证据，另有仓库szz-runs历史及/szz-runs/{id}/results提交状态；均认证只读/page_size最大100。0007增加szz_run固定Fix/HEAD/私有快照/解析/算法/Git/覆盖/cutoff/输入及标签摘要，szz_item冻结assessment/review输入与批次结果，szz_link按(item,ordinal)唯一保存行证据JSON；repository.szz_status/root/latest随任务变化。规划ER图中的blamed_commit引用以SHA证据保存，有限历史来源无本地commit行时必须保留Unknown，不能伪造FK。完整契约见 [SZZ指导](development/SZZ追溯与验收.md) 及生成OpenAPI。

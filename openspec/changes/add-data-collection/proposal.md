@@ -21,6 +21,11 @@ JIT 缺陷预测需要真实仓库的提交历史数据，当前系统没有任�
 
 ## 影响范围
 
-- 新增数据库表：repository、author_identity、git_commit、file_change、defect_evidence、async_task
-- 新增后端模块：仓库接入、数据采集、Fix 证据与异步任务服务
+- 新增数据库表：repository、author_identity、git_commit、file_change、defect_evidence；async_task/task_outbox 复用已验收框架
+- 新增后端模块：仓库接入、数据采集、Fix 证据；扩展已有任务服务的业务 payload
 - 不包含 SZZ 标注、特征提取与模型训练（后续 change 实现）
+
+
+## 分批实施
+
+第六阶段先交付安全 bare 克隆、repository 与 A07～A09/仓库页面；解析与 checkpoint、增量同步、Fix 分批实施。作者表与解析一起创建。SZZ 不加入本 change。实施状态见 tasks，第六阶段完成不代表整个 change 或课程故事完成。

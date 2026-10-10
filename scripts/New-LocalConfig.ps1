@@ -1,14 +1,21 @@
 #requires -Version 7.2
 [CmdletBinding()]
-param()
+param([string] $BootstrapUsername = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $target = Join-Path $projectRoot '.env'
 $lines = Get-Content -LiteralPath (Join-Path $projectRoot '.env.example')
 $secrets = @('DG_MYSQL_PASSWORD','DG_MYSQL_ROOT_PASSWORD','DG_REDIS_PASSWORD','DG_SIGNING_KEY')
+if ($BootstrapUsername) {
+    if ($BootstrapUsername -cnotmatch '^[A-Za-z0-9_.-]{1,64}$') { throw 'Invalid explicit bootstrap username.' }
+    $BootstrapUsername = $BootstrapUsername.ToLowerInvariant()
+    $secrets += 'DG_BOOTSTRAP_PASSWORD'
+}
 $output = foreach ($line in $lines) {
     $name = ($line -split '=', 2)[0]
-    if ($name -in $secrets) {
+    if ($name -eq 'DG_BOOTSTRAP_USERNAME' -and $BootstrapUsername) {
+        $name + '=' + $BootstrapUsername
+    } elseif ($name -in $secrets) {
         $bytes = New-Object byte[] 32
         [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
         $name + '=' + [Convert]::ToHexString($bytes)

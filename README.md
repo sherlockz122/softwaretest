@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前已完成准备与工程基础：API、Vue 前端、MySQL、Redis 和真实 Celery Worker 可按说明启动，依赖已锁定，健康/配置检查已验收。最小认证、业务迁移及可靠任务尚待实现，再进入 `add-data-collection`。见 [工程启动与验收](docs/development/工程启动与验收.md)、[第二阶段报告](docs/reports/2026-10-09-第二阶段工程基础报告.md) 和 [后续整体规划](docs/development/后续整体规划与空间预算.md)。
+当前实现工程、认证、可靠任务、仓库安全克隆（A07～A09）、提交解析（A11）、增量同步（A10）、Fix证据/复核（A12）及第十阶段baseline SZZ（A13/A14）。SZZ冻结Fix轮次/复核版本、接受快照与观测截止，提供可恢复行级候选证据和可用时间，不以无证据生成clean；历史分叉仍暂停待复核。Kamei/数据集/模型、分叉决策和受控归档待后续。框架已归档，采集与独立SZZ change保持活动；仅wang。见 [SZZ追溯与验收](docs/development/SZZ追溯与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 
@@ -24,4 +24,4 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 项目使用 Python 3.11 和根目录 `.venv`，版本要求记录在 `.python-version`。虚拟环境不进入 Git；系统默认 Python 可以继续使用其他版本。激活、退出及编辑器解释器选择见 [Python 环境使用](docs/development/Python环境使用.md)。
 
-容量有限时按 [存储预算与命令使用](docs/development/存储预算与命令使用.md) 执行：框架阶段新增预算目标 4 GiB，D 盘保留至少 6 GiB，缓存与临时文件放在项目 `runtime/`。
+按 [存储安排与命令使用](docs/development/存储预算与命令使用.md) 执行：D 盘扩容后取消旧严格预算，常规容量检查改为提示，保留磁盘极低余量时的写入保护；缓存与临时文件继续位于 D 盘 runtime。
