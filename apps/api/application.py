@@ -10,9 +10,12 @@ from starlette.exceptions import HTTPException
 from apps.api.auth import router as auth_router
 from apps.api.errors import error
 from apps.api.security import AuthRejection
+from apps.api.tasks import diagnostics_router
+from apps.api.tasks import router as tasks_router
 from packages.persistence.db import create_session_factory
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
+from packages.tasks.domain import TaskRejection
 
 logger = logging.getLogger("defectguard")
 
@@ -22,9 +25,21 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.connections = connection_factory(settings)
         app.state.session_factory = create_session_factory(settings)
+        stop_event, loop_threads = None, []
+        if settings.task_loops_enabled:
+            # 投递器与协调器驻留 API 进程：Worker 停机时仍能标记租约过期并恢复。
+            from apps.worker.main import create_celery_app
+            from packages.tasks.loops import start_task_loops, stop_task_loops
+
+            celery_app = create_celery_app(settings)
+            stop_event, loop_threads = start_task_loops(
+                app.state.session_factory, settings, celery_app
+            )
         try:
             yield
         finally:
+            if stop_event is not None:
+                stop_task_loops(stop_event, loop_threads)
             app.state.connections.close()
 
     app = FastAPI(
@@ -83,7 +98,14 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def auth_rejection(request: Request, exc: AuthRejection):
         return error(request, exc.status, exc.code, exc.message)
 
+    @app.exception_handler(TaskRejection)
+    async def task_rejection(request: Request, exc: TaskRejection):
+        return error(request, exc.status, exc.code, exc.message)
+
     app.include_router(auth_router)
+    app.include_router(tasks_router)
+    # A35 诊断入口：production 由路由守卫返回 404（可观测行为与未挂载一致）。
+    app.include_router(diagnostics_router)
 
     @app.get("/api/v1/health", tags=["health"])
     def health():

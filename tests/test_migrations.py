@@ -181,6 +181,7 @@ def test_upgrade_creates_expected_schema(migrated_db):
             }
             for name in (
                 "uq_task_idempotency",
+                "uq_async_task_retry_of",
                 "uq_outbox_task_event",
                 "ix_auth_session_user_revoked",
                 "ix_auth_session_expires",
@@ -208,7 +209,13 @@ def test_upgrade_creates_expected_schema(migrated_db):
             assert charsets["id"] == ("ascii", "ascii_bin")
 
             version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "20261009_0001"
+            from alembic.config import Config
+            from alembic.script import ScriptDirectory
+
+            head = ScriptDirectory.from_config(
+                Config(str(PROJECT_ROOT / "alembic.ini"))
+            ).get_current_head()
+            assert version == head
     finally:
         engine.dispose()
 

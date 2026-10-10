@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     redis_host: str = "127.0.0.1"
     redis_port: int = Field(default=16379, ge=1, le=65535)
     redis_password: SecretStr
+    broker_redis_db: int = Field(default=0, ge=0, le=15)
     signing_key: SecretStr
     frontend_origin: str = "http://127.0.0.1:5173"
     # 认证与预置账号（bootstrap-application 第 2 组）
@@ -37,6 +38,18 @@ class Settings(BaseSettings):
     provision_username: str
     provision_password: SecretStr
     provision_role: str = "Member"
+    # 可靠任务（bootstrap-application 第 3 组）
+    task_loops_enabled: bool = True
+    task_dispatch_attempts: int = Field(default=8, ge=1, le=100)
+    task_delivery_lease_seconds: int = Field(default=30, ge=5, le=600)
+    task_execution_lease_seconds: int = Field(default=45, ge=5, le=3600)
+    task_heartbeat_seconds: int = Field(default=10, ge=1, le=60)
+    task_queue_timeout_seconds: int = Field(default=600, ge=60, le=86400)
+    task_loop_interval_seconds: int = Field(default=2, ge=1, le=60)
+    task_coordinator_interval_seconds: int = Field(default=15, ge=1, le=60)
+    task_auto_recovery_limit: int = Field(default=3, ge=1, le=10)
+    task_max_payload_bytes: int = Field(default=16384, ge=1024, le=1048576)
+    task_max_result_bytes: int = Field(default=4096, ge=256, le=65536)
 
     @field_validator("environment")
     @classmethod
@@ -116,7 +129,7 @@ class Settings(BaseSettings):
     @property
     def broker_url(self) -> str:
         password = quote(self.redis_password.get_secret_value(), safe="")
-        return f"redis://:{password}@{self.redis_host}:{self.redis_port}/0"
+        return f"redis://:{password}@{self.redis_host}:{self.redis_port}/{self.broker_redis_db}"
 
 
 def load_settings(**overrides) -> Settings:

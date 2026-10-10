@@ -15,13 +15,15 @@
 ## 2. 最小认证（US-22，NFR-01/04）
 - [x] 2.1 实施 user/auth_session/审计迁移和显式预置账号；INT-MIGRATION 验证约束、升级与空库回滚
 - [x] 2.2 实施 A01～A04、密码哈希、JWT 会话校验、refresh 轮转及 CSRF；SEC-AUTH 验证正常、失效、重复 refresh、退出和跨站请求
-- [ ] 2.3 实施角色和任务操作者检查；SEC-RBAC 验证 Viewer 发起/取消任务和 Member 操作他人任务被拒绝
+- [x] 2.3 实施角色和任务操作者检查；SEC-RBAC 验证 Viewer 发起/取消任务和 Member 操作他人任务被拒绝
 
 ## 3. 可靠任务（US-02/12/21，NFR-02）
-- [ ] 3.1 实施 async_task/task_outbox 迁移与诊断创建 A35；INT-OUTBOX 验证幂等键、同键异载荷和事务回滚
-- [ ] 3.2 实施投递器、领取租约、发送/补投/超限与 queued deadline；INT-OUTBOX 注入 Redis 中断和发后写回失败
-- [ ] 3.3 实施真实 Worker、执行令牌、心跳与恢复协调器；REL-LEASE 验证重复消息、kill Worker、旧令牌写回和重试上限
-- [ ] 3.4 实施 A29～A32、取消和 successor；REL-CANCEL 验证并发重试、queued 取消及取消/成功竞态
+- [x] 3.1 实施 async_task/task_outbox 迁移与诊断创建 A35；INT-OUTBOX 验证幂等键、同键异载荷和事务回滚
+- [x] 3.2 实施投递器、领取租约、发送/补投/超限与 queued deadline；INT-OUTBOX 注入 Redis 中断和发后写回失败
+- [x] 3.3 实施真实 Worker、执行令牌、心跳与恢复协调器；REL-LEASE 验证重复消息、kill Worker、旧令牌写回和重试上限
+- [x] 3.4 实施 A29～A32、取消和 successor；REL-CANCEL 验证并发重试、queued 取消及取消/成功竞态
+
+第 2.3/3 组证据：tests/test_tasks.py 28 项集成测试（独立临时库 defectguard_task_test，broker 用 Redis db15 隔离）与 tests/test_runtime.py 8 项容器验收（真实故障注入：kill Worker 租约过期恢复、Redis 中断投递退避、运行中取消检查点、同键重放）全部通过；迁移 0002（DATETIME(6) 收敛）与 0003（retry_of 唯一索引）已应用于开发库且 INT-MIGRATION 通过；SEC-RBAC 覆盖 Viewer/Member/Admin 操作边界。
 
 ## 4. 页面与交付
 - [ ] 4.1 实施登录和任务页面、加载/空态/错误/刷新；UI-TASK 验证状态与 API 一致、重复点击及认证失效
