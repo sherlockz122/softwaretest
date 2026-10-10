@@ -5,9 +5,12 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from apps.api.auth import router as auth_router
+from apps.api.errors import error
+from apps.api.security import AuthRejection
+from packages.persistence.db import create_session_factory
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
 
@@ -18,6 +21,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.connections = connection_factory(settings)
+        app.state.session_factory = create_session_factory(settings)
         try:
             yield
         finally:
@@ -31,6 +35,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         redoc_url=None,
         openapi_url="/api/openapi.json" if settings.environment != "production" else None,
     )
+    app.state.settings = settings
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
@@ -45,14 +50,6 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         ],
         expose_headers=["X-Request-ID"],
     )
-
-    def error(request: Request, status: int, code: str, message: str):
-        request_id = getattr(request.state, "request_id", str(uuid4()))
-        return JSONResponse(
-            status_code=status,
-            content={"code": code, "message": message, "request_id": request_id},
-            headers={"X-Request-ID": request_id},
-        )
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -81,6 +78,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
         return error(request, 422, "SYSTEM_INVALID_INPUT", "请求参数无效")
+
+    @app.exception_handler(AuthRejection)
+    async def auth_rejection(request: Request, exc: AuthRejection):
+        return error(request, exc.status, exc.code, exc.message)
+
+    app.include_router(auth_router)
 
     @app.get("/api/v1/health", tags=["health"])
     def health():

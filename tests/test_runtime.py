@@ -57,6 +57,45 @@ def test_web_proxy_and_worker():
     docker("exec", "-T", "worker", "python", "-m", "apps.worker.health")
 
 
+def test_live_auth_roundtrip():
+    # 容器化认证验收：登录/访问/刷新轮转/CSRF 拒绝/退出撤销（真实 HTTP 栈）。
+    settings = load_settings()
+    with httpx.Client(base_url="http://127.0.0.1:18080", timeout=8, trust_env=False) as client:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": settings.provision_username,
+                "password": settings.provision_password.get_secret_value(),
+            },
+            headers={"Origin": settings.frontend_origin},
+        )
+        assert response.status_code == 201
+        body = response.json()
+        access = body["access_token"]
+        csrf = body["csrf_token"]
+        me = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {access}"})
+        assert me.status_code == 200 and me.json()["username"] == settings.provision_username
+        rotated = client.post(
+            "/api/v1/auth/refresh",
+            headers={"X-CSRF-Token": csrf, "Origin": settings.frontend_origin},
+        )
+        assert rotated.status_code == 200
+        new_csrf = rotated.json()["csrf_token"]
+        stale = client.post(
+            "/api/v1/auth/refresh",
+            headers={"X-CSRF-Token": csrf, "Origin": settings.frontend_origin},
+        )
+        assert stale.status_code == 403 and stale.json()["code"] == "AUTH_CSRF_REJECTED"
+        logout = client.post(
+            "/api/v1/auth/logout",
+            headers={"X-CSRF-Token": new_csrf, "Origin": settings.frontend_origin},
+        )
+        assert logout.status_code == 204
+        assert "max-age=0" in logout.headers.get("set-cookie", "").lower()
+        after = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {access}"})
+        assert after.status_code == 401 and after.json()["code"] == "AUTH_REQUIRED"
+
+
 def test_dependency_failure_and_restart_persistence():
     marker = str(uuid4())
     connections = Connections(load_settings())

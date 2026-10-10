@@ -15,6 +15,8 @@ def settings():
         mysql_password="local-test-value-123456",
         redis_password="local-test-value-654321",
         signing_key="s" * 48,
+        provision_username="member",
+        provision_password="provision-test-123456",
     )
 
 

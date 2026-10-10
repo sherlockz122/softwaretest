@@ -1,10 +1,13 @@
 """Shared configuration. Validation messages never include secret values."""
 
+import re
 from urllib.parse import quote
 
 from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{1,64}$")
 
 
 class ConfigurationError(RuntimeError):
@@ -25,6 +28,15 @@ class Settings(BaseSettings):
     redis_password: SecretStr
     signing_key: SecretStr
     frontend_origin: str = "http://127.0.0.1:5173"
+    # 认证与预置账号（bootstrap-application 第 2 组）
+    jwt_issuer: str = "defectguard"
+    jwt_audience: str = "defectguard-api"
+    access_token_ttl_seconds: int = Field(default=900, ge=60, le=86400)
+    session_ttl_days: int = Field(default=7, ge=1, le=90)
+    login_rate_limit_per_minute: int = Field(default=5, ge=1, le=1000)
+    provision_username: str
+    provision_password: SecretStr
+    provision_role: str = "Member"
 
     @field_validator("environment")
     @classmethod
@@ -41,6 +53,34 @@ class Settings(BaseSettings):
         if len(raw) < minimum or raw.lower() in {"change_me", "changeme", "password"}:
             raise ValueError("explicit strong secret required")
         return value
+
+    @field_validator("provision_username")
+    @classmethod
+    def provision_username_normalized(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not USERNAME_PATTERN.fullmatch(value):
+            raise ValueError("username must match ^[a-z0-9_.-]{1,64}$")
+        return value
+
+    @field_validator("provision_password")
+    @classmethod
+    def provision_password_required(cls, value: SecretStr) -> SecretStr:
+        # 密码不做隐式 trim；预置密码至少 12 字符且不提供默认值。
+        if len(value.get_secret_value()) < 12:
+            raise ValueError("provision password must be at least 12 characters")
+        return value
+
+    @field_validator("provision_role")
+    @classmethod
+    def provision_role_known(cls, value: str) -> str:
+        if value not in {"Viewer", "Member", "Admin"}:
+            raise ValueError("role must be Viewer, Member or Admin")
+        return value
+
+    @property
+    def secure_cookies(self) -> bool:
+        # 仅 loopback 本地 HTTP 开发允许关闭 Secure；生产强制。
+        return self.environment == "production"
 
     @field_validator("frontend_origin")
     @classmethod
