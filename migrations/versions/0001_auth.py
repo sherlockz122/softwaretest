@@ -1,8 +1,9 @@
 """Authentication foundation. Definitions are frozen in this revision."""
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import mysql
+
+from alembic import op
 
 revision = "0001_auth"
 down_revision = None

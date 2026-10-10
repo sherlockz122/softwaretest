@@ -1,6 +1,6 @@
-from alembic import context
 from sqlalchemy import create_engine
 
+from alembic import context
 from packages.persistence.models import Base
 from packages.platform.config import load_settings
 

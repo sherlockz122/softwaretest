@@ -1,8 +1,9 @@
 """Frozen sync DDL; preserve existing parsing windows and guard the full downgrade path."""
 
 import sqlalchemy as sa
-from alembic import context, op
 from sqlalchemy.dialects import mysql
+
+from alembic import context, op
 
 revision = "0005_repository_sync"
 down_revision = "0004_commit_parsing"

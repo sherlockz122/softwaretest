@@ -1,6 +1,7 @@
 """Frozen MySQL task/outbox DDL; independent of subsequent ORM changes."""
 
 import sqlalchemy as sa
+
 from alembic import context, op
 
 revision = "0002_tasks"

@@ -3,10 +3,10 @@ import subprocess
 from contextlib import contextmanager
 from uuid import uuid4
 
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 
+from alembic import command
 from packages.platform.config import load_settings
 
 

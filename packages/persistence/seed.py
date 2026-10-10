@@ -28,9 +28,7 @@ def provision_user(settings) -> User:
                 )
                 session.add(user)
                 return user
-            existing.password_hash = hash_password(
-                settings.provision_password.get_secret_value()
-            )
+            existing.password_hash = hash_password(settings.provision_password.get_secret_value())
             existing.role = settings.provision_role
             existing.is_active = True
             return existing

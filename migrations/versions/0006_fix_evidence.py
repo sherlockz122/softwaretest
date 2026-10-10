@@ -1,8 +1,9 @@
 """Frozen Fix evidence and review schema; refuse destructive populated downgrade."""
 
 import sqlalchemy as sa
-from alembic import context, op
 from sqlalchemy.dialects import mysql
+
+from alembic import context, op
 
 revision = "0006_fix_evidence"
 down_revision = "0005_repository_sync"

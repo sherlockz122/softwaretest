@@ -1,8 +1,9 @@
 """Frozen baseline SZZ schema; refuse populated downgrade before any DDL."""
 
 import sqlalchemy as sa
-from alembic import context, op
 from sqlalchemy.dialects import mysql
+
+from alembic import context, op
 
 revision = "0007_szz"
 down_revision = "0006_fix_evidence"
