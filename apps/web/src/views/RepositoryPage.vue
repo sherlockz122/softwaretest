@@ -7,8 +7,10 @@ import { active, operationKeys, date } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 import FixPanel from "../components/FixPanel.vue";
 import SZZPanel from "../components/SZZPanel.vue";
+import FeaturePanel from "../components/FeaturePanel.vue";
 const fixPanel = ref(null);
 const szzPanel = ref(null);
+const featurePanel = ref(null);
 const route = useRoute();
 const repo = useLatest((id, signal) =>
   client.request("/repositories/" + encodeURIComponent(id), { signal }),
@@ -59,6 +61,7 @@ async function refresh() {
   await Promise.all(queries);
   await fixPanel.value?.refresh();
   await szzPanel.value?.refresh();
+  await featurePanel.value?.refresh();
 }
 watch(filePage, (value) => {
   if (selected.value)
@@ -395,6 +398,13 @@ onUnmounted(() => clearInterval(poll));
       />
       <SZZPanel
         ref="szzPanel"
+        :repo="repo.data.value"
+        :can-write="canParse"
+        :busy="active.has(repo.data.value.task.status)"
+        :reload="refresh"
+      />
+      <FeaturePanel
+        ref="featurePanel"
         :repo="repo.data.value"
         :can-write="canParse"
         :busy="active.has(repo.data.value.task.status)"

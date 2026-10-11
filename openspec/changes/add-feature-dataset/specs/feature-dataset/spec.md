@@ -40,3 +40,33 @@
 #### Scenario: Invalid report population
 - **WHEN** 重复提交或混合输入摘要进入同一质量报告
 - **THEN** 拒绝生成混合轮次报告
+
+### Requirement: Frozen accepted feature run
+系统 SHALL 复用可靠任务、租约和 execution_token，从固定私有接受 HEAD 筛选解析提交，冻结 Fix 复核与输入摘要，按原子批次发布向量并保留恢复点。
+
+#### Scenario: Unaccepted database union
+- **WHEN** A11 并集含未接受同步记录或 full 历史有解析缺口
+- **THEN** 未接受提交排除；完整历史缺口拒绝，有限窗口保持明确缺失
+
+#### Scenario: Concurrent creation and later review
+- **WHEN** 相同幂等请求并发到达，或接受后 Fix 复核发生变化
+- **THEN** 同政策只创建一轮，不同政策冲突；旧轮次继续使用冻结复核和证据时间
+
+#### Scenario: Interrupted worker and stale token
+- **WHEN** Worker 在已提交批次后中断，或计算中取消或空间不足
+- **THEN** 未提交批次回滚，旧令牌禁止写入，重试沿用原轮次和冻结输入并且不重复结果
+
+### Requirement: Authenticated quality workflow
+系统 SHALL 提供 A15/A16 与分页轮次历史，Member/Admin 可发起，Viewer 只读，并允许按特征缺失或有效值降序下钻。
+
+#### Scenario: Partial population
+- **WHEN** 轮次尚未完成
+- **THEN** 页面显示待处理及已提交批次，总体质量报告保持未发布
+
+#### Scenario: Uncertain acknowledgement and changed repository
+- **WHEN** 发起响应丢失，或旧仓库查询晚到
+- **THEN** 重放相同幂等键并跟踪已接受任务，旧数据不覆盖新仓库界面
+
+#### Scenario: Safe migration
+- **WHEN** 从旧 SZZ schema 升级或对有数据的迁移路径降级
+- **THEN** 升级保留旧业务数据，任何受影响数据在第一次 DDL 前阻止降级

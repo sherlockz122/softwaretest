@@ -314,9 +314,11 @@ def subsystem(path):
     return path.split("/", 1)[0] if "/" in path else "."
 
 
-def ancestry(commit, index):
+def ancestry(commit, index, tick=lambda: None):
     seen, pending = set(), list(commit.parents)
     while pending:
+        if len(seen) % 256 == 0:
+            tick()
         sha = pending.pop()
         if sha not in seen and sha in index:
             seen.add(sha)
@@ -324,11 +326,13 @@ def ancestry(commit, index):
     return sorted((index[sha] for sha in seen), key=lambda c: c.order)
 
 
-def file_history(file, previous):
+def file_history(file, previous, tick=lambda: None):
     if file.change_type in {"A", "C"}:
         return []
     path, changes = file.old_path, []
-    for commit in reversed(previous):
+    for ordinal, commit in enumerate(reversed(previous)):
+        if ordinal % 256 == 0:
+            tick()
         for changed in commit.files:
             if changed.new_path == path:
                 changes.append(commit)
@@ -341,7 +345,8 @@ def file_history(file, previous):
     return changes
 
 
-def vector(commit, previous, snapshot, source, purpose):
+def vector(commit, previous, snapshot, source, purpose, tick=lambda: None):
+    tick()
     values, reasons = dict.fromkeys(FEATURES), {}
 
     def missing(keys, reason):
@@ -385,7 +390,9 @@ def vector(commit, previous, snapshot, source, purpose):
                 for c in by_author
             )
             incomplete = any(
-                c.parse_status != "parsed" or any(not f.supported for f in c.files)
+                c.parse_status != "parsed"
+                or len(c.parents) > 1
+                or any(not f.supported for f in c.files)
                 for c in previous
             )
             if incomplete:
@@ -395,7 +402,7 @@ def vector(commit, previous, snapshot, source, purpose):
                 values["SEXP"] = sum(
                     bool(systems & {subsystem(f.path) for f in c.files}) for c in by_author
                 )
-                histories = [file_history(f, previous) for f in commit.files]
+                histories = [file_history(f, previous, tick) for f in commit.files]
                 values["NDEV"] = len({c.identity_key for h in histories for c in h})
                 values["NUC"] = len({h[0].sha for h in histories if h})
                 if not total:
@@ -425,10 +432,14 @@ def vector(commit, previous, snapshot, source, purpose):
     )
 
 
-def compute(snapshot, purpose="historical"):
+def compute(snapshot, purpose="historical", tick=lambda: None):
     if not isinstance(snapshot, Snapshot) or purpose not in ("historical", "candidate"):
         raise FeatureInputError("FEATURE_POLICY_UNSUPPORTED")
     ordered = sorted(snapshot.commits, key=lambda c: c.order)
+    frozen = []
+    for commit in ordered:
+        tick()
+        frozen.append(asdict(commit))
     source = digest(
         {
             "repository_id": snapshot.repository_id,
@@ -439,14 +450,16 @@ def compute(snapshot, purpose="historical"):
             "feature_version": FEATURE_VERSION,
             "rule_hash": RULE_HASH,
             "purpose": purpose,
-            "commits": [asdict(c) for c in ordered],
+            "commits": frozen,
         }
     )
     index = {c.sha: c for c in ordered}
-    return tuple(vector(c, ancestry(c, index), snapshot, source, purpose) for c in ordered)
+    return tuple(
+        vector(c, ancestry(c, index, tick), snapshot, source, purpose, tick) for c in ordered
+    )
 
 
-def quality(vectors):
+def quality(vectors, tick=lambda: None):
     """One immutable run only; train preprocessing and label distributions are separate."""
     vectors = tuple(vectors)
     if (
@@ -457,6 +470,7 @@ def quality(vectors):
         raise FeatureInputError("FEATURE_QUALITY_POPULATION_INVALID")
     report = {}
     for name in FEATURES:
+        tick()
         raw = sorted(dict(v.values)[name] for v in vectors if dict(v.values)[name] is not None)
         if any(type(v) not in {int, float} or not math.isfinite(v) or v < 0 for v in raw):
             raise FeatureInputError("FEATURE_VALUE_INVALID")

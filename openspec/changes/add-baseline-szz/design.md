@@ -16,3 +16,8 @@ baseline-szz-v1 固定唯一父，merge/root Unknown；native-v1 文件/删除�
 真实Git golden、MySQL与迁移、并发/权限/幂等/冻结/时间/有限历史/空库、故障/真实Worker强杀及新卷浏览器，具体状态见tasks。基于 [Git blame](https://git-scm.com/docs/git-blame) 与 [Python tokenize](https://docs.python.org/3.11/library/tokenize.html)。
 
 Java词法边界依据 [JLS](https://docs.oracle.com/javase/specs/jls/se21/html/jls-3.html)；非编译器语义验证，不将歧义输入当clean。
+
+
+## 第十二阶段并发发布边界
+
+MySQL REPEATABLE READ 下，创建事务的幂等查询可能先建立旧快照，随后等待仓库锁到 Fix 最终发布。FixRun/Assessment 的 locking read 会看到当前已提交轮次，Evidence 必须同样使用当前共享 locking read，不能混入旧一致性快照。特征和SZZ同时修正；受控双事务时序用例验证晚发布证据摘要/available_at完整冻结，不改变已有轮次或追溯算法。

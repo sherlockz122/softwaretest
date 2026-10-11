@@ -561,6 +561,59 @@ test("public repository lost-response replay, real Worker clone and persisted me
     timeout: 60000,
   });
   await expect(page.getByTestId("szz-runs").locator("li")).toHaveCount(2);
+  let featureTask;
+  let featureHeaders;
+  let featureBody;
+  await page.route("**/api/v1/repositories/*/feature-runs", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    featureHeaders = route.request().headers();
+    featureBody = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.status()).toBe(202);
+    featureTask = (await response.json()).task_id;
+    await route.abort("failed");
+  });
+  await page
+    .getByRole("button", { name: "提取 Kamei14 特征", exact: true })
+    .click();
+  await expect.poll(() => featureTask).toBeTruthy();
+  const featureReplay = await page.request.post(
+    `/api/v1/repositories/${accepted}/feature-runs`,
+    { headers: featureHeaders, data: featureBody },
+  );
+  expect(featureReplay.status()).toBe(202);
+  expect((await featureReplay.json()).task_id).toBe(featureTask);
+  await expect(page.getByTestId("feature-status")).toHaveText("提取完成", {
+    timeout: 60000,
+  });
+  await expect(page.getByTestId("feature-quality")).toContainText(
+    "完整轮次 3 个提交",
+  );
+  const featureData = await page.request.get(
+    `/api/v1/repositories/${accepted}/feature-quality?run_id=${featureTask}`,
+    { headers: featureHeaders },
+  );
+  expect(featureData.status()).toBe(200);
+  const featureDocument = await featureData.json();
+  const featureQuality = featureDocument.quality;
+  await info.attach("feature-quality", {
+    body: JSON.stringify(featureDocument, null, 2),
+    contentType: "application/json",
+  });
+  await expect(page.getByTestId("feature-result")).toHaveCount(3);
+  await page.getByRole("button", { name: "FIX 缺失", exact: true }).click();
+  await expect(page.getByTestId("feature-result")).toHaveCount(
+    featureQuality.features.FIX.missing,
+  );
+  await expect(page.getByTestId("feature-results")).toContainText(
+    "fix_not_yet_available",
+  );
+  await page.getByRole("button", { name: "EXP 数值降序", exact: true }).click();
+  await expect(page.getByTestId("feature-result")).toHaveCount(
+    featureQuality.features.EXP.valid,
+  );
+  await shot(page, info, "repository-feature-quality");
+  await page.unroute("**/api/v1/repositories/*/feature-runs");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "登录", exact: true }),
@@ -578,6 +631,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await expect(page.getByTestId("sync-status")).toHaveText("同步完成");
   await expect(page.getByTestId("fix-status")).toHaveText("识别完成");
   await expect(page.getByTestId("szz-status")).toHaveText("追溯完成");
+  await expect(page.getByTestId("feature-status")).toHaveText("提取完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({
@@ -625,6 +679,10 @@ test("repository Viewer controls and mobile detail remain readable", async ({
   ).toHaveCount(0);
   await expect(page.getByTestId("fix-panel")).toBeVisible();
   await expect(page.getByTestId("szz-panel")).toBeVisible();
+  await expect(page.getByTestId("feature-panel")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "提取 Kamei14 特征", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "运行 SZZ 追溯", exact: true }),
   ).toHaveCount(0);

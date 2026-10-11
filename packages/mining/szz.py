@@ -72,6 +72,7 @@ class SZZService(FixService):
                     or repo.fix_status != "detected"
                     or repo.sync_status not in {"pending", "synced", "requires_review"}
                     or repo.szz_status in {"queued", "tracing"}
+                    or repo.feature_status in {"queued", "extracting"}
                 ):
                     raise RepositoryError(409, "SZZ_STATE_CONFLICT")
                 fix = db.get(FixRun, policy["fix_run_id"], with_for_update=True)
@@ -110,6 +111,7 @@ class SZZService(FixService):
                             select(DefectEvidence)
                             .where(DefectEvidence.assessment_id == row.id)
                             .order_by(DefectEvidence.ordinal)
+                            .with_for_update(read=True)
                         )
                     )
                     times = [fix.created_at, row.created_at, commit.committer_time]

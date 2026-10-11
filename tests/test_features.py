@@ -320,6 +320,54 @@ def test_immutable_output_and_versioned_digest():
     )
 
 
+def test_cpu_callbacks_preserve_values_and_can_interrupt():
+    inputs = snapshot(*(commit(i, [i - 1] if i > 1 else [], i) for i in range(1, 301)))
+    calls = 0
+
+    def tick():
+        nonlocal calls
+        calls += 1
+
+    assert compute(inputs, tick=tick) == compute(inputs)
+    assert calls > len(inputs.commits)
+
+    def stopped():
+        raise InterruptedError("cancelled computation")
+
+    with pytest.raises(InterruptedError):
+        compute(inputs, tick=stopped)
+
+
+def test_merge_ancestor_is_incomplete_even_when_record_status_is_parsed():
+    base = commit(1)
+    left, right = commit(2, [1], 1), commit(3, [1], 2)
+    merged = commit(4, [2, 3], 3, files=[])
+    child = commit(5, [4], 4)
+    output = result(base, left, right, merged, child)
+    assert output["values"]["EXP"] == 4
+    assert all(output["values"][key] is None for key in ("NDEV", "AGE", "NUC", "SEXP"))
+
+
+def test_tree_cache_reuses_verified_modes_and_still_rejects_wrong_blob(tmp_path):
+    root, _, _, shas = szz_history(tmp_path / "source", count=1)
+    reader = reader_for(root, tmp_path / "attempt")
+    record = reader.record(shas[-1])
+    first = freeze_native_record(reader, record)
+    calls = []
+    original = reader.command
+
+    def command(arguments, *args, **kwargs):
+        calls.append(arguments)
+        return original(arguments, *args, **kwargs)
+
+    reader.command = command
+    assert freeze_native_record(reader, record) == first
+    assert not calls
+    broken = record | {"files": [record["files"][0] | {"old_blob": "f" * 40}]}
+    with pytest.raises(FeatureInputError, match="FEATURE_BLOB_CONFLICT"):
+        freeze_native_record(reader, broken)
+
+
 def test_quality_quantiles_and_empty_missing_population():
     a = commit(1, files=[change(la=1)])
     b = commit(2, [1], 1, [change(la=3)])

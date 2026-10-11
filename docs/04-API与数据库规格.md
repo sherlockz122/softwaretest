@@ -347,4 +347,9 @@ A13要求fix_run_id，algorithm_version固定baseline-szz-v1，as_of可null或�
 
 ## 第十一阶段特征接口边界
 
-当前交付纯内核/原始质量统计，不新增 A15/A16 或数据集 A17～19，生成 OpenAPI 与 schema `0007_szz` 保持当前契约。上表特征/数据集结构仍为待实施设计；后续 feature_run/item 必须绑定接受快照、输入/规则/身份/Fix冻结摘要，唯一性包含轮次。原始十四维 null 与原因单独保存，不填零，不作为监督标签；实现与下一批约束见 [Kamei指导](development/Kamei14计算与验收.md)。
+第十一阶段只交付纯内核；第十二阶段新增 A15/A16 及关联分页历史，生成 OpenAPI/schema `0008_features` 更新。feature_run/item绑定接受快照、输入/规则/身份/Fix冻结摘要，唯一性包含轮次；数据集 A17～19仍待实施。原始十四维 null 与原因单独保存，不填零，不作为监督标签；实现与下一批约束见 [Kamei指导](development/Kamei14计算与验收.md)。
+
+
+## 第十二阶段特征纵向接入（2026-10-11）
+
+US-06/07个人wang实现A15/A16、feature_run/item（0008_features）、repository.feature可靠任务与FeaturePanel质量页。固定接受HEAD/private快照/解析身份/覆盖/用途/Fix复核，Worker可达性排除未接受并集，冻结输入后每10结果原子发布/恢复；旧令牌与变更输入拒绝。完整质量只在全部发布后出现，缺失保留原因，提供稳定分页/缺失和数值降序下钻。不得构造标签、拟合填充或将晚到FIX回填；US-08/09及A17～19成熟度/不可变数据集与模型仍待后续。详情见 [Kamei指导](development/Kamei14计算与验收.md)；完成验收结果另写本批报告，不标记团队故事Done，不归档change，仅wang。

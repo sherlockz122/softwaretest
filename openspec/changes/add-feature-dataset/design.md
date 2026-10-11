@@ -26,8 +26,25 @@ US-06～09 依赖已接受 HEAD，而 A11 是已入库记录并集。首批采�
 
 # Dataset Follow-up
 
+## 第十二阶段纵向决策
+
+`0008_features` 新增 feature_run/item，唯一键包含根轮次与 SHA/ordinal。启动事务冻结接受 HEAD/storage、初次解析覆盖、用途及可选同 HEAD 已完成 Fix 的 review/证据摘要；available_at 取轮次生成/判定/复核/Issue 观察时间最大值，未复核且内容不完整不能形成否定 FIX。无需 Fix 也可提取，历史 FIX 缺失。
+
+Worker 在固定私有 bare 仓库运行有监督的可达计划，交集过滤 A11 并集；full 缺解析拒绝。初次计划验证 mode/blob 后原子冻结最小 CommitInput，重试从冻结输入重算并校验摘要，不重新取当前复核。源摘要另绑定 storage_key/Fix 根轮次/Fix冻结摘要；公开响应不带私有 storage 或原始身份。tree LRU 至多64项且累计原始树字节8MiB（Python对象占用另计），祖先/文件回溯周期调用租约/取消/空间/总时限检查，数值公式保持一致，源码摘要变化产生新轮次。
+
+每10结果与checkpoint/进度同事务；最终批次同时发布完整质量和成功状态。部分轮次没有总体质量。复用现有协调器自动续跑与人工retry；parse/sync/Fix/SZZ/feature 互斥，旧token/latest/root/HEAD/storage/源码/解析/身份变化拒绝。数据库迁移整个降级路径先检查数据后DDL。
+
+A15 POST `/repositories/{id}/feature-runs` 支持 feature_version/purpose/fix_run_id；认证分页 GET 同路径，A16 GET `/repositories/{id}/feature-quality?run_id=...` 提供完整统计、分页结果及 feature/missing 下钻（有效值按数值降序，ordinal稳定次序）。页面显式历史/候选用途、覆盖/源摘要/缺失、运行中/失败状态，复用当前任务链接取消/retry；不增加标签或预处理。
+
+保留 O(N²) 内核复杂度边界，本批以真实400提交 Worker 故障恢复与合成规模探针验证；不以夹具声称大仓库无限性能，超时需根据真实资源重新估算。数据集/模型依赖留第3组，未交付不得提前勾选。
+
 同时限制 event_time 与 label_available_at；观察窗口 W 预声明，clean 必须有完整观察覆盖、无冲突、无未知未复核证据。现阶段 SZZ 候选不直接作为确定标签。历史证据今天才生成时，历史 train 截止可能没有可用样本，必须明示不可构建/不足类别，禁止回填时间。冻结接受快照/特征轮次/SZZ/Fix/revision/identity/公式/label版本，train-only 填充/缩放/采样，validation 阈值，test 最终评估。
 
 # Test Strategy
 
 真实 Git 经 NativeReader 的两文件多作者夹具逐项手算十四维；重命名、删除再新增、根/零 churn/merge/binary/编码/超限；缺父/full/recent/未接受分支、同时间 SHA/倒置时间、晚到 Fix、输入冻结、摘要顺序/版本变化、质量缺失与分位数；全量既有后端/新卷浏览器/静态/规格/契约回归及确切 SHA CI。本机 runtime/acceptance/stage11 保留脱敏证据。
+
+
+## 第十二阶段并发发布边界
+
+MySQL REPEATABLE READ 下，创建事务的幂等查询可能先建立旧快照，随后等待仓库锁到 Fix 最终发布。FixRun/Assessment 的 locking read 会看到当前已提交轮次，Evidence 必须同样使用当前共享 locking read，不能混入旧一致性快照。特征和SZZ同时修正；受控双事务时序用例验证晚发布证据摘要/available_at完整冻结，不改变已有轮次或追溯算法。

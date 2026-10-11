@@ -1,6 +1,6 @@
 # Baseline SZZ 追溯与验收
 
-2026-10-10第十阶段在个人wang交付A13/A14及独立add-baseline-szz change。数据库head为`0007_szz`。版本`baseline-szz-v1`包含唯一父策略、blank/Python/Java词法过滤、默认Git whole-file rename及时间/覆盖检查；代码SHA256另行冻结，更改算法需要新版本和新轮。
+2026-10-10第十阶段在个人wang交付A13/A14及独立add-baseline-szz change。该阶段迁移为`0007_szz`；当前第十二阶段特征head为`0008_features`。版本`baseline-szz-v1`包含唯一父策略、blank/Python/Java词法过滤、默认Git whole-file rename及时间/覆盖检查；代码SHA256另行冻结，更改算法需要新版本和新轮。
 
 ## 使用与接口
 
@@ -42,3 +42,6 @@ available_at取Fix轮/判定创建、复核、全部Issue观测和Fix committer 
 0007为冻结DDL，空库base/head往返、0006旧Fix/提交数据保留、受影响整路径非空降级在第一条DDL前拒绝。启动/每批复用512MiB增长+2GiB紧急余量；新增预计0.5～3GiB在D，实际仓库/构建峰值另计，不足停止告知、不转C、不prune业务卷。JUnit、故障日志、截图、容量/分支/确切SHA CI和SHA256清单仅保存在`runtime/acceptance/stage10`，脱敏，不上传Actions artifact。
 
 下一批：Kamei14 golden/时间与身份/有限历史缺失规则、观察窗口及冲突/完整覆盖审核、不可变时间数据集，先验收防泄漏再接LR/RF。Java Unicode预处理、其它语言过滤、跨文件移动、历史分叉批准/重新基线和快照归档仍须明确版本/审计设计。不得因为D空间足够直接扩大未验证的数据或将Unknown置0。见[整体规划](后续整体规划与空间预算.md)。
+
+
+第十二阶段补强启动与Fix最终发布竞争时的证据读取：与FixRun/Assessment同为当前locking read，避免旧RR快照遗漏新证据。Source冻结/available_at由受控双事务用例验证，旧轮次及baseline-szz-v1算法不变。

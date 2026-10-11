@@ -132,6 +132,7 @@ class TaskService:
             "repository.sync",
             "repository.fix",
             "repository.szz",
+            "repository.feature",
         }:
             repository = db.get(Repository, payload["repository_id"], with_for_update=True)
             if not repository:
@@ -141,6 +142,8 @@ class TaskService:
             repository.latest_task_id = task.id
             if kind == "repository.clone":
                 repository.status = "queued"
+            elif kind == "repository.feature":
+                repository.feature_status = "queued"
             elif kind == "repository.szz":
                 repository.szz_status = "queued"
             elif kind == "repository.fix":
@@ -219,6 +222,7 @@ class TaskService:
             "repository.sync",
             "repository.fix",
             "repository.szz",
+            "repository.feature",
         } or status not in STATES | {None}:
             raise TaskError(422, "TASK_INVALID_INPUT")
         with Session(self.engine) as db, db.begin():
@@ -296,11 +300,14 @@ class TaskService:
             "repository.sync",
             "repository.fix",
             "repository.szz",
+            "repository.feature",
         }:
             repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
             if repository and repository.latest_task_id == task.id:
                 if task.type == "repository.clone":
                     repository.status = "cloned" if status == "succeeded" else status
+                elif task.type == "repository.feature":
+                    repository.feature_status = "extracted" if status == "succeeded" else status
                 elif task.type == "repository.szz":
                     repository.szz_status = "traced" if status == "succeeded" else status
                 elif task.type == "repository.fix":
@@ -331,6 +338,7 @@ class TaskService:
                 "repository.sync",
                 "repository.fix",
                 "repository.szz",
+                "repository.feature",
             }:
                 self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
                 audit(db, task, "task.failed")
@@ -347,6 +355,7 @@ class TaskService:
                 "repository.sync",
                 "repository.fix",
                 "repository.szz",
+                "repository.feature",
             }:
                 repository = db.get(Repository, task.payload["repository_id"], with_for_update=True)
                 if not repository or repository.latest_task_id != task.id:
@@ -354,6 +363,8 @@ class TaskService:
                     return None
                 if task.type == "repository.clone":
                     repository.status = "cloning"
+                elif task.type == "repository.feature":
+                    repository.feature_status = "extracting"
                 elif task.type == "repository.szz":
                     repository.szz_status = "tracing"
                 elif task.type == "repository.fix":

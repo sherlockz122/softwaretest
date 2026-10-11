@@ -270,3 +270,16 @@ footer {
     grid-template-columns: 90px 1fr;
   }
 }
+.feature-table-wrap {
+  overflow-x: auto;
+}
+.feature-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.feature-table th,
+.feature-table td {
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  text-align: left;
+}
