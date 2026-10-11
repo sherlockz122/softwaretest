@@ -188,7 +188,7 @@ erDiagram
 | `defect_evidence` | `id`, `fix_commit_id`, `type`, `value`, `confidence`, `rule_version`, `review_status` | Fix 证据 |
 | `szz_link` | `id`, `fix_commit_id`, `blamed_commit_id`, `path`, `fixed_line`, `blamed_line`, `confidence`, `label_version`; 唯一证据键 | SZZ 行级追溯 |
 | `commit_label` | `commit_id`, `label_version`, `state`, `snapshot_at`, `maturity_days`, `reason`; `PK(commit_id,label_version)` | buggy/clean/unknown 标签 |
-| `commit_feature` | `commit_id`, `feature_version`, 14 个原始值, `semantic_artifact_uri`, `computed_at`; `PK(commit_id,feature_version)` | 多版本特征 |
+| `commit_feature`（待实现） | `commit_id`, `feature_version`, `feature_run_id/source_digest`, 14 个原始值与缺失原因, `semantic_artifact_uri`, `computed_at`; 唯一性须绑定冻结输入轮次，不仅是 `(commit_id,feature_version)` | 多版本/快照特征；迁移在后续切片固定 |
 | `dataset` | `id`, `repository_id`, `label_version`, `feature_version`, `snapshot_at`, split 边界, `config_json`, `content_hash` | 不可变数据集 |
 | `dataset_item` | `dataset_id`, `commit_id`, `split`, `label`, `feature_version`, `label_version`; `PK(dataset_id,commit_id)` | 数据集成员 |
 | `model_run` | `id`, `dataset_id`, `plugin`, `family`, `code_sha`, `dependency_digest`, `params_json`, `seed`, `status`, `metrics_json`, `threshold`, `calibration`, `source_run_id` | 一次训练运行 |
@@ -344,3 +344,7 @@ repository.sync复用租约/取消/重试/outbox；克隆期processed单位字�
 ## 第十阶段A13/A14实际扩展
 
 A13要求fix_run_id，algorithm_version固定baseline-szz-v1，as_of可null或带时区UTC截止且未来拒绝；202/幂等/Member+。A14分页行证据，另有仓库szz-runs历史及/szz-runs/{id}/results提交状态；均认证只读/page_size最大100。0007增加szz_run固定Fix/HEAD/私有快照/解析/算法/Git/覆盖/cutoff/输入及标签摘要，szz_item冻结assessment/review输入与批次结果，szz_link按(item,ordinal)唯一保存行证据JSON；repository.szz_status/root/latest随任务变化。规划ER图中的blamed_commit引用以SHA证据保存，有限历史来源无本地commit行时必须保留Unknown，不能伪造FK。完整契约见 [SZZ指导](development/SZZ追溯与验收.md) 及生成OpenAPI。
+
+## 第十一阶段特征接口边界
+
+当前交付纯内核/原始质量统计，不新增 A15/A16 或数据集 A17～19，生成 OpenAPI 与 schema `0007_szz` 保持当前契约。上表特征/数据集结构仍为待实施设计；后续 feature_run/item 必须绑定接受快照、输入/规则/身份/Fix冻结摘要，唯一性包含轮次。原始十四维 null 与原因单独保存，不填零，不作为监督标签；实现与下一批约束见 [Kamei指导](development/Kamei14计算与验收.md)。

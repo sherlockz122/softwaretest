@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前实现工程、认证、可靠任务、仓库安全克隆（A07～A09）、提交解析（A11）、增量同步（A10）、Fix证据/复核（A12）及第十阶段baseline SZZ（A13/A14）。SZZ冻结Fix轮次/复核版本、接受快照与观测截止，提供可恢复行级候选证据和可用时间，不以无证据生成clean；历史分叉仍暂停待复核。Kamei/数据集/模型、分叉决策和受控归档待后续。框架已归档，采集与独立SZZ change保持活动；仅wang。见 [SZZ追溯与验收](docs/development/SZZ追溯与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
+当前已实现工程、认证、可靠任务、克隆/解析/同步、Fix及baseline SZZ（A07～A14）。第十一阶段新增 `kamei14-dg-v1` 特征计算内核、缺失原因、原始质量统计和真实Git手算验收；特征任务/持久化/A15/A16/页面下一批接入，再成熟度/不可变数据集和模型。SZZ仍为候选证据，不以无证据生成clean；历史分叉待复核。框架已归档，采集/SZZ/feature-dataset change保持活动，仅wang。见 [Kamei指导](docs/development/Kamei14计算与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 

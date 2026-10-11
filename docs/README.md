@@ -64,3 +64,5 @@
 
 - [SZZ追溯与验收](development/SZZ追溯与验收.md)
 - [第十阶段SZZ追溯与恢复报告](reports/2026-10-10-第十阶段SZZ追溯与恢复报告.md)
+- [Kamei14计算与验收](development/Kamei14计算与验收.md)
+- [第十一阶段特征内核报告](reports/2026-10-11-第十一阶段Kamei14计算内核报告.md)
