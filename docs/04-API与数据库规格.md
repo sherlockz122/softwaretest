@@ -1,6 +1,6 @@
 # DefectGuard API 与数据库规格
 
-2026-10-11 第十六阶段当前边界（优先于下文历史阶段描述）：v2 已接入 A15/A16、冻结/可靠任务/质量页面并绑定已接受原生 Git；API 默认 v1，页面默认可选 v2。schema 仍0008_features，35项接口编号不增加。Git 特征来源绑定不证明标签完整；label_coverage_complete/product_training_ready=false，数据集 A17～19/完整负例来源/模型与预测待后续。见 [当前指导](development/在线可知特征与来源绑定验收.md)。
+2026-10-12 第十七阶段当前边界（优先于下文历史阶段描述）：v2 数值使用文件事件索引/线性祖先复用/密集路径旧扫描，与未修改v1数值及缺失原因精确等价；新代码绑定v2规则摘要，旧轮次不改写。A15/A16版本/原生Git绑定及质量合同保留，schema仍0008_features，35项接口编号不变。性能优化不证明标签完整；A17～19/来源认证/模型与预测仍待后续。见 [当前指导](development/v2文件历史索引与验收.md)。
 
 ## 1 API 通用约定
 
@@ -367,3 +367,10 @@ A15 的 feature_version 枚举扩为 kamei14-dg-v1 / kamei14-dg-message-v2，缺
 v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpose（值、原因、消息摘要）与 native_record_digest，fix_json={}、fix_root_task_id=null；恢复验证摘要/版本/规则/租约/接受HEAD/private存储。质量 source_validation 包含 native-record-binding-v1、accepted_head、native_records_digest、feature_population_complete、label_coverage_complete=false、product_training_ready=false。full 可达解析缺口/冻结或规则漂移为 FEATURE_SOURCE_CONFLICT；原生Git与DB事实漂移为 FEATURE_GIT_RECORD_CONFLICT；限额为 FEATURE_RESOURCE_LIMIT。失败不发布完整质量。旧表即可存储新 JSON，不新增迁移或接口编号。
 
 数据集 A17～19、完整负例/最早知识来源认证仍待实现；旧 production-time-labels-v1 来源入口严格拒绝 v2，不能将特征校验标志当成负例认证。
+
+
+## 第十七阶段增量（2026-10-12）
+
+无新增端点/字段/迁移，A15/A16及0008_features保留。旧已完成v2轮次按冻结结果读取；未完成轮次的旧rule_hash按原FEATURE_SOURCE_CONFLICT拒绝，新轮次另创建，不修改冻结规则或旧quality。
+
+见 [当前指导](development/v2文件历史索引与验收.md) 与 [阶段报告](reports/2026-10-12-第十七阶段v2文件历史索引报告.md)。

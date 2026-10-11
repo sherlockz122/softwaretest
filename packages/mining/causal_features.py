@@ -8,7 +8,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from packages.mining import fix_rules
-from packages.mining.features import FEATURES, RULE_HASH, SHA, Snapshot, compute, digest
+from packages.mining.features import FEATURES, RULE_HASH, SHA, Snapshot, digest
+from packages.mining.indexed_features import compute_indexed
+from packages.mining.indexed_features import rule_hash as indexed_rule_hash
 
 VERSION = "kamei14-dg-message-v2"
 MESSAGE_RULE = "commit-message-purpose-v1"
@@ -34,6 +36,7 @@ def rule_hash():
     return digest(
         {
             "base_numeric_rule": RULE_HASH,
+            "indexed_numeric_rule": indexed_rule_hash(),
             "message_rule": fix_rules.RULE_HASH,
             "code": Path(__file__).read_text(encoding="utf-8"),
         }
@@ -107,7 +110,7 @@ def compute_causal(snapshot, messages, *, max_commits=1000, seconds=30, tick=lam
 
     # Future review data is removed before hashing as well as before calculation.
     safe = replace(snapshot, commits=tuple(replace(c, fix=None) for c in snapshot.commits))
-    base = compute(safe, tick=check)
+    base = compute_indexed(safe, tick=check)
     source = digest(
         {
             "base_source": base[0].source_digest,
