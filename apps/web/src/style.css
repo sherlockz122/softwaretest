@@ -206,7 +206,8 @@ td:first-child {
   overflow-wrap: anywhere;
   color: #536978;
 }
-.repository-list li {
+.repository-list li,
+.task-list li {
   overflow-wrap: anywhere;
   padding: 12px 0;
   line-height: 1.6;

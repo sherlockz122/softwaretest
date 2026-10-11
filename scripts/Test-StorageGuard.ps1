@@ -65,3 +65,24 @@ Write-Output 'PASS advisory capacity allows command; environment restored'
 $storage = (& (Join-Path $PSScriptRoot 'Measure-ProjectStorage.ps1')) | ConvertFrom-Json
 if ($storage.project_root -ne $projectRoot -or $storage.project_logical_bytes -le 0 -or $storage.venv_logical_bytes -le 0) { throw 'Storage report invalid' }
 Write-Output 'PASS read-only storage report'
+if ($storage.measurement_complete -isnot [bool]) { throw 'Storage completeness must be explicit' }
+# Exercise an unreadable directory without creating ACL changes or filesystem fixtures.
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Measure-ProjectStorage.ps1'), [ref]$null, [ref]$null)
+$measurementFunction = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-LogicalBytes' }, $true)
+. ([scriptblock]::Create($measurementFunction.Extent.Text))
+function Get-ChildItem {
+    param([string] $LiteralPath, [switch] $Force, [string] $ErrorAction)
+    if ($LiteralPath -eq $projectRoot) {
+        [pscustomobject]@{ Attributes = [IO.FileAttributes]::Normal; PSIsContainer = $false; Length = 17; FullName = (Join-Path $projectRoot 'simulated-file') }
+        [pscustomobject]@{ Attributes = [IO.FileAttributes]::Directory; PSIsContainer = $true; FullName = (Join-Path $projectRoot 'simulated-unreadable') }
+        [pscustomobject]@{ Attributes = [IO.FileAttributes]::ReparsePoint; PSIsContainer = $true; FullName = (Join-Path $projectRoot 'simulated-link') }
+    } else { throw [UnauthorizedAccessException]::new('Simulated unreadable directory') }
+}
+try {
+    $partial = Get-LogicalBytes $projectRoot
+    if ($partial.bytes -ne 17 -or $partial.complete -or $partial.unreadable.Count -ne 1 -or $partial.links.Count -ne 1) {
+        throw 'Unreadable directories must produce explicit lower-bound measurements'
+    }
+} finally { Remove-Item -LiteralPath Function:\Get-ChildItem }
+Assert-Restored
+Write-Output 'PASS partial measurement reports unreadable directories and excludes links without ACL changes'

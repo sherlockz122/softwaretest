@@ -58,3 +58,8 @@ A15 POST `/repositories/{id}/feature-runs` 支持 feature_version/purpose/fix_ru
 ## 第十二阶段并发发布边界
 
 MySQL REPEATABLE READ 下，创建事务的幂等查询可能先建立旧快照，随后等待仓库锁到 Fix 最终发布。FixRun/Assessment 的 locking read 会看到当前已提交轮次，Evidence 必须同样使用当前共享 locking read，不能混入旧一致性快照。特征和SZZ同时修正；受控双事务时序用例验证晚发布证据摘要/available_at完整冻结，不改变已有轮次或追溯算法。
+
+
+## 第十四阶段前置适配修订
+
+外部公开数据审计独立add-public-dataset-audit。先核验历史回放时间与可知特征，再完成第4组纵向接入；真实效果/发布需合格数据，但模型工程可并行。实际观测合同不改写，外部13维不兼容产品14维，不能伪装过去系统观察。最新决策见docs/decisions/2026-10-11-公开数据与历史评估口径.md。

@@ -692,10 +692,37 @@ test("repository Viewer controls and mobile detail remain readable", async ({
   await expect(
     page.getByRole("button", { name: "确认修复", exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByTestId("feature-status")).toHaveText("提取完成");
+  await expect(page.getByTestId("feature-quality")).toBeVisible();
+  const overflow = await page.evaluate(() => ({
+    viewport: innerWidth,
+    width: document.documentElement.scrollWidth,
+    elements: [...document.querySelectorAll("body *")]
+      .filter(
+        (element) =>
+          !element.closest(".feature-table-wrap") &&
+          element.getBoundingClientRect().right > innerWidth,
+      )
+      .slice(0, 20)
+      .map((element) => ({
+        tag: element.tagName,
+        class: element.className,
+        right: element.getBoundingClientRect().right,
+        client: element.clientWidth,
+        scroll: element.scrollWidth,
+      })),
+  }));
+  const layoutFile = info.outputPath("mobile-layout-diagnostic.json");
+  fs.writeFileSync(layoutFile, JSON.stringify(overflow, null, 2));
+  await info.attach("mobile-layout-diagnostic", {
+    path: layoutFile,
+    contentType: "application/json",
+  });
+  expect(overflow.width <= overflow.viewport).toBe(true);
   expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
+    await page
+      .getByTestId("feature-quality")
+      .evaluate((element) => element.scrollWidth > element.clientWidth),
   ).toBe(true);
   await shot(page, info, "mobile-repository");
 });

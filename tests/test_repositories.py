@@ -14,7 +14,7 @@ from packages.persistence.models import SCHEMA_HEAD, AsyncTask, OperationLog, Re
 from packages.repositories.clone import CloneExecutor
 from packages.repositories.safety import RepositoryError
 from packages.repositories.service import RepositoryService
-from packages.repositories.storage import GIB, Storage
+from packages.repositories.storage import GIB, Storage, directory_bytes, filesystem_path
 from packages.tasks.service import TaskError
 from tests.auth_support import migrate
 from tests.repository_support import git, https_git
@@ -94,6 +94,54 @@ def test_real_native_git_clone_publication_and_duplicate_delivery(repo_env):
     assert git("-C", str(bare), "rev-parse", "--is-bare-repository").strip() == b"true"
     assert not service.publish(result["task_id"], token, {}, "wrong")
     assert bare.exists()
+
+
+def test_deep_private_storage_clone_preserves_scoped_environment(repo_env):
+    import os
+
+    settings, connections, _, actors, fixture = repo_env
+    deep = settings.repository_storage_root
+    # A legal Python parent path whose Git pack/index children cross MAX_PATH.
+    padding = max(1, 110 - len(str(deep)) - 1)
+    deep = deep / ("n" * padding)
+    deep.mkdir(parents=True)
+    pack_path = (
+        deep
+        / "objects"
+        / str(uuid4())
+        / str(uuid4())
+        / "repo.git"
+        / "objects"
+        / "pack"
+        / ("pack-" + "a" * 40 + ".pack")
+    )
+    assert len(str(pack_path)) > 260
+    settings = settings.model_copy(update={"repository_storage_root": deep})
+    service = RepositoryService(settings, connections, probe=fixture["probe"])
+    environment = dict(os.environ)
+    result = service.create(actors[1], "deep", "https://repo.example/team/demo", str(uuid4()))
+    token, payload = service.tasks.claim(result["task_id"])
+    runner = CloneExecutor(
+        settings, service, fixture["policy"], fixture["connector"], cafile=fixture["certfile"]
+    )
+    assert runner.run(result["task_id"], token, payload)
+    detail = service.detail(result["repository_id"])
+    assert detail["head_sha"] == fixture["head"]
+    with Session(connections.engine) as db:
+        repository = db.get(Repository, result["repository_id"])
+        bare = filesystem_path(deep / repository.storage_key)
+        published_bytes = repository.size_bytes
+    packs = list((bare / "objects" / "pack").glob("*.pack"))
+    assert packs and any(len(str(path)) > 260 for path in packs)
+    actual_bytes = sum(path.stat().st_size for path in bare.rglob("*") if path.is_file())
+    assert directory_bytes(bare) == published_bytes == actual_bytes
+    assert actual_bytes >= sum(path.stat().st_size for path in packs)
+    changed_names = [
+        key
+        for key in environment.keys() | os.environ.keys()
+        if environment.get(key) != os.environ.get(key)
+    ]
+    assert changed_names == []
 
 
 def test_rejected_network_and_audit_failure_leave_no_records(repo_env, monkeypatch):
@@ -227,3 +275,22 @@ def test_clone_size_limit_removes_only_unpublished_attempt(repo_env, monkeypatch
         "REPOSITORY_SIZE_LIMIT"
     )
     assert not list(settings.repository_storage_root.glob("objects/*/*"))
+
+
+def test_long_file_size_and_unreadable_scan_are_supervised(tmp_path, monkeypatch):
+    root = filesystem_path(tmp_path / ("n" * max(160, 270 - len(str(tmp_path)))))
+    root.mkdir()
+    payload = root / "payload.bin"
+    payload.write_bytes(b"x" * 513)
+    assert len(str(payload)) > 260
+    assert directory_bytes(root) == 513
+
+    def blocked_walk(path, *, followlinks, onerror):
+        assert not followlinks
+        onerror(PermissionError("simulated traversal denial"))
+        return iter(())
+
+    monkeypatch.setattr("packages.repositories.storage.os.walk", blocked_walk)
+    with pytest.raises(RepositoryError) as failure:
+        directory_bytes(root)
+    assert failure.value.code == "REPOSITORY_STORAGE_UNAVAILABLE"

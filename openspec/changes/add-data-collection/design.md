@@ -104,3 +104,10 @@ URL 限公开 HTTPS、443、ASCII DNS 名或 IPv4，拒绝凭据/查询/片段/�
 ## 12. 第九阶段Fix证据（2026-10-10）
 
 A12异步repository.fix固定接受HEAD/解析版本/覆盖度及fix-evidence-v1摘要/medium政策，Git可达集合交已解析数据，不使用未接受同步批次。0006添加fix_run/assessment/defect_evidence/issue_observation及repository状态/root；每10判定/证据/checkpoint/进度原子，真实Worker恢复保留已复核批次。只读公开GitHub适配精确bug标签且本仓库关闭关系为high；普通引用、PR、限流/不可用为low；观测首次发布冻结，网络不持数据库锁，回执未知不重取，重算另建轮次。人工复核revision/非空理由/审计同事务，相同已接受决策安全重放，冲突409；不覆盖规则原判定，也不输出clean/SZZ标签。新轮与解析/同步活动任务互斥，requires_review不解除。API/page/容量/规则边界详见 [Fix指导](../../../docs/development/Fix证据与验收.md)。SZZ独立change，防止事后Issue/复核信息泄漏。
+
+
+## 第十四阶段Windows深路径修复
+
+实际全量复验暴露Git Filename too long；CloneExecutor仅在Windows受控Git内置命令的GIT_CONFIG_*子进程配置加入core.longpaths=true，不改全局Git、注册表、PATH、SSH或ACL。TLS/SSRF/凭据/hook/fsck/容量约束保留；原深路径同步及真实TLS/MySQL深存储回归，不通过短路径替代失败断言。
+
+后续真实pack补查发现：265字符文件Python普通stat报FileNotFoundError，旧容量扫描仅计288字节，不能认为长路径克隆成功即防护有效。受控回归第二轮在38%后主动中断并保留日志/原因，未声明全量通过。修复仅本地文件访问的Windows扩展路径，safe_path仍检查祖先重解析点，容量扫描计入长pack且不可读目录拒绝，UUID范围核验后扩展路径清理；Git子进程继续普通合法root。新增真实pack/发布/全目录字节一致性和不可读扫描测试，无注册表/PATH/ACL变更，最终重新重建/全量/独立验收。

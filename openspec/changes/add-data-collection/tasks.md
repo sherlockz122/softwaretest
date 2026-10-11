@@ -67,3 +67,6 @@ A07保持仅接受url；第七阶段commit_limit在独立parse请求中启用，
 - [x] 9.3 A12及关联查询/复核、公开clone→parse→sync→Fix页面、同键重放/409冲突/旧轮保留/Viewer、新卷浏览器与指导报告
 
 本机验收与确切SHA CI见 [第九报告](../../../docs/reports/2026-10-10-第九阶段Fix证据与复核报告.md) 及本机stage9记录。第5组登记个人分支提交/测试/演示，无PR或团队审批；保持活动，采集验收不等于课程故事或算法精度已完成。下一批独立baseline SZZ change；冻结Fix轮次/复核revision/外部observed_at/接受HEAD及内容覆盖，不能以无证据认定clean。历史分叉批准/重新基线、受控归档及其它托管平台适配另行设计。
+
+## 第十四阶段Windows路径验收补充
+- [x] 受控Git子进程core.longpaths，原深路径同步15项和合法父路径内部pack>260字符真实TLS/MySQL克隆通过，父环境不变；任意长root仍受Python/HTTPS helper限制，不改系统/全局配置（最终完整回归另登记）。

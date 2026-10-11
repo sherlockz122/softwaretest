@@ -9,7 +9,7 @@ import pytest
 
 from packages.repositories.clone import CloneExecutor
 from packages.repositories.safety import RepositoryError, URLPolicy, canonicalize, public_address
-from packages.repositories.storage import GIB, Storage, directory_bytes
+from packages.repositories.storage import GIB, Storage, directory_bytes, filesystem_path
 from packages.repositories.transport import RepositoryProbe, Tunnel
 from tests.repository_support import git, https_git
 
@@ -148,7 +148,7 @@ def test_growth_reserve_and_owned_cleanup(tmp_path):
 
 
 def test_size_scan_tolerates_index_pack_rename(tmp_path, monkeypatch):
-    temporary, kept = tmp_path / "tmp_idx", tmp_path / "pack.idx"
+    temporary, kept = filesystem_path(tmp_path / "tmp_idx"), filesystem_path(tmp_path / "pack.idx")
     temporary.write_bytes(b"temporary")
     kept.write_bytes(b"kept")
     real_lstat = Path.lstat
@@ -161,6 +161,7 @@ def test_size_scan_tolerates_index_pack_rename(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "lstat", disappear)
     assert directory_bytes(tmp_path) == 4
+    assert not temporary.exists()
 
 
 @pytest.mark.parametrize(
