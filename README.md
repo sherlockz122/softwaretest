@@ -12,7 +12,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## 当前状态
 
-当前已实现工程、认证、可靠任务、克隆/解析/同步、Fix及baseline SZZ（A07～A14）。第十一阶段新增 `kamei14-dg-v1` 特征计算内核、缺失原因、原始质量统计和真实Git手算验收；第十二阶段接入特征任务/冻结持久化/A15/A16/质量页面，下一批成熟度/不可变数据集，然后合格样本下的模型。SZZ仍为候选证据，不以无证据生成clean；历史分叉待复核。框架已归档，采集/SZZ/feature-dataset change保持活动，仅wang。见 [Kamei指导](docs/development/Kamei14计算与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
+当前已实现工程、认证、可靠任务、克隆/解析/同步、Fix及baseline SZZ（A07～A14）。第十一阶段新增 `kamei14-dg-v1` 特征计算内核、缺失原因、原始质量统计和真实Git手算验收；第十二阶段接入特征任务/冻结持久化/A15/A16/质量页面，第十三阶段新增成熟度/多轮观察/不可变双时间内核与只读审计；第十四阶段接数据集任务/持久化/A17～19/页面，再在合格样本下接模型。SZZ仍为候选证据，不以无证据生成clean；历史分叉待复核。框架已归档，采集/SZZ/feature-dataset change保持活动，仅wang。见 [Kamei指导](docs/development/Kamei14计算与验收.md)、[整体规划](docs/development/后续整体规划与空间预算.md) 和 [文档更新记录](docs/development/文档更新记录.md)。
 
 ## 当前分支范围
 
@@ -25,3 +25,5 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 项目使用 Python 3.11 和根目录 `.venv`，版本要求记录在 `.python-version`。虚拟环境不进入 Git；系统默认 Python 可以继续使用其他版本。激活、退出及编辑器解释器选择见 [Python 环境使用](docs/development/Python环境使用.md)。
 
 按 [存储安排与命令使用](docs/development/存储预算与命令使用.md) 执行：D 盘扩容后取消旧严格预算，常规容量检查改为提示，保留磁盘极低余量时的写入保护；缓存与临时文件继续位于 D 盘 runtime。
+
+成熟度合同和只读核验见 [成熟度指导](docs/development/成熟度与时间数据集验收.md)。

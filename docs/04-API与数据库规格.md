@@ -1,5 +1,7 @@
 # DefectGuard API 与数据库规格
 
+2026-10-11 当前实现边界：第十三阶段实现成熟度、多轮完整观察和不可变双时间切分内核及只读审计；当前数据集表/任务/A17～19/页面尚未实现，留第十四阶段。真实成熟两类数据不足时明确拒绝，不回填标签时间。见 [成熟度指导](development/成熟度与时间数据集验收.md)。
+
 ## 1 API 通用约定
 
 - 基础路径为 `/api/v1`，JSON 字段使用 `snake_case`。
@@ -83,15 +85,15 @@
 
 当前A07保持url-only，未知字段（包括commit_limit）返回422；URL先通过SSRF/TLS/smart HTTP。第七阶段窗口在独立parse请求启用，见第12节，不给克隆任务传无效参数。
 
-### 4.2 创建数据集
+### 4.2 创建数据集（第十四阶段计划，当前未实现）
 
 `POST /api/v1/datasets`
 
 ```json
 {
   "repository_id": "uuid",
-  "label_version": "szz-baseline-v1",
-  "feature_version": "kamei-v1",
+  "label_version": "time-labels-v1",
+  "feature_version": "kamei14-dg-v1",
   "snapshot_at": "2026-09-26T00:00:00Z",
   "split": {"train": 0.70, "validation": 0.15, "test": 0.15},
   "imbalance_strategy": {"kind": "class_weight"}
