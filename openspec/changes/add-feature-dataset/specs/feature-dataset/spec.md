@@ -46,11 +46,11 @@
 - **THEN** 改名继承历史，再新增终止旧历史，NUC 去重上次修改 SHA
 
 #### Scenario: Equal time and late Fix
-- **WHEN** 祖先时间与当前相同但 SHA 不在前序，或 FIX available_at 晚于当前 event_time
+- **WHEN** 祖先时间与当前相同但 SHA 不在前序，或 kamei14-dg-v1 的 FIX available_at 晚于当前 event_time
 - **THEN** 历史相关特征标明时间倒置，FIX 为 null；非祖先分支不影响历史
 
 #### Scenario: Candidate purpose
-- **WHEN** 显式使用 candidate 模式
+- **WHEN** 显式使用 kamei14-dg-v1 的 candidate 模式
 - **THEN** FIX 使用声明的零默认并保留原因，模式进入摘要
 
 ### Requirement: Missing-aware quality report
@@ -65,7 +65,7 @@
 - **THEN** 拒绝生成混合轮次报告
 
 ### Requirement: Frozen accepted feature run
-系统 SHALL 复用可靠任务、租约和 execution_token，从固定私有接受 HEAD 筛选解析提交，冻结 Fix 复核与输入摘要，按原子批次发布向量并保留恢复点。
+系统 SHALL 复用可靠任务、租约和 execution_token，从固定私有接受 HEAD 筛选解析提交，冻结与声明版本匹配的信号和输入摘要，按原子批次发布向量并保留恢复点。kamei14-dg-v1 冻结 Fix 复核；kamei14-dg-message-v2 使用独立在线合同的消息用途信号，不接受 Fix 轮次。
 
 #### Scenario: Unaccepted database union
 - **WHEN** A11 并集含未接受同步记录或 full 历史有解析缺口
