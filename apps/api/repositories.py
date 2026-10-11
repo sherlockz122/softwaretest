@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.auth import current_user
 from packages.mining.feature_service import FeatureService
@@ -53,9 +53,15 @@ class SZZBody(BaseModel):
 
 class FeatureBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    feature_version: Literal["kamei14-dg-v1"] = "kamei14-dg-v1"
+    feature_version: Literal["kamei14-dg-v1", "kamei14-dg-message-v2"] = "kamei14-dg-v1"
     purpose: Literal["historical", "candidate"] = "historical"
     fix_run_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def independent_message_version(self):
+        if self.feature_version == "kamei14-dg-message-v2" and self.fix_run_id is not None:
+            raise ValueError("Message-purpose features cannot consume later Fix review runs")
+        return self
 
 
 def features(request):

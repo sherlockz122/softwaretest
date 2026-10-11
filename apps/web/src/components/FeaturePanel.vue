@@ -16,6 +16,8 @@ const page = ref(1);
 const feature = ref("");
 const mode = ref("all");
 const purpose = ref("historical");
+const version = ref("kamei14-dg-message-v2");
+const v2 = computed(() => version.value === "kamei14-dg-message-v2");
 const sending = ref(false);
 const failure = ref(null);
 const keys = operationKeys();
@@ -135,9 +137,10 @@ async function start() {
   const id = props.repo.id;
   const previous = props.repo.feature_run?.root_task_id;
   const body = {
-    feature_version: "kamei14-dg-v1",
+    feature_version: version.value,
     purpose: purpose.value,
     fix_run_id:
+      !v2.value &&
       props.repo.fix_run?.head_sha === props.repo.head_sha &&
       props.repo.fix_run?.processed === props.repo.fix_run?.total
         ? props.repo.fix_run.root_task_id
@@ -181,15 +184,31 @@ async function start() {
       {{ statuses[repo.feature_status] || "未提取" }}
     </p>
     <p class="hint">
-      冻结接受 HEAD 和 Fix 复核版本，缺失保留原因，不填充或生成缺陷标签。历史
-      FIX 仅使用事件发生时已可用的证据；候选模式明确默认 FIX=0。
+      缺失保留原因，不填充或生成缺陷标签。不同特征版本不能混用于模型。
     </p>
     <div v-if="canStart">
+      <label
+        >特征版本
+        <select v-model="version" :disabled="busy || sending">
+          <option value="kamei14-dg-message-v2">v2 提交消息用途</option>
+          <option value="kamei14-dg-v1">v1 历史兼容</option>
+        </select>
+      </label>
+      <p v-if="v2" class="hint">
+        v2 核对固定 Git 记录，历史与候选使用相同消息规则。FIX=0
+        只表示未命中启发式，不表示非修复或无缺陷；消息未验证时保留缺失。最多1000提交，完整负例与训练资格仍需单独验收。
+      </p>
+      <p v-else class="hint">
+        v1 冻结 Fix 复核版本，历史 FIX 仅使用事件时已可用证据；候选模式默认
+        FIX=0。
+      </p>
       <label
         >特征用途
         <select v-model="purpose" :disabled="busy || sending">
           <option value="historical">历史事件</option>
-          <option value="candidate">候选提交（FIX 默认 0）</option>
+          <option value="candidate">
+            {{ v2 ? "候选提交（同消息规则）" : "候选提交（FIX 默认 0）" }}
+          </option>
         </select></label
       >
       <button class="primary" :disabled="busy || sending" @click="start">
@@ -210,7 +229,8 @@ async function start() {
         ><span
           >{{ date(item.created_at) }} · {{ item.processed }} /
           {{ item.total ?? "待扫描" }} ·
-          {{ item.complete ? "完整" : "未完成" }}</span
+          {{ item.complete ? "完整" : "未完成" }} ·
+          {{ item.feature_version }}</span
         ><button
           :disabled="selected === item.root_task_id"
           @click="select(item.root_task_id)"
@@ -240,7 +260,11 @@ async function start() {
         <dt>用途</dt>
         <dd>
           {{
-            run.purpose === "historical" ? "历史事件" : "候选提交（FIX 默认 0）"
+            run.purpose === "historical"
+              ? "历史事件"
+              : run.feature_version === "kamei14-dg-message-v2"
+                ? "候选提交（同消息规则）"
+                : "候选提交（FIX 默认 0）"
           }}
         </dd>
         <dt>历史覆盖</dt>
@@ -252,6 +276,24 @@ async function start() {
         <dt>源摘要</dt>
         <dd class="task-id">{{ run.source_digest || "待冻结" }}</dd>
       </dl>
+      <p
+        v-if="run.feature_version === 'kamei14-dg-message-v2'"
+        class="hint"
+        data-testid="feature-version-semantics"
+      >
+        本轮 FIX 是提交消息用途启发式，0 不代表非修复或 clean。Git
+        特征校验不证明缺陷标签覆盖完整，也不证明模型可训练。
+      </p>
+      <p
+        v-if="quality?.source_validation"
+        data-testid="feature-source-validation"
+      >
+        Git 来源绑定：{{ quality.source_validation.version }}；特征历史{{
+          quality.source_validation.feature_population_complete
+            ? "完整"
+            : "有限窗口"
+        }}；标签覆盖尚未认证，训练资格未通过。
+      </p>
       <p v-if="!quality">
         本轮未完成，暂不发布总体质量统计。已提交批次可查看，但不表示完整结果。
       </p>

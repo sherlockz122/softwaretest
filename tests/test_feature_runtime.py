@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 """Actual Worker SIGKILL after feature publication; resume the frozen input run."""
 
 import os
@@ -9,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from packages.mining.feature_service import FeatureService
+from packages.mining.feature_versions import V2
 from packages.persistence.models import (
     AsyncTask,
     FeatureItem,
@@ -33,9 +35,13 @@ pytestmark = [
 ]
 
 
-def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  # noqa: F811
+@pytest.mark.parametrize("feature_version,count", [("kamei14-dg-v1", 398), (V2, 118)])
+def test_actual_feature_worker_kill_frozen_review_and_resume(
+    live, tmp_path, feature_version, count
+):  # noqa: F811
     api, settings, connections = live
-    source, _, _, shas = szz_history(tmp_path / "source", count=398)
+    total = count + 2
+    source, _, _, shas = szz_history(tmp_path / "source", count=count)
     bare = tmp_path / "fixture.git"
     git("clone", "--bare", str(source), str(bare))
     repo_id = str(uuid4())
@@ -72,12 +78,15 @@ def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  #
         assert response.status_code == 202
         assert (
             wait_task(api, response.json()["task_id"], {"succeeded"}, timeout=240)["processed"]
-            == 400
+            == total
         )
     fixed = response.json()["task_id"]
     response = api.post(
         path + "/feature-runs",
-        json={"fix_run_id": fixed},
+        json={
+            "feature_version": feature_version,
+            "fix_run_id": fixed if feature_version != V2 else None,
+        },
         headers={"Idempotency-Key": str(uuid4())},
     )
     assert response.status_code == 202
@@ -89,7 +98,7 @@ def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  #
         while time.monotonic() < deadline:
             with Session(connections.engine) as db:
                 point, task = db.get(FeatureRun, root), db.get(AsyncTask, root)
-                if 0 < point.processed < 400 and task.status == "running":
+                if 0 < point.processed < total and task.status == "running":
                     token = task.execution_token
                     frozen_digest = point.source_digest
                     observed = True
@@ -99,7 +108,7 @@ def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  #
         docker("kill", "-s", "SIGKILL", "worker")
         with Session(connections.engine) as db:
             point = db.get(FeatureRun, root)
-            assert 0 < point.processed < 400 and point.quality_json is None
+            assert 0 < point.processed < total and point.quality_json is None
             assert (
                 db.scalar(
                     select(func.count())
@@ -132,12 +141,16 @@ def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  #
         assert not FeatureService(settings, connections).heartbeat(root, token)
     finally:
         docker("up", "-d", "--wait", "--wait-timeout", "120", "worker")
-    assert wait_task(api, successor, {"succeeded"}, timeout=180)["processed"] == 400
+    assert wait_task(api, successor, {"succeeded"}, timeout=180)["processed"] == total
     with Session(connections.engine) as db:
         point = db.get(FeatureRun, root)
-        assert point.total == point.processed == point.quality_json["count"] == 400
+        assert point.total == point.processed == point.quality_json["count"] == total
         assert point.source_digest == frozen_digest and point.head_sha == shas[-1]
-        assert point.fix_json[shas[1]]["review_revision"] == 0
+        if feature_version == V2:
+            assert point.fix_json == {} and point.fix_root_task_id is None
+            assert point.quality_json["source_validation"]["label_coverage_complete"] is False
+        else:
+            assert point.fix_json[shas[1]]["review_revision"] == 0
         assert db.get(FixAssessment, assessment_id).review_revision == 1
         assert (
             db.scalar(
@@ -145,9 +158,10 @@ def test_actual_feature_worker_kill_frozen_review_and_resume(live, tmp_path):  #
                 .select_from(FeatureItem)
                 .where(FeatureItem.root_task_id == root)
             )
-            == 400
+            == total
         )
     print(
-        f"FEATURE_RUNTIME commits=400 elapsed_seconds={time.monotonic() - started:.3f} "
+        f"FEATURE_RUNTIME version={feature_version} commits={total} "
+        f"elapsed_seconds={time.monotonic() - started:.3f} "
         "recovered=true"
     )

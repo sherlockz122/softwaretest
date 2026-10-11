@@ -19,8 +19,11 @@
         "additionalProperties": false,
         "properties": {
           "feature_version": {
-            "const": "kamei14-dg-v1",
             "default": "kamei14-dg-v1",
+            "enum": [
+              "kamei14-dg-v1",
+              "kamei14-dg-message-v2"
+            ],
             "title": "Feature Version",
             "type": "string"
           },

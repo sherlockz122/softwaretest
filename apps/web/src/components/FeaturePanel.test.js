@@ -19,6 +19,123 @@ const run = {
   created_at: "2026-10-11T00:00:00Z",
 };
 afterEach(() => vi.restoreAllMocks());
+test("v2 default omits later Fix run; explicit v1 selection retains compatibility", async () => {
+  const send = vi
+    .spyOn(client, "request")
+    .mockImplementation((_path, options) =>
+      Promise.resolve(
+        options?.method === "POST"
+          ? { task_id: "new-run" }
+          : { items: [], total: 0 },
+      ),
+    );
+  const view = mount(FeaturePanel, {
+    props: {
+      repo: {
+        ...repo,
+        fix_run: {
+          head_sha: repo.head_sha,
+          processed: 3,
+          total: 3,
+          root_task_id: "fixed",
+        },
+      },
+      canWrite: true,
+      reload: async () => {},
+    },
+  });
+  await flushPromises();
+  await view.get("button.primary").trigger("click");
+  await flushPromises();
+  let calls = send.mock.calls.filter(
+    ([, options]) => options?.method === "POST",
+  );
+  expect(JSON.parse(calls[0][1].body)).toEqual({
+    feature_version: "kamei14-dg-message-v2",
+    purpose: "historical",
+    fix_run_id: null,
+  });
+  await view.get("select").setValue("kamei14-dg-v1");
+  await view.get("button.primary").trigger("click");
+  await flushPromises();
+  calls = send.mock.calls.filter(([, options]) => options?.method === "POST");
+  expect(JSON.parse(calls[1][1].body).fix_run_id).toBe("fixed");
+  expect(calls[0][1].headers["Idempotency-Key"]).not.toBe(
+    calls[1][1].headers["Idempotency-Key"],
+  );
+  view.unmount();
+});
+
+test("Viewer reads v2 source boundary without training or clean claims", async () => {
+  const v2run = {
+    ...run,
+    feature_version: "kamei14-dg-message-v2",
+    purpose: "candidate",
+  };
+  vi.spyOn(client, "request").mockImplementation((path) =>
+    Promise.resolve(
+      path.includes("/feature-runs")
+        ? { items: [v2run], total: 1 }
+        : {
+            run: v2run,
+            quality: {
+              count: 11,
+              features: Object.fromEntries(
+                [
+                  "NS",
+                  "ND",
+                  "NF",
+                  "Entropy",
+                  "LA",
+                  "LD",
+                  "LT",
+                  "FIX",
+                  "NDEV",
+                  "AGE",
+                  "NUC",
+                  "EXP",
+                  "REXP",
+                  "SEXP",
+                ].map((name) => [
+                  name,
+                  {
+                    valid: 11,
+                    missing: 0,
+                    missing_reasons: {},
+                    min: 0,
+                    p25: 0,
+                    median: 0,
+                    p75: 0,
+                    p95: 0,
+                    max: 0,
+                  },
+                ]),
+              ),
+              source_validation: {
+                version: "native-record-binding-v1",
+                feature_population_complete: false,
+                label_coverage_complete: false,
+                product_training_ready: false,
+              },
+            },
+            items: [],
+            total: 0,
+          },
+    ),
+  );
+  const view = mount(FeaturePanel, {
+    props: { repo, canWrite: false, reload: async () => {} },
+  });
+  await flushPromises();
+  expect(
+    view.get('[data-testid="feature-version-semantics"]').text(),
+  ).toContain("0 不代表非修复或 clean");
+  expect(
+    view.get('[data-testid="feature-source-validation"]').text(),
+  ).toContain("标签覆盖尚未认证");
+  expect(view.text()).toContain("候选提交（同消息规则）");
+  view.unmount();
+});
 test("quality drills down missing or descending values and pages independently", async () => {
   const stats = {
     valid: 10,

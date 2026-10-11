@@ -1,6 +1,6 @@
 # DefectGuard API 与数据库规格
 
-2026-10-11 当前实现边界：第十五阶段新增独立kamei14-dg-message-v2/historical-horizon-replay-v1内核与只读Git探针；旧生产和外部研究合同保留，schema仍0008_features，A17～19/数据集在线版本/模型尚未实现。下一批推进版本与来源认证的数据集纵向接入；模型工程可并行，真实效果/发布仍须通过相应用途验收。见 [当前指导](development/历史回放与可知特征验收.md)、[当前决策](decisions/2026-10-11-历史回放与可知特征合同.md) 和 [遗留处置](development/遗留问题与处置记录.md)。
+2026-10-11 第十六阶段当前边界（优先于下文历史阶段描述）：v2 已接入 A15/A16、冻结/可靠任务/质量页面并绑定已接受原生 Git；API 默认 v1，页面默认可选 v2。schema 仍0008_features，35项接口编号不增加。Git 特征来源绑定不证明标签完整；label_coverage_complete/product_training_ready=false，数据集 A17～19/完整负例来源/模型与预测待后续。见 [当前指导](development/在线可知特征与来源绑定验收.md)。
 
 ## 1 API 通用约定
 
@@ -358,4 +358,12 @@ US-06/07个人wang实现A15/A16、feature_run/item（0008_features）、reposito
 
 ## 第十五阶段在线边界
 
-无新增迁移/API/任务，schema0008_features和A15/A16只接受旧kamei14-dg-v1合同。独立message-v2/replay-v1及只读本地探针未写业务表；下一批需版本冻结、来源认证、不可变dataset发布/A17～19、恢复/RBAC/幂等与前端质量，不将外部CSV/自声明覆盖直接传旧生产内核。
+第十五阶段当时无新增迁移/API/任务，schema0008_features和A15/A16只接受旧kamei14-dg-v1合同。该段为历史记录；第十六阶段变更如下。
+
+## 第十六阶段 A15/A16 版本合同
+
+A15 的 feature_version 枚举扩为 kamei14-dg-v1 / kamei14-dg-message-v2，缺省保持 v1，purpose 仍为 historical/candidate；v2 与非空 fix_run_id 组合拒绝422，服务层也检查，不读最新 Fix。原幂等键在不同版本/用途/参数重用会冲突，Viewer 只能读。A16 返回的每轮版本及 source_digest/input_digest/quality 随真实轮次，不混用当前页面版本选择。
+
+v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpose（值、原因、消息摘要）与 native_record_digest，fix_json={}、fix_root_task_id=null；恢复验证摘要/版本/规则/租约/接受HEAD/private存储。质量 source_validation 包含 native-record-binding-v1、accepted_head、native_records_digest、feature_population_complete、label_coverage_complete=false、product_training_ready=false。full 可达解析缺口/冻结或规则漂移为 FEATURE_SOURCE_CONFLICT；原生Git与DB事实漂移为 FEATURE_GIT_RECORD_CONFLICT；限额为 FEATURE_RESOURCE_LIMIT。失败不发布完整质量。旧表即可存储新 JSON，不新增迁移或接口编号。
+
+数据集 A17～19、完整负例/最早知识来源认证仍待实现；旧 production-time-labels-v1 来源入口严格拒绝 v2，不能将特征校验标志当成负例认证。

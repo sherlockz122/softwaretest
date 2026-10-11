@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from packages.mining.dataset import DatasetError, Evidence, Link, Observation, Policy, audit
 from packages.mining.feature_service import decode_input
 from packages.mining.features import (
+    FEATURE_VERSION,
     FEATURES,
     RULE_HASH,
     FeatureInputError,
@@ -115,6 +116,7 @@ class DatasetSource:
                 or feature.total != feature.processed
                 or feature.quality_json is None
                 or feature.rule_hash != RULE_HASH
+                or feature.feature_version != FEATURE_VERSION
                 or feature.purpose != "historical"
             ):
                 failed()

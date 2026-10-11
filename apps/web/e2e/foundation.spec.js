@@ -596,6 +596,18 @@ test("public repository lost-response replay, real Worker clone and persisted me
   expect(featureData.status()).toBe(200);
   const featureDocument = await featureData.json();
   const featureQuality = featureDocument.quality;
+  expect(featureBody.feature_version).toBe("kamei14-dg-message-v2");
+  expect(featureBody.fix_run_id).toBeNull();
+  expect(featureDocument.run.feature_version).toBe("kamei14-dg-message-v2");
+  expect(featureQuality.source_validation.version).toBe(
+    "native-record-binding-v1",
+  );
+  expect(featureQuality.source_validation.label_coverage_complete).toBe(false);
+  expect(featureQuality.source_validation.product_training_ready).toBe(false);
+  await expect(page.getByTestId("feature-version-semantics")).toBeVisible();
+  await expect(page.getByTestId("feature-source-validation")).toContainText(
+    "标签覆盖尚未认证",
+  );
   await info.attach("feature-quality", {
     body: JSON.stringify(featureDocument, null, 2),
     contentType: "application/json",
@@ -606,7 +618,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     featureQuality.features.FIX.missing,
   );
   await expect(page.getByTestId("feature-results")).toContainText(
-    "fix_not_yet_available",
+    "message_unverified",
   );
   await page.getByRole("button", { name: "EXP 数值降序", exact: true }).click();
   await expect(page.getByTestId("feature-result")).toHaveCount(

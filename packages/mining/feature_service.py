@@ -10,10 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from packages.mining import feature_versions
 from packages.mining.feature_inputs import freeze_native_record
 from packages.mining.features import (
     FEATURE_VERSION,
-    RULE_HASH,
     CommitInput,
     FeatureInputError,
     FileDelta,
@@ -63,10 +63,13 @@ def decode_input(data):
 class FeatureService(FixService):
     def create(self, user, repository_id, key, policy, request_id):
         key_valid(key)
-        if policy["feature_version"] != FEATURE_VERSION or policy["purpose"] not in (
+        version = policy["feature_version"]
+        if version not in (FEATURE_VERSION, feature_versions.V2) or policy["purpose"] not in (
             "historical",
             "candidate",
         ):
+            raise RepositoryError(422, "FEATURE_POLICY_UNSUPPORTED")
+        if version == feature_versions.V2 and policy["fix_run_id"] is not None:
             raise RepositoryError(422, "FEATURE_POLICY_UNSUPPORTED")
         scope = user.id + ":repository:feature:" + repository_id
 
@@ -178,7 +181,7 @@ class FeatureService(FixService):
                     key,
                     {
                         "repository_id": repo.id,
-                        "feature_version": FEATURE_VERSION,
+                        "feature_version": version,
                         "request_policy": policy,
                     },
                     scope,
@@ -197,8 +200,8 @@ class FeatureService(FixService):
                         parser_version=PARSER_VERSION,
                         identity_version=IDENTITY_VERSION,
                         history_coverage="recent_window" if checkpoint.commit_limit else "full",
-                        feature_version=FEATURE_VERSION,
-                        rule_hash=RULE_HASH,
+                        feature_version=version,
+                        rule_hash=feature_versions.rule_hash(version),
                         purpose=policy["purpose"],
                         fix_json=frozen,
                         fix_digest=digest(frozen),
@@ -248,8 +251,10 @@ class FeatureService(FixService):
         if (
             point.head_sha != repo.head_sha
             or point.storage_key != repo.storage_key
-            or point.rule_hash != RULE_HASH
-            or point.feature_version != FEATURE_VERSION
+            or point.rule_hash != feature_versions.rule_hash(point.feature_version)
+            or point.feature_version != task.payload["feature_version"]
+            or point.feature_version == feature_versions.V2
+            and (point.fix_root_task_id is not None or point.fix_json != {})
             or point.parser_version != PARSER_VERSION
             or point.identity_version != IDENTITY_VERSION
             or digest(point.fix_json) != point.fix_digest
@@ -280,6 +285,7 @@ class FeatureService(FixService):
                 raise ExecutionStopped
             point = context[2]
             metadata = self.visible(point)
+            is_v2 = point.feature_version == feature_versions.V2
             fixed = point.fix_json
             storage_key = point.storage_key
             if point.git_version and point.git_version != version:
@@ -306,6 +312,8 @@ class FeatureService(FixService):
                     )
                 ).all()
                 eligible = {commit.sha for commit, _ in commits} & reachable
+                if is_v2 and len(eligible) > 1000:
+                    raise RepositoryError(422, "FEATURE_RESOURCE_LIMIT")
                 if metadata["history_coverage"] == "full" and eligible != reachable:
                     raise RepositoryError(409, "FEATURE_SOURCE_CONFLICT")
                 for commit, author in commits:
@@ -354,9 +362,27 @@ class FeatureService(FixService):
                             ],
                         }
                     )
+                    if is_v2:
+                        records[-1]["commit"].update(
+                            {
+                                k: getattr(commit, k)
+                                for k in (
+                                    "message",
+                                    "author_time",
+                                    "author_offset",
+                                    "committer_offset",
+                                )
+                            }
+                        )
+                        if sum(len(row["files"]) for row in records) > 10000:
+                            raise RepositoryError(422, "FEATURE_RESOURCE_LIMIT")
             inputs = []
+            verified = []
             for record in records:
                 reader.tick()
+                if is_v2:
+                    verified.append(feature_versions.freeze_verified(reader, record, encode_input))
+                    continue
                 signal = fixed.get(record["commit"]["sha"], {}).get("signal")
                 fix = None
                 if signal:
@@ -366,16 +392,26 @@ class FeatureService(FixService):
                     )
                     fix = FixSignal(**data)
                 inputs.append(freeze_native_record(reader, record, fix))
-            frozen = [encode_input(c) for c in sorted(inputs, key=lambda c: c.order)]
+            if is_v2:
+                frozen = sorted(verified, key=lambda row: (row["commit"]["event_time"], row["sha"]))
+            else:
+                frozen = [encode_input(c) for c in sorted(inputs, key=lambda c: c.order)]
         else:
             if digest(frozen) != input_digest:
                 raise RepositoryError(409, "FEATURE_SOURCE_CONFLICT")
-            inputs = [decode_input(row) for row in frozen]
+            if not is_v2:
+                inputs = [decode_input(row) for row in frozen]
+        if is_v2:
+            inputs, messages = feature_versions.thaw(frozen, decode_input)
         snapshot = Snapshot(
             metadata["repository_id"], head, tuple(inputs), metadata["history_coverage"]
         )
-        vectors = compute(snapshot, metadata["purpose"], reader.tick)
-        report = quality(vectors, reader.tick)
+        if is_v2:
+            outputs, report = feature_versions.calculate(snapshot, messages, frozen, reader.tick)
+        else:
+            vectors = compute(snapshot, metadata["purpose"], reader.tick)
+            report = quality(vectors, reader.tick)
+            outputs = [v.as_dict() for v in vectors]
         # Bind storage/frozen Fix run even when no signal is usable at event time.
         bound = digest(
             {
@@ -383,11 +419,16 @@ class FeatureService(FixService):
                 "storage_key": storage_key,
                 "fix_run": metadata["fix_root_task_id"],
                 "fix_digest": metadata["fix_digest"],
+                **(
+                    {"native_records": report["source_validation"]["native_records_digest"]}
+                    if is_v2
+                    else {}
+                ),
             }
         )
         if source_digest is not None and source_digest != bound:
             raise RepositoryError(409, "FEATURE_SOURCE_CONFLICT")
-        reader.feature_outputs = {v.sha: v.as_dict() | {"source_digest": bound} for v in vectors}
+        reader.feature_outputs = {v["sha"]: v | {"source_digest": bound} for v in outputs}
         reader.feature_quality = report | {"source_digest": bound}
         self.prepared_quality = reader.feature_quality
         with Session(self.engine) as db, db.begin():
@@ -413,7 +454,7 @@ class FeatureService(FixService):
             db.flush()
             if database_now(db) >= context[0].lease_until:
                 raise ExecutionStopped
-        return [v.sha for v in vectors]
+        return [v["sha"] for v in outputs]
 
     def record(self, task_id, token, reader, sha):
         return reader.feature_outputs[sha]
@@ -493,7 +534,7 @@ class FeatureService(FixService):
                     "head_sha": point.head_sha,
                     "source_digest": point.source_digest,
                     "extracted": end,
-                    "feature_version": FEATURE_VERSION,
+                    "feature_version": point.feature_version,
                 }
                 self.tasks.terminal(db, task, "succeeded")
                 audit(db, task, "task.succeeded")
