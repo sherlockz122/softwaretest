@@ -10,6 +10,6 @@
 ## 3 Acceptance and documentation
 - [x] 3.1 Run final full backend faults, frontend and isolated browser acceptance.
 - [x] 3.2 Update current guidance/planning/issues/traceability/report and retain safe evidence.
-- [ ] 3.3 Deliver only wang and verify the exact pushed SHA CI and other branch heads.
+- [x] 3.3 Deliver only wang and verify the exact pushed SHA CI and other branch heads.
 
-Local full run: 504 passed/2 failed, retained. Both failed cases and all eight affected runtime scenarios revalidated without weakening limits; 506 distinct backend, 22 frontend, 15 independent browser scenarios verified. Exact-SHA complete CI and delivery remain step 3.3.
+Local full run: 504 passed/2 failed, retained. Both failed cases and all eight affected runtime scenarios revalidated without weakening limits; 506 distinct backend, 22 frontend, 15 independent browser scenarios verified. Initial delivery c85e5a4a0b5c484f77a5f5eb3dc83feb0389b3b0: exact-SHA complete CI success, all five required steps verified; only wang changed. Final documentation commit is checked independently and bound to retained evidence/chat.
