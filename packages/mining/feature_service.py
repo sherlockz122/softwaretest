@@ -2,6 +2,7 @@
 
 import json
 import time
+from contextlib import nullcontext
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -10,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from packages.mining import feature_versions
+from packages.mining import feature_reads, feature_versions
 from packages.mining.feature_inputs import freeze_native_record
 from packages.mining.features import (
     FEATURE_VERSION,
@@ -316,6 +317,13 @@ class FeatureService(FixService):
                     raise RepositoryError(422, "FEATURE_RESOURCE_LIMIT")
                 if metadata["history_coverage"] == "full" and eligible != reachable:
                     raise RepositoryError(409, "FEATURE_SOURCE_CONFLICT")
+                grouped_files = (
+                    feature_reads.file_projections(
+                        db, [commit for commit, _ in commits if commit.sha in eligible], reader.tick
+                    )
+                    if is_v2
+                    else None
+                )
                 for commit, author in commits:
                     if commit.sha not in eligible:
                         continue
@@ -354,10 +362,14 @@ class FeatureService(FixService):
                                         "parser_version",
                                     )
                                 }
-                                for file in db.scalars(
-                                    select(FileChange)
-                                    .where(FileChange.commit_id == commit.id)
-                                    .order_by(FileChange.ordinal)
+                                for file in (
+                                    grouped_files.get(commit.id, [])
+                                    if is_v2
+                                    else db.scalars(
+                                        select(FileChange)
+                                        .where(FileChange.commit_id == commit.id)
+                                        .order_by(FileChange.ordinal)
+                                    )
                                 )
                             ],
                         }
@@ -374,24 +386,25 @@ class FeatureService(FixService):
                                 )
                             }
                         )
-                        if sum(len(row["files"]) for row in records) > 10000:
-                            raise RepositoryError(422, "FEATURE_RESOURCE_LIMIT")
             inputs = []
             verified = []
-            for record in records:
-                reader.tick()
-                if is_v2:
-                    verified.append(feature_versions.freeze_verified(reader, record, encode_input))
-                    continue
-                signal = fixed.get(record["commit"]["sha"], {}).get("signal")
-                fix = None
-                if signal:
-                    data = dict(signal)
-                    data["available_at"] = datetime.fromisoformat(
-                        data["available_at"].removesuffix("Z")
-                    )
-                    fix = FixSignal(**data)
-                inputs.append(freeze_native_record(reader, record, fix))
+            with feature_reads.cached_blobs(reader) if is_v2 else nullcontext():
+                for record in records:
+                    reader.tick()
+                    if is_v2:
+                        verified.append(
+                            feature_versions.freeze_verified(reader, record, encode_input)
+                        )
+                        continue
+                    signal = fixed.get(record["commit"]["sha"], {}).get("signal")
+                    fix = None
+                    if signal:
+                        data = dict(signal)
+                        data["available_at"] = datetime.fromisoformat(
+                            data["available_at"].removesuffix("Z")
+                        )
+                        fix = FixSignal(**data)
+                    inputs.append(freeze_native_record(reader, record, fix))
             if is_v2:
                 frozen = sorted(verified, key=lambda row: (row["commit"]["event_time"], row["sha"]))
             else:
@@ -431,6 +444,7 @@ class FeatureService(FixService):
         reader.feature_outputs = {v["sha"]: v | {"source_digest": bound} for v in outputs}
         reader.feature_quality = report | {"source_digest": bound}
         self.prepared_quality = reader.feature_quality
+        frozen_digest = digest(frozen)
         with Session(self.engine) as db, db.begin():
             context = self.fenced(db, task_id, token)
             if not context:
@@ -447,8 +461,8 @@ class FeatureService(FixService):
                             input_json=data,
                         )
                     )
-                point.input_digest, point.source_digest = digest(frozen), bound
-            elif point.input_digest != digest(frozen) or point.source_digest != bound:
+                point.input_digest, point.source_digest = frozen_digest, bound
+            elif point.input_digest != frozen_digest or point.source_digest != bound:
                 raise RepositoryError(409, "FEATURE_SOURCE_CONFLICT")
             point.git_version = version
             db.flush()

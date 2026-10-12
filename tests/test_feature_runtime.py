@@ -24,7 +24,7 @@ from tests.szz_support import szz_history
 from tests.test_runtime import docker
 from tests.test_sync_runtime import seed
 from tests.test_tasks import expire
-from tests.test_tasks_runtime import live, wait_task  # noqa: F401
+from tests.test_tasks_runtime import runtime_client, wait_task
 
 pytestmark = [
     pytest.mark.runtime,
@@ -33,6 +33,13 @@ pytestmark = [
         reason="explicit Docker fault opt-in required",
     ),
 ]
+
+
+@pytest.fixture
+def live():
+    # Each expensive parameter gets a fresh session; do not extend server token TTL.
+    with runtime_client() as client:
+        yield client
 
 
 @pytest.mark.parametrize("feature_version,count", [("kamei14-dg-v1", 398), (V2, 118)])
