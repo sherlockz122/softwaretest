@@ -206,7 +206,8 @@ td:first-child {
   overflow-wrap: anywhere;
   color: #536978;
 }
-.repository-list li {
+.repository-list li,
+.task-list li {
   overflow-wrap: anywhere;
   padding: 12px 0;
   line-height: 1.6;
@@ -269,4 +270,17 @@ footer {
   .task-facts {
     grid-template-columns: 90px 1fr;
   }
+}
+.feature-table-wrap {
+  overflow-x: auto;
+}
+.feature-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.feature-table th,
+.feature-table td {
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  text-align: left;
 }

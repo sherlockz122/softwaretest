@@ -2,9 +2,10 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from apps.api.auth import current_user
+from packages.mining.feature_service import FeatureService
 from packages.mining.fix import FixService
 from packages.mining.fix_rules import RULE_VERSION
 from packages.mining.szz import SZZService
@@ -48,6 +49,78 @@ class SZZBody(BaseModel):
     fix_run_id: UUID
     algorithm_version: Literal["baseline-szz-v1"] = "baseline-szz-v1"
     as_of: AwareDatetime | None = None
+
+
+class FeatureBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feature_version: Literal["kamei14-dg-v1", "kamei14-dg-message-v2"] = "kamei14-dg-v1"
+    purpose: Literal["historical", "candidate"] = "historical"
+    fix_run_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def independent_message_version(self):
+        if self.feature_version == "kamei14-dg-message-v2" and self.fix_run_id is not None:
+            raise ValueError("Message-purpose features cannot consume later Fix review runs")
+        return self
+
+
+def features(request):
+    return FeatureService(request.app.state.settings, request.app.state.connections)
+
+
+@router.post("/{repository_id:uuid}/feature-runs", status_code=202)
+def start_features(
+    repository_id: UUID,
+    body: FeatureBody,
+    request: Request,
+    user=Depends(current_user),
+    key: str = Header(alias="Idempotency-Key"),
+):
+    policy = body.model_dump() | {"fix_run_id": str(body.fix_run_id) if body.fix_run_id else None}
+    return features(request).create(user, str(repository_id), key, policy, request.state.request_id)
+
+
+@router.get("/{repository_id:uuid}/feature-runs")
+def feature_runs(
+    repository_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return features(request).runs(str(repository_id), page, page_size)
+
+
+@router.get("/{repository_id:uuid}/feature-quality")
+def feature_quality(
+    repository_id: UUID,
+    run_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    feature: Literal[
+        "NS",
+        "ND",
+        "NF",
+        "Entropy",
+        "LA",
+        "LD",
+        "LT",
+        "FIX",
+        "NDEV",
+        "AGE",
+        "NUC",
+        "EXP",
+        "REXP",
+        "SEXP",
+    ]
+    | None = None,
+    missing: bool | None = None,
+):
+    return features(request).results(
+        str(repository_id), str(run_id), page, page_size, feature, missing
+    )
 
 
 def szzing(request):

@@ -34,3 +34,7 @@
 - 看板任务必须标注 Sprint 与对应 OpenSpec change/task
 - 每个核心功能须有正向验收与至少一个异常/无效输入验证
 - `softwarePrediction/` 为外部导入材料，不再作为开发依据；后续统一维护 `docs/`
+
+## 第十六阶段当前实施边界
+
+v2 message features 已在线接现有 A15/A16/任务/质量，原生 accepted Git 绑定并区分特征完整与标签资格。schema0008_features，API默认v1/UI默认显式v2，保留旧生产合同。完整负例/最早知识/银金标抽检与数据集迁移A17～19下一切片，模型工程可以并行，真实效果/发布需兼容合格数据；仅wang，不代表团队批准。

@@ -23,6 +23,14 @@
 - THEN 任务进入 failed 并保存稳定错误码与安全化摘要
 - AND 不暴露凭据、本机路径、命令行或依赖版本
 
+### Requirement: 受控Git深路径
+系统 SHALL 在Windows深存储路径执行受控Git内置命令时仅通过子进程配置启用长路径，保留既有URL/TLS/凭据/钩子/容量安全限制，不修改全局Git或系统设置。
+
+#### Scenario: Deep private storage path
+- **WHEN** 合法长度的项目存储root及UUID私有路径下Git pack/index文件超过Windows常规260字符限制
+- **THEN** 受控bare克隆与元数据核验成功，配置仅在Git子进程生效，现有SSRF/TLS/发布与取消限制不变
+- **AND** Python本机容量扫描计入长路径pack文件，发布字节与实际一致；不可读目录拒绝而非漏计，扩展路径只用于本地文件访问与范围核验后的清理
+
 ### Requirement: 提交解析
 系统 SHALL 以确定性顺序解析提交的哈希、作者身份、author/committer time、消息、父提交及文件变更并分批持久化。
 

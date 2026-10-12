@@ -83,6 +83,9 @@ class CloneExecutor:
             "fetch.uriprotocols": "",
             "gc.auto": "0",
         }
+        if os.name == "nt":
+            # Scoped to builtin Git commands, never global/user/system config.
+            config["core.longpaths"] = "true"
         if self.cafile:
             config["http.sslCAInfo"] = str(self.cafile)
             if os.name == "nt":

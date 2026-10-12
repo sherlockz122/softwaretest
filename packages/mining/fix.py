@@ -66,6 +66,7 @@ class FixService(ParsingService):
                     or repo.sync_status not in {"pending", "synced", "requires_review"}
                     or repo.fix_status in {"queued", "detecting"}
                     or repo.szz_status in {"queued", "tracing"}
+                    or repo.feature_status in {"queued", "extracting"}
                 ):
                     raise RepositoryError(409, "FIX_STATE_CONFLICT")
                 checkpoint = db.get(ParseCheckpoint, repo.parse_root_task_id, with_for_update=True)

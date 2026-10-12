@@ -100,6 +100,7 @@ class RepositoryService:
             "sync_status": repository.sync_status,
             "fix_status": repository.fix_status,
             "szz_status": repository.szz_status,
+            "feature_status": repository.feature_status,
         }
 
     def listing(self, page=1, page_size=20):
@@ -168,6 +169,15 @@ class RepositoryService:
                 db.get(SZZRun, repository.szz_root_task_id) if repository.szz_root_task_id else None
             )
             result["szz_run"] = SZZService.visible(szz_run) if szz_run else None
+            from packages.mining.feature_service import FeatureService
+            from packages.persistence.models import FeatureRun
+
+            feature_run = (
+                db.get(FeatureRun, repository.feature_root_task_id)
+                if repository.feature_root_task_id
+                else None
+            )
+            result["feature_run"] = FeatureService.visible(feature_run) if feature_run else None
             return result
 
     def publish(self, task_id, token, metadata, storage_key):

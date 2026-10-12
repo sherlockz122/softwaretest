@@ -1,5 +1,7 @@
 # DefectGuard API 与数据库规格
 
+2026-10-12 第十七阶段当前边界（优先于下文历史阶段描述）：v2 数值使用文件事件索引/线性祖先复用/密集路径旧扫描，与未修改v1数值及缺失原因精确等价；新代码绑定v2规则摘要，旧轮次不改写。A15/A16版本/原生Git绑定及质量合同保留，schema仍0008_features，35项接口编号不变。性能优化不证明标签完整；A17～19/来源认证/模型与预测仍待后续。见 [当前指导](development/v2文件历史索引与验收.md)。
+
 ## 1 API 通用约定
 
 - 基础路径为 `/api/v1`，JSON 字段使用 `snake_case`。
@@ -83,15 +85,15 @@
 
 当前A07保持url-only，未知字段（包括commit_limit）返回422；URL先通过SSRF/TLS/smart HTTP。第七阶段窗口在独立parse请求启用，见第12节，不给克隆任务传无效参数。
 
-### 4.2 创建数据集
+### 4.2 创建数据集（后续纵向阶段计划，当前未实现）
 
 `POST /api/v1/datasets`
 
 ```json
 {
   "repository_id": "uuid",
-  "label_version": "szz-baseline-v1",
-  "feature_version": "kamei-v1",
+  "label_version": "time-labels-v1",
+  "feature_version": "kamei14-dg-v1",
   "snapshot_at": "2026-09-26T00:00:00Z",
   "split": {"train": 0.70, "validation": 0.15, "test": 0.15},
   "imbalance_strategy": {"kind": "class_weight"}
@@ -188,7 +190,7 @@ erDiagram
 | `defect_evidence` | `id`, `fix_commit_id`, `type`, `value`, `confidence`, `rule_version`, `review_status` | Fix 证据 |
 | `szz_link` | `id`, `fix_commit_id`, `blamed_commit_id`, `path`, `fixed_line`, `blamed_line`, `confidence`, `label_version`; 唯一证据键 | SZZ 行级追溯 |
 | `commit_label` | `commit_id`, `label_version`, `state`, `snapshot_at`, `maturity_days`, `reason`; `PK(commit_id,label_version)` | buggy/clean/unknown 标签 |
-| `commit_feature` | `commit_id`, `feature_version`, 14 个原始值, `semantic_artifact_uri`, `computed_at`; `PK(commit_id,feature_version)` | 多版本特征 |
+| `commit_feature`（待实现） | `commit_id`, `feature_version`, `feature_run_id/source_digest`, 14 个原始值与缺失原因, `semantic_artifact_uri`, `computed_at`; 唯一性须绑定冻结输入轮次，不仅是 `(commit_id,feature_version)` | 多版本/快照特征；迁移在后续切片固定 |
 | `dataset` | `id`, `repository_id`, `label_version`, `feature_version`, `snapshot_at`, split 边界, `config_json`, `content_hash` | 不可变数据集 |
 | `dataset_item` | `dataset_id`, `commit_id`, `split`, `label`, `feature_version`, `label_version`; `PK(dataset_id,commit_id)` | 数据集成员 |
 | `model_run` | `id`, `dataset_id`, `plugin`, `family`, `code_sha`, `dependency_digest`, `params_json`, `seed`, `status`, `metrics_json`, `threshold`, `calibration`, `source_run_id` | 一次训练运行 |
@@ -344,3 +346,31 @@ repository.sync复用租约/取消/重试/outbox；克隆期processed单位字�
 ## 第十阶段A13/A14实际扩展
 
 A13要求fix_run_id，algorithm_version固定baseline-szz-v1，as_of可null或带时区UTC截止且未来拒绝；202/幂等/Member+。A14分页行证据，另有仓库szz-runs历史及/szz-runs/{id}/results提交状态；均认证只读/page_size最大100。0007增加szz_run固定Fix/HEAD/私有快照/解析/算法/Git/覆盖/cutoff/输入及标签摘要，szz_item冻结assessment/review输入与批次结果，szz_link按(item,ordinal)唯一保存行证据JSON；repository.szz_status/root/latest随任务变化。规划ER图中的blamed_commit引用以SHA证据保存，有限历史来源无本地commit行时必须保留Unknown，不能伪造FK。完整契约见 [SZZ指导](development/SZZ追溯与验收.md) 及生成OpenAPI。
+
+## 第十一阶段特征接口边界
+
+第十一阶段只交付纯内核；第十二阶段新增 A15/A16 及关联分页历史，生成 OpenAPI/schema `0008_features` 更新。feature_run/item绑定接受快照、输入/规则/身份/Fix冻结摘要，唯一性包含轮次；数据集 A17～19仍待实施。原始十四维 null 与原因单独保存，不填零，不作为监督标签；实现与下一批约束见 [Kamei指导](development/Kamei14计算与验收.md)。
+
+
+## 第十二阶段特征纵向接入（2026-10-11）
+
+US-06/07个人wang实现A15/A16、feature_run/item（0008_features）、repository.feature可靠任务与FeaturePanel质量页。固定接受HEAD/private快照/解析身份/覆盖/用途/Fix复核，Worker可达性排除未接受并集，冻结输入后每10结果原子发布/恢复；旧令牌与变更输入拒绝。完整质量只在全部发布后出现，缺失保留原因，提供稳定分页/缺失和数值降序下钻。不得构造标签、拟合填充或将晚到FIX回填；US-08/09及A17～19成熟度/不可变数据集与模型仍待后续。详情见 [Kamei指导](development/Kamei14计算与验收.md)；完成验收结果另写本批报告，不标记团队故事Done，不归档change，仅wang。
+
+## 第十五阶段在线边界
+
+第十五阶段当时无新增迁移/API/任务，schema0008_features和A15/A16只接受旧kamei14-dg-v1合同。该段为历史记录；第十六阶段变更如下。
+
+## 第十六阶段 A15/A16 版本合同
+
+A15 的 feature_version 枚举扩为 kamei14-dg-v1 / kamei14-dg-message-v2，缺省保持 v1，purpose 仍为 historical/candidate；v2 与非空 fix_run_id 组合拒绝422，服务层也检查，不读最新 Fix。原幂等键在不同版本/用途/参数重用会冲突，Viewer 只能读。A16 返回的每轮版本及 source_digest/input_digest/quality 随真实轮次，不混用当前页面版本选择。
+
+v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpose（值、原因、消息摘要）与 native_record_digest，fix_json={}、fix_root_task_id=null；恢复验证摘要/版本/规则/租约/接受HEAD/private存储。质量 source_validation 包含 native-record-binding-v1、accepted_head、native_records_digest、feature_population_complete、label_coverage_complete=false、product_training_ready=false。full 可达解析缺口/冻结或规则漂移为 FEATURE_SOURCE_CONFLICT；原生Git与DB事实漂移为 FEATURE_GIT_RECORD_CONFLICT；限额为 FEATURE_RESOURCE_LIMIT。失败不发布完整质量。旧表即可存储新 JSON，不新增迁移或接口编号。
+
+数据集 A17～19、完整负例/最早知识来源认证仍待实现；旧 production-time-labels-v1 来源入口严格拒绝 v2，不能将特征校验标志当成负例认证。
+
+
+## 第十七阶段增量（2026-10-12）
+
+无新增端点/字段/迁移，A15/A16及0008_features保留。旧已完成v2轮次按冻结结果读取；未完成轮次的旧rule_hash按原FEATURE_SOURCE_CONFLICT拒绝，新轮次另创建，不修改冻结规则或旧quality。
+
+见 [当前指导](development/v2文件历史索引与验收.md) 与 [阶段报告](reports/2026-10-12-第十七阶段v2文件历史索引报告.md)。
