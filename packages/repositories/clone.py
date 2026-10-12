@@ -90,10 +90,6 @@ class CloneExecutor:
             config["http.sslCAInfo"] = str(self.cafile)
             if os.name == "nt":
                 config["http.sslBackend"] = "openssl"
-        if os.name == "nt":
-            # Deep storage roots exceed Windows' legacy 260-char path limit during
-            # pack renames; git's longpath mode covers its own file operations.
-            config["core.longpaths"] = "true"
         environment["GIT_CONFIG_COUNT"] = str(len(config))
         for index, (key, value) in enumerate(config.items()):
             environment[f"GIT_CONFIG_KEY_{index}"] = key
