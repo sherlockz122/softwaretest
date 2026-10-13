@@ -16,16 +16,25 @@
 ## 技术栈
 
 - 后端：Python 3.11 + FastAPI + SQLAlchemy
-- 数据：PyDriller 解析 Git 仓库；MySQL 持久化
+- 数据：PyDriller + 原生 Git 命令解析仓库；MySQL 8 持久化
+- 任务：Celery + Redis，支持幂等、心跳、重试、取消与断点恢复
+- 工件：首期使用本地持久化卷，通过存储接口预留 MinIO 迁移能力
 - 模型：scikit-learn、XGBoost、LightGBM、PyTorch；解释用 SHAP
 - 前端：Vue3 + ECharts + Element Plus
-- 工程：GitHub Actions CI；OpenSpec 规格驱动开发
+- 部署：Docker Compose
+- 工程：GitHub Actions CI；OpenSpec 规格驱动开发；当前基线见 `docs/README.md`
 
 ## 团队约定
 
-- 分支规范：main（稳定）/ develop（集成）/ feature/<change名>
+- 分支规范：main（稳定，由维护者管理）/ wang（个人独立开发）/ feature/<us-id>-<slug>（可选短期功能分支）
+- 当前修改尚未与团队同步，仅推送 origin/wang；不修改 main 或其他分支，不主动发起合入 main 的流程。
 - 提交信息：type(scope): subject，如 feat(szz): 支持行号追踪
 - 合并前至少一位非作者成员在 PR 中审阅，审阅记录保留在平台
 - 所有需求变更必须先创建或修改 OpenSpec change，不得只改代码不更新规格
 - 看板任务必须标注 Sprint 与对应 OpenSpec change/task
 - 每个核心功能须有正向验收与至少一个异常/无效输入验证
+- `softwarePrediction/` 为外部导入材料，不再作为开发依据；后续统一维护 `docs/`
+
+## 第十六阶段当前实施边界
+
+v2 message features 已在线接现有 A15/A16/任务/质量，原生 accepted Git 绑定并区分特征完整与标签资格。schema0008_features，API默认v1/UI默认显式v2，保留旧生产合同。完整负例/最早知识/银金标抽检与数据集迁移A17～19下一切片，模型工程可以并行，真实效果/发布需兼容合格数据；仅wang，不代表团队批准。

@@ -4,6 +4,12 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
 
 # 数据与数据库（克隆的仓库数据、本地数据库不进版本控制）
 data/
@@ -19,3 +25,28 @@ models/*.pt
 .idea/
 .vscode/
 .DS_Store
+
+# 前端依赖、构建和测试产物
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# 环境配置和运行工件；示例配置允许跟踪
+.env
+.env.*
+!.env.example
+!.env.*.example
+/artifacts/
+/runtime/
+*.log
+
+# 本机操作记录和凭据目录不进入共享仓库
+/.codex/local-system/
+.ssh/
+*.key
+*.pem
+
+# 外部 Word 通用模板仅本地留存；Markdown 来源材料纳入跟踪
+/softwarePrediction/*.docx
