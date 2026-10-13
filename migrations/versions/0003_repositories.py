@@ -1,9 +1,8 @@
 """Frozen repository DDL and whole-path rollback protection."""
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
 from alembic import context, op
+from sqlalchemy.dialects import mysql
 
 revision = "0003_repositories"
 down_revision = "0002_tasks"

@@ -1,0 +1,6 @@
+# Keep formatter-controlled web source portable across Windows and Linux checkouts.
+apps/web/**/*.json text eol=lf
+apps/web/**/*.js text eol=lf
+apps/web/**/*.vue text eol=lf
+apps/web/**/*.css text eol=lf
+apps/web/**/*.html text eol=lf

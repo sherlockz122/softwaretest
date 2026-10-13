@@ -1,9 +1,8 @@
 """Frozen collection DDL; refuse nonempty affected paths before any MySQL DDL."""
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
 from alembic import context, op
+from sqlalchemy.dialects import mysql
 
 revision = "0004_commit_parsing"
 down_revision = "0003_repositories"

@@ -1,9 +1,8 @@
 """Frozen feature schema; validate the entire downgrade path before MySQL DDL."""
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
 from alembic import context, op
+from sqlalchemy.dialects import mysql
 
 revision = "0008_features"
 down_revision = "0007_szz"
