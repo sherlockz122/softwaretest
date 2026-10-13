@@ -5,7 +5,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from packages.mining import causal_features
+from packages.mining import causal_features, feature_reads
 from packages.mining.feature_inputs import freeze_native_record
 from packages.mining.features import FEATURES, RULE_HASH, FeatureVector, digest, quality
 from packages.repositories.safety import RepositoryError
@@ -23,6 +23,7 @@ def rule_hash(version):
         {
             "causal": causal_features.rule_hash(),
             "online": Path(__file__).read_text(encoding="utf-8"),
+            "native_reads": feature_reads.rule_hash(),
         }
     )
 

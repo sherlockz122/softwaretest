@@ -2,6 +2,7 @@
 
 import os
 import time
+from contextlib import contextmanager
 from uuid import uuid4
 
 import httpx
@@ -26,8 +27,8 @@ pytestmark = [
 ]
 
 
-@pytest.fixture(scope="module")
-def live():
+@contextmanager
+def runtime_client():
     settings = BootstrapSettings()
     assert settings.environment == "development" and settings.mysql_host == "127.0.0.1"
     api = httpx.Client(base_url="http://127.0.0.1:18080", timeout=10, trust_env=False)
@@ -47,6 +48,12 @@ def live():
         api.post("/api/v1/auth/logout", headers={"X-CSRF-Token": response.json()["csrf_token"]})
         api.close()
         connections.close()
+
+
+@pytest.fixture(scope="module")
+def live():
+    with runtime_client() as client:
+        yield client
 
 
 def create(api, duration=0, key=None):
