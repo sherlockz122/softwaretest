@@ -1,6 +1,6 @@
 # DefectGuard API 与数据库规格
 
-2026-10-14 当前状态：第十九阶段固定标签来源审计已交付，数据集纵向/API、模型训练与候选评审闭环尚未交付。本日规划补强公开数据资产/安全导入与质量（P0）、预训练语义/融合（P1）、类型与语言分层验收；保留 Kamei 基线和旧 v1/v2，schema0008_features/35接口及当前限额不变。下一批有界资产/复核纵切，随后用途分离的数据集/LR/RF、语义和候选链路。见 [最新决策](decisions/2026-10-14-公开数据兼容与预训练语义路线.md) 与 [衔接指南](development/公开数据与语义模型衔接指南.md)。
+2026-10-14 第二十阶段当前边界：首条ApacheJIT CSV离线不可变资产/12数值派生/重载与85条来源绑定复核起点已实现，2条AMQ浅库缺对象记录未决；不改原标签、历史时间或旧false资格。无新API/schema/依赖/模型，完整验收另见本批报告。下一批用途分离dataset纵向/LR-RF工程，预训练语义/融合P1随后；公开通用应用导入、非Java/类型/定位仍待验证。见 [当前指导](development/公开资产保存与来源复核验收.md)。
 
 ## 1 API 通用约定
 
@@ -388,3 +388,7 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 拟增public_asset/manifest、review与可选type/location证据、派生数据、语义工件引用；不是已迁移表名承诺。公共导入/重载/导出端点待独立API设计与编号，不伪装成A07仓库创建字段；M1/RBAC/幂等/任务/审计/冻结/来源失效/安全降级复用现有合同。模型运行与候选发布校验用途、language/domain、input schema/checkpoint/tokenizer及质量能力；非兼容工件明确拒绝。语义不直接扩展旧14维响应或改旧FeatureRun false。
 
 详见 [决策](decisions/2026-10-14-公开数据兼容与预训练语义路线.md)、[指导](development/公开数据与语义模型衔接指南.md)；实施前再改OpenAPI/迁移/规格/回归，当前文档不能被视为新增服务能力。
+
+## 第二十阶段实际边界
+
+本批只新增本机资产/复核CLI及磁盘清单，35 API/schema0008_features/OpenAPI保持。A17～19及公开导入/目录/复核用户身份/应用权限、模型注册/发布均未实现；本机operator不是应用用户。后续迁移/用途/恢复合同按 [实际指导](development/公开资产保存与来源复核验收.md) 和总规划细化，不通过本机目录默认给予Viewer写权。
