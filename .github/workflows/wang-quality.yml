@@ -55,6 +55,8 @@ jobs:
           npm audit --prefix apps/web --audit-level=high
       - name: Build and prepare real services
         run: |
+          # Host-side inert fixtures need a host-owned root before Docker bind creation.
+          mkdir -p runtime/public-assets
           docker compose --profile full build api web
           docker compose up -d --wait --wait-timeout 180 mysql redis
           docker compose --profile maintenance run --rm migrate
