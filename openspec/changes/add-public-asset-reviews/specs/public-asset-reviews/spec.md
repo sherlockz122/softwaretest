@@ -37,6 +37,12 @@ The offline system SHALL preserve an immutable review revision chain bound to a 
 - **WHEN** evidence contents, packet identity, revision or predecessor digest differs from the bound chain
 - **THEN** the system rejects the review update or reload rather than silently accepting a new interpretation
 
+#### Scenario: A reader overlaps an unpublished review revision
+- **WHEN** a writer has created its private atomic staging file but has not linked the next revision, and another reader or writer accesses the case
+- **THEN** the reader sees a verified committed prefix, only one competing revision is published and a losing writer receives a revision conflict
+- **AND** only regular staging files with exact revision/UUID names and valid revision range are excluded, with at most 100 staging files; malformed names, directories, links and excess staging still cause rejection
+- **AND** original labels, review wire format, prior records and capability deficits remain unchanged
+
 #### Scenario: A non-shallow repository does not certify a negative ancestry result
 - **WHEN** both endpoint objects exist but merge-base returns 1 or 128 without independently verified graph completeness
 - **THEN** the probe records unknown graph evidence rather than a certified absence of ancestry
