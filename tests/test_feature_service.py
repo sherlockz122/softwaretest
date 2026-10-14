@@ -264,7 +264,7 @@ def test_frozen_schema_roundtrip_and_whole_path_guard(szz_env):
         with engine.connect() as db:
             assert (
                 db.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0010_dataset_numbers"
+                == "0011_models"
             )
     assert service.results(szz_env[4], root)["total"] == 0
     with scratch_database() as (_, empty):

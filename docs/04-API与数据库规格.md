@@ -6,7 +6,7 @@ A17～19已实现首条public研究版本：POST /datasets接name、asset_id/sou
 
 schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、源/计划及最终output；dataset_member以dataset_id/ordinal为主键、canonical_repository/commit_id唯一，保存分区/标签/事件及原行引用。numeric_json是MEDIUMTEXT无损CanonicalJSON，0009旧JSON定义保留、0010增量转换不回填失败数据。旧迁移/表/FeatureRun不改；全路径降级预检非空和dataset任务/引用，禁stamp/手工重建。详见 [指南](development/用途分离数据集与验收.md)。
 
-2026-10-14 第二十一阶段当前边界：用途分离研究数据集的0010持久化、可靠任务/RBAC/A17～19/页面和12数值CSV导出已实现；真实106674行已通过新版本成员与导出校验，首个JSON数值漂移失败版本保留。研究结构资格不改旧资产/FeatureRun/标签，历史/候选/语义/类型仍false；模型未训练，完整验收见阶段报告。下一批LR/RF任务与评估工件，预训练语义/融合P1随后；来源质量线继续。见 [当前指导](development/用途分离数据集与验收.md)。
+2026-10-15 第二十二阶段当前：研究LR/RF的0011模型表、可靠训练/监督进程、A20/A21/A23、研究工件注册与页面已实施，A22因研究用途不兼容明确拒绝产品发布。固定106674数据双seed及重复概率复现、真实Worker故障恢复和正常数据备份/隔离恢复已有证据；完整回归/新卷/最终SHA CI另按本批报告登记。生产/历史/候选资格不晋升；预训练语义/融合P1随后。见 [当前模型指南](development/LR与RF研究训练及验收.md)。
 
 ## 1 API 通用约定
 
@@ -53,7 +53,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 | A20 | `POST /model-runs` | 发起训练 | Member |
 | A21 | `GET /model-runs/{id}` | 训练状态、配置和指标 | Viewer |
 | A22 | `POST /model-runs/{id}/publish` | 发布模型 | Admin |
-| A23 | `GET /models` | 已发布模型和插件注册表 | Viewer |
+| A23 | `GET /models` | 研究运行/已注册工件和插件；产品列表须另验资格 | Viewer |
 | A24 | `POST /predictions/candidate` | 候选 ref 或 diff 预测 | Member |
 | A25 | `POST /prediction-tasks` | 创建批量预测 | Member |
 | A26 | `GET /prediction-tasks/{id}/results` | 查询风险队列 | Viewer |
@@ -398,3 +398,8 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 ## 第二十阶段实际边界
 
 本批只新增本机资产/复核CLI及磁盘清单，35 API/schema0008_features/OpenAPI保持。A17～19及公开导入/目录/复核用户身份/应用权限、模型注册/发布均未实现；本机operator不是应用用户。后续迁移/用途/恢复合同按 [实际指导](development/用途分离数据集与验收.md) 和总规划细化，不通过本机目录默认给予Viewer写权。
+
+
+## 第二十二阶段模型研究增量
+
+当前schema0011_models。model_run保存dataset_id/plugin/params_json/seed/code_sha/snapshot_json/metrics_json/output_json/latest_task_id，模型JSON无损文本；model_artifact保存固定kind/uri/hash/size。code_sha为规范源文件和锁文件SHA256，Git交付另绑定。A20仅dataset_id/plugin/params/seed，A21支持固定名称artifact下载；A23分页研究运行并明确production_models=[]，A22 Admin仍拒绝不兼容研究用途。0011在整条降级请求任何DDL前检查所有将受影响旧表、引用和任务，0001～0010不改。

@@ -34,7 +34,7 @@ jobs:
         run: |
           mkdir -p runtime/acceptance/ci
           python -m pip install uv==0.12.19
-          uv sync --frozen
+          uv sync --frozen --group modeling
           uv lock --check
           npm ci --prefix apps/web
           npm install --prefix runtime/tools @fission-ai/openspec@1.13.2 --no-audit --no-fund

@@ -14,6 +14,7 @@ from packages.auth.security import AuthError, CurrentUser, authorize_task_owner,
 from packages.persistence.models import (
     AsyncTask,
     DatasetVersion,
+    ModelRun,
     OperationLog,
     Repository,
     TaskOutbox,
@@ -84,6 +85,7 @@ def public(task, timestamp):
         else "healthy",
         "retry_of": task.retry_of,
         **({"dataset_id": task.root_task_id} if task.type == "dataset.build" else {}),
+        **({"model_run_id": task.root_task_id} if task.type == "model.train" else {}),
         "result": task.result_json,
         "error": {
             "code": task.error_code,
@@ -169,6 +171,11 @@ class TaskService:
             ):
                 raise TaskError(409, "DATA_STATE_CONFLICT")
             dataset.latest_task_id = task.id
+        if parent and kind == "model.train":
+            run = db.get(ModelRun, parent.root_task_id, with_for_update=True)
+            if not run or run.latest_task_id != parent.id or run.output_json is not None:
+                raise TaskError(409, "MODEL_STATE_CONFLICT")
+            run.latest_task_id = task.id
         return task
 
     @staticmethod
@@ -235,6 +242,7 @@ class TaskService:
             None,
             "diagnostic",
             "dataset.build",
+            "model.train",
             "repository.clone",
             "repository.parse",
             "repository.sync",
@@ -352,6 +360,7 @@ class TaskService:
             if task.type not in {
                 "diagnostic",
                 "dataset.build",
+                "model.train",
                 "repository.clone",
                 "repository.parse",
                 "repository.sync",
@@ -376,6 +385,11 @@ class TaskService:
                     or dataset.output_json is not None
                 ):
                     self.terminal(db, task, "failed", "DATA_STATE_CONFLICT")
+                    return None
+            if task.type == "model.train":
+                run = db.get(ModelRun, task.root_task_id, with_for_update=True)
+                if not run or run.latest_task_id != task.id or run.output_json is not None:
+                    self.terminal(db, task, "failed", "MODEL_STATE_CONFLICT")
                     return None
             if task.type in {
                 "repository.clone",

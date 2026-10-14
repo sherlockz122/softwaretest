@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from packages.persistence.canonical_json import CanonicalJSON
 
-SCHEMA_HEAD = "0010_dataset_numbers"
+SCHEMA_HEAD = "0011_models"
 
 
 class Base(DeclarativeBase):
@@ -680,3 +680,46 @@ class SZZLink(Stamp, Base):
     )
     ordinal: Mapped[int] = mapped_column(INTEGER())
     evidence: Mapped[dict] = mapped_column(JSON())
+
+
+class ModelRun(Base):
+    __tablename__ = "model_run"
+    __table_args__ = (
+        Index("ix_model_created", "created_at", "id"),
+        CheckConstraint("seed >= 0", name="ck_model_seed"),
+    )
+    id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    latest_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("dataset_version.id", ondelete="RESTRICT")
+    )
+    plugin: Mapped[str] = mapped_column(VARCHAR(16))
+    params_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    seed: Mapped[int] = mapped_column(INTEGER())
+    code_sha: Mapped[str] = mapped_column(hash_column())
+    snapshot_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    metrics_json: Mapped[dict | None] = mapped_column(CanonicalJSON())
+    output_json: Mapped[dict | None] = mapped_column(CanonicalJSON())
+    created_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), server_default=func.utc_timestamp(6)
+    )
+
+
+class ModelArtifact(Base):
+    __tablename__ = "model_artifact"
+    __table_args__ = (
+        UniqueConstraint("model_run_id", "kind", name="uq_model_artifact_kind"),
+        CheckConstraint("size >= 0", name="ck_model_artifact_size"),
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    model_run_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("model_run.id", ondelete="RESTRICT")
+    )
+    kind: Mapped[str] = mapped_column(VARCHAR(32))
+    uri: Mapped[str] = mapped_column(VARCHAR(256))
+    sha256: Mapped[str] = mapped_column(hash_column())
+    size: Mapped[int] = mapped_column(BIGINT())

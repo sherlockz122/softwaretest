@@ -1,6 +1,20 @@
 import { reactive } from "vue";
 
 const messages = {
+  MODEL_DATASET_NOT_READY: "数据集尚未发布，请等待其完成后训练。",
+  MODEL_DATASET_INCOMPATIBLE:
+    "数据集用途或特征不兼容，请选择已发布的研究十二指标数据。",
+  MODEL_DATA_DRIFT: "固定数据或分区摘要不符，已停止训练。",
+  MODEL_INVALID_INPUT: "模型参数超出支持范围，请核对算法、种子和参数。",
+  MODEL_CALIBRATION_UNUSABLE:
+    "验证区不能形成两类校准和阈值子集，请核对预声明数据分区。",
+  MODEL_PURPOSE_INCOMPATIBLE: "研究模型尚不具备候选产品发布资格。",
+  MODEL_ARTIFACT_DRIFT: "模型工件校验失败，已停止下载。",
+  MODEL_NOT_READY: "研究模型尚未完成，暂不能下载。",
+  MODEL_NOT_FOUND: "模型运行不存在，请返回列表。",
+  MODEL_MEMORY_LIMIT: "训练达到内存限制，请核对模型规模后重试。",
+  MODEL_DEADLINE: "训练达到当前时限，请核对模型规模后重试。",
+  MODEL_NOT_CONVERGED: "模型未收敛，请调整训练参数并创建新的研究运行。",
   DATA_SOURCE_DRIFT: "数据源版本发生变化，请刷新来源后重新创建。",
   DATA_PURPOSE_UNSUPPORTED: "当前数据尚不支持该用途，请使用公开二分类研究。",
   DATA_SPLIT_UNUSABLE: "数据不足以形成完整分区，请调整策略或选择其它数据。",
