@@ -5,9 +5,10 @@ context: |
   All artifacts must be written in zh.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
   Canonical project documents are under docs/ and baseline DG-BL-2026-09-26.
-  softwarePrediction/ contains imported source material and must not be used as the implementation baseline.
+  User decision 2026-10-14: the current canonical specifications, latest roadmap and verified wang implementation are the development and team synchronization standard.
+  External originals are isolated under archive/external/; do not read them or the retired softwarePrediction/docs/prototype entries to guide implementation. Use the canonical decisions and absorption checklist under docs/.
   Database is MySQL 8; architecture is FastAPI modular monolith plus Celery/Redis workers.
-  Branch wang is the current personal development space; changes are not yet synchronized with the team.
+  Branch wang is the only development and maintenance target. Team synchronization designation does not imply other branches have adopted it or independent review has occurred.
   Push only to origin/wang. Do not modify main or other branches or initiate integration into main; that is the maintainer's responsibility.
   Every change must trace to User Stories and planned tests in docs/07-需求设计测试追踪矩阵.md.
 

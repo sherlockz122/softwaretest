@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "decision": "docs/decisions/2026-10-14-基线权威与外来材料隔离.md",
+  "authority": "traceability_only_not_a_development_dependency",
+  "items": [
+    {
+      "original_path": "docs/prototype/low-fidelity-wireframes.html",
+      "archived_path": "archive/external/prototype/low-fidelity-wireframes.html",
+      "classification": "external_prototype",
+      "introduced_commit": "35fb7c1",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "71f9ca3754fa6ad89a1bfd8e3c85b16cde44f194",
+      "source_raw_sha256": "19f39576042b22f24213d012c9c36f1d09d95347f19831c051ebcf3b424993b6",
+      "archived_raw_sha256": "19f39576042b22f24213d012c9c36f1d09d95347f19831c051ebcf3b424993b6",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "docs/prototype/low-fidelity-wireframes.v1-旧版(JITGuard-9屏).html",
+      "archived_path": "archive/external/prototype/low-fidelity-wireframes.v1-旧版(JITGuard-9屏).html",
+      "classification": "external_prototype",
+      "introduced_commit": "35fb7c1",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "d5670f94a00c60318a18573d1e57dadc2a81c8a6",
+      "source_raw_sha256": "51d4861794d7be659e5c06381add187cf44c329281c7299687d7bc6406c44aad",
+      "archived_raw_sha256": "51d4861794d7be659e5c06381add187cf44c329281c7299687d7bc6406c44aad",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "docs/prototype/low-fidelity-wireframes.v2-拆分前备份.html",
+      "archived_path": "archive/external/prototype/low-fidelity-wireframes.v2-拆分前备份.html",
+      "classification": "external_prototype",
+      "introduced_commit": "35fb7c1",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "1bea777c4c920a05bd405333f45b2f20f91b0564",
+      "source_raw_sha256": "2999955f9050fe54a3833c645688b0717301a771b3769fa3aa3c1a9af92bd52d",
+      "archived_raw_sha256": "2999955f9050fe54a3833c645688b0717301a771b3769fa3aa3c1a9af92bd52d",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "docs/prototype/screen-states.html",
+      "archived_path": "archive/external/prototype/screen-states.html",
+      "classification": "external_prototype",
+      "introduced_commit": "35fb7c1",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "22595924319837661b9e08eda0b0c1f28947e4bd",
+      "source_raw_sha256": "934e409915b5bfc674c679cfb331b58c8ab94786730a0f8237d565e229510855",
+      "archived_raw_sha256": "934e409915b5bfc674c679cfb331b58c8ab94786730a0f8237d565e229510855",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/2026-2027-1 软件开发与测试综合实训 项目要求.md",
+      "archived_path": "archive/external/softwarePrediction/2026-2027-1 软件开发与测试综合实训 项目要求.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "aa8020e32ea726095eba826f6b2014dc24cfed42",
+      "source_raw_sha256": "d3ea63b9011f22d2464d92ff47753541965b51848621ae07ba633062fea9b2fd",
+      "archived_raw_sha256": "d3ea63b9011f22d2464d92ff47753541965b51848621ae07ba633062fea9b2fd",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/01-项目要求分析.md",
+      "archived_path": "archive/external/softwarePrediction/docs/01-项目要求分析.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "bd05f7d88c8596c0fe771f2b8de56b07b48eb389",
+      "source_raw_sha256": "ac347e97d5dd1b28b2f31dcca295d53bdeb6aaaf80d2b77d5cc895c0d361f408",
+      "archived_raw_sha256": "ac347e97d5dd1b28b2f31dcca295d53bdeb6aaaf80d2b77d5cc895c0d361f408",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/02-产品设计文档-V2.0.md",
+      "archived_path": "archive/external/softwarePrediction/docs/02-产品设计文档-V2.0.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "270a765bba7b03f2abe6c1064ba82835b96126ae",
+      "source_raw_sha256": "56111a8dab768ca4d8a69abe5a4ea5d311f2fae46e68d9212c8eb626f217a9f0",
+      "archived_raw_sha256": "56111a8dab768ca4d8a69abe5a4ea5d311f2fae46e68d9212c8eb626f217a9f0",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/02-产品设计文档.md",
+      "archived_path": "archive/external/softwarePrediction/docs/02-产品设计文档.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "f46b1763de6c85d34e9eb47b1943121047f210a0",
+      "source_raw_sha256": "15795cd2136a541f5498bb342ad061e263a1afc6cc2019e74893a75f305de48d",
+      "archived_raw_sha256": "15795cd2136a541f5498bb342ad061e263a1afc6cc2019e74893a75f305de48d",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/03-产品需求文档-V2.0.md",
+      "archived_path": "archive/external/softwarePrediction/docs/03-产品需求文档-V2.0.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "7c88f84bdd540bcdceea710ccc9207e5ad184a4d",
+      "source_raw_sha256": "5a1eb4fba47015bc80eec47539846d29fa755fc55c9ab780cfb03063abe4756c",
+      "archived_raw_sha256": "5a1eb4fba47015bc80eec47539846d29fa755fc55c9ab780cfb03063abe4756c",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/03-产品需求文档.md",
+      "archived_path": "archive/external/softwarePrediction/docs/03-产品需求文档.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "27034ce76ebd14c6750b290e973f29683faec360",
+      "source_raw_sha256": "07b1cc42a3b65bea4556efa5c8c896f80e2530babf875c133369ff54b61e7b37",
+      "archived_raw_sha256": "07b1cc42a3b65bea4556efa5c8c896f80e2530babf875c133369ff54b61e7b37",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "softwarePrediction/docs/04-需求设计追踪矩阵-V2.0.md",
+      "archived_path": "archive/external/softwarePrediction/docs/04-需求设计追踪矩阵-V2.0.md",
+      "classification": "imported_course_or_design",
+      "introduced_commit": "b703e29",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "616867219cd0c5551e5aeae3a04f22d632be7251",
+      "source_raw_sha256": "36dfee5e6725aae8bcfc01f767d075383c3321a348e11d3431c1dab88fa306c9",
+      "archived_raw_sha256": "36dfee5e6725aae8bcfc01f767d075383c3321a348e11d3431c1dab88fa306c9",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "packages/persistence/db.py",
+      "archived_path": "archive/external/legacy-tools/db.py.txt",
+      "classification": "unused_external_helper",
+      "introduced_commit": "5fc4954",
+      "source_revision": "a074e7a6117cf9f41a63e0c67a5b9499d789afff",
+      "source_git_blob": "fa66853667df8548c7e28a66d079acead95d5477",
+      "source_raw_sha256": "f7a8746ca5b2b5bf7800e52c621be53fd9ae566d7bc9f979ebb2bc15470f54e2",
+      "archived_raw_sha256": "f7a8746ca5b2b5bf7800e52c621be53fd9ae566d7bc9f979ebb2bc15470f54e2",
+      "byte_preserved": true
+    },
+    {
+      "original_path": "packages/persistence/seed.py",
+      "archived_path": "archive/external/legacy-tools/seed.py.txt",
+      "classification": "rejected_original_seed_not_current_compatibility_shim",
+      "introduced_commit": "5fc4954",
+      "source_revision": "0f590af49474009fd935dc1abadb6914a352f231",
+      "source_git_blob": "57af047019f70e788255cd6d4b1a56399c5f13ad",
+      "source_raw_sha256": "ce18cf4ab3b628fae570edd5183c9829aa7dc3d9237e46f5f6c6ffa47bfd95f2",
+      "archived_raw_sha256": "ce18cf4ab3b628fae570edd5183c9829aa7dc3d9237e46f5f6c6ffa47bfd95f2",
+      "byte_preserved": true,
+      "original_path_retained_as_our_refusal_shim": true
+    }
+  ]
+}

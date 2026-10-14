@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>JITGuard 即时软件缺陷预测系统 · 低保真原型线框图</title>
+<style>
+/* ==================== 1. 基础与灰阶色板 ====================
+   色板： #ffffff / #f7f7f7 / #e0e0e0 / #9e9e9e / #424242
+   全部图形用 1px 边框 + 灰阶填充，无任何外部资源
+   ========================================================= */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;padding:0;background:#e0e0e0;color:#424242;
+     font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",sans-serif;
+     font-size:13px;line-height:1.5}
+.page{width:1280px;margin:0 auto;background:#ffffff;border-left:1px solid #9e9e9e;border-right:1px solid #9e9e9e;padding:16px 16px 48px}
+h1{font-size:20px;margin:6px 0 2px}
+.doc-meta{color:#9e9e9e;font-size:12px;margin-bottom:16px}
+.sec-h{font-size:14px;margin:20px 0 8px;padding-left:8px;border-left:4px solid #424242}
+.note{font-size:11px;color:#9e9e9e;margin:6px 0 0}
+
+/* ==================== 2. 顶部固定导航条 ==================== */
+.topnav{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;background:#424242;border:1px solid #424242;margin:12px 0 20px}
+.topnav .nav-label{background:#9e9e9e;color:#ffffff;padding:8px 12px;font-size:12px;font-weight:bold;white-space:nowrap}
+.topnav a{color:#f7f7f7;text-decoration:none;padding:8px 11px;font-size:12px;border-right:1px solid #9e9e9e;white-space:nowrap}
+.topnav a:hover{background:#9e9e9e;color:#ffffff}
+
+/* ==================== 3. 屏容器 ==================== */
+.screen{border:1px solid #9e9e9e;background:#ffffff;margin:0 0 22px;scroll-margin-top:64px}
+.screen-title{background:#424242;color:#ffffff;padding:9px 14px;font-size:14px;font-weight:bold;letter-spacing:.5px}
+.screen-body{padding:14px}
+
+/* ==================== 4. 标注块 ==================== */
+.anno{background:#f7f7f7;border:1px solid #9e9e9e;padding:10px 12px;margin-bottom:14px}
+.anno-title{font-weight:bold;font-size:12px;padding-bottom:5px;margin-bottom:6px;border-bottom:1px dashed #9e9e9e}
+.anno-row{display:flex;margin:3px 0}
+.anno-k{flex:0 0 92px;font-weight:bold;font-size:12px}
+.anno-v{flex:1;font-size:12px}
+.anno-v .ex{display:block;margin:1px 0}
+
+/* ==================== 5. 面板 / 分区 ==================== */
+.panel{border:1px solid #9e9e9e;background:#ffffff;margin-bottom:14px}
+.panel:last-child{margin-bottom:0}
+.panel-hd{background:#e0e0e0;border-bottom:1px solid #9e9e9e;padding:6px 10px;font-size:12px;font-weight:bold}
+.panel-hd .hd-note{font-weight:normal;font-size:11px;color:#424242}
+.panel-bd{padding:10px}
+.panel-note{font-size:11px;color:#9e9e9e;padding:6px 10px;border-top:1px dashed #e0e0e0}
+
+/* ==================== 6. 表单控件 ==================== */
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 20px}
+.form-grid.one{grid-template-columns:1fr}
+.form-grid.three{grid-template-columns:repeat(3,1fr)}
+.field{display:flex;align-items:center;gap:8px;min-width:0}
+.field-lb{flex:0 0 104px;text-align:right;font-size:12px}
+.field-lb .req{color:#424242}
+.inp{border:1px solid #9e9e9e;background:#ffffff;color:#424242;height:26px;padding:0 6px;font-size:12px;font-family:inherit;min-width:0;width:100%}
+.inp.sm{width:88px;flex:0 0 88px}
+.inp.xs{width:64px;flex:0 0 64px}
+.inp.area{height:52px;padding:4px 6px;resize:none}
+select.inp{height:26px}
+input[type=checkbox],input[type=radio]{margin:0;width:13px;height:13px}
+.chk-line{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.slider{width:220px;height:20px;margin:0}
+.hint{font-size:11px;color:#9e9e9e}
+.err-text{font-size:11px;color:#424242;border-left:3px solid #9e9e9e;padding-left:6px;margin-top:3px}
+
+/* ==================== 7. 按钮 ==================== */
+.btn{display:inline-block;border:1px solid #424242;background:#e0e0e0;color:#424242;padding:5px 12px;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.btn-primary{background:#424242;color:#ffffff;border-color:#424242}
+.btn-ghost{background:#ffffff;border:1px solid #9e9e9e}
+.btn[disabled]{background:#f7f7f7;color:#9e9e9e;border-color:#9e9e9e;cursor:not-allowed}
+.btn-group{display:inline-flex}
+.btn-group .btn{border-right-width:0}
+.btn-group .btn:last-child{border-right-width:1px}
+.btn-group .btn.on{background:#424242;color:#ffffff}
+.ops{display:flex;gap:6px;flex-wrap:nowrap}
+
+/* ==================== 8. 表格 ==================== */
+table.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th,.tbl td{border:1px solid #9e9e9e;padding:5px 6px;font-size:12px;text-align:left;vertical-align:middle;word-break:break-all}
+.tbl th{background:#e0e0e0;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbl.wrap th{white-space:normal;word-break:break-all}
+.tbl td.nowrap,.tbl td.mono{white-space:nowrap}
+.tbl td.mono{font-family:Consolas,"Courier New",monospace}
+.tbl td.num{text-align:right;white-space:nowrap}
+.tbl td.ctr{text-align:center}
+.tbl tr.alt td{background:#f7f7f7}
+.tbl tr.hl td{background:#e0e0e0;font-weight:bold}
+.tbl td.best{background:#e0e0e0;font-weight:bold}
+.tbl .cellbar{display:inline-block;width:38px;height:7px;border:1px solid #9e9e9e;background:#f7f7f7;vertical-align:middle;margin-right:5px}
+.tbl .cellbar i{display:block;height:100%;background:#9e9e9e}
+
+/* ==================== 9. 状态标签 / 统计卡 ==================== */
+.pill{display:inline-block;border:1px solid #9e9e9e;background:#f7f7f7;padding:0 6px;font-size:11px;white-space:nowrap}
+.pill-dark{background:#424242;color:#ffffff;border-color:#424242}
+.pill-mid{background:#e0e0e0}
+.cards{display:flex;gap:12px;margin-bottom:14px}
+.card{flex:1;border:1px solid #9e9e9e;background:#f7f7f7;padding:10px 12px}
+.card-k{font-size:11px;color:#9e9e9e}
+.card-v{font-size:20px;font-weight:bold;margin-top:2px}
+.card-v small{font-size:11px;font-weight:normal;color:#9e9e9e;margin-left:4px}
+
+/* ==================== 10. 进度与阶段条 ==================== */
+.track{height:14px;border:1px solid #9e9e9e;background:#f7f7f7}
+.track .fill{height:100%;background:repeating-linear-gradient(45deg,#9e9e9e 0 4px,#e0e0e0 4px 8px)}
+.track-lb{display:flex;justify-content:space-between;font-size:11px;color:#9e9e9e;margin-top:3px}
+.stages{display:flex;border:1px solid #9e9e9e;margin:10px 0}
+.stage{flex:1;padding:8px 10px;border-right:1px solid #9e9e9e;background:#ffffff}
+.stage:last-child{border-right:0}
+.stage.done{background:#f7f7f7}
+.stage.run{background:#e0e0e0}
+.stage .st-name{font-size:12px;font-weight:bold}
+.stage .st-st{font-size:11px;color:#9e9e9e;margin-top:2px}
+.stage.done .st-st,.stage.run .st-st{color:#424242}
+
+/* ==================== 11. 筛选器行 / 工具条 ==================== */
+.filters{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;border:1px solid #9e9e9e;background:#f7f7f7;padding:10px;margin-bottom:12px}
+.fitem{display:flex;flex-direction:column;gap:4px}
+.flb{font-size:11px;color:#424242;white-space:nowrap}
+.budget{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid #9e9e9e;border-left:4px solid #424242;background:#f7f7f7;padding:8px 10px;margin-bottom:12px}
+.batchbar{display:flex;align-items:center;gap:8px;border:1px solid #9e9e9e;background:#f7f7f7;padding:7px 10px;margin-bottom:10px}
+.batchbar .selinfo{font-size:12px;margin-right:6px}
+.pager{display:flex;align-items:center;gap:10px;justify-content:flex-end;border:1px solid #9e9e9e;border-top:0;padding:7px 10px;font-size:12px}
+.alertbar{border:1px solid #424242;border-left:4px solid #424242;background:#e0e0e0;padding:7px 10px;margin-bottom:12px;font-size:12px}
+
+/* ==================== 12. 分栏 ==================== */
+.row{display:flex;gap:14px;align-items:flex-start}
+.col-grow{flex:1;min-width:0}
+.col720{flex:0 0 720px;min-width:0}
+.col480{flex:0 0 480px;min-width:0}
+.col-l{flex:0 0 620px;min-width:0}
+.col-r{flex:1;min-width:0}
+
+/* ==================== 13. 特征开关列表 ==================== */
+.feat-group{border:1px solid #e0e0e0;margin-bottom:8px}
+.feat-group-hd{background:#f7f7f7;border-bottom:1px solid #e0e0e0;padding:4px 8px;font-size:11px;font-weight:bold;color:#9e9e9e}
+.feat-row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px dashed #e0e0e0;font-size:12px}
+.feat-row:last-child{border-bottom:0}
+.feat-code{flex:0 0 74px;font-weight:bold;font-family:Consolas,"Courier New",monospace;font-size:11px}
+.feat-name{flex:1;min-width:0}
+.feat-tag{font-size:11px;color:#9e9e9e;white-space:nowrap}
+
+/* ==================== 14. 条形图（标签分布） ==================== */
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.bar-lb{flex:0 0 96px;text-align:right}
+.bar-track{flex:1;height:16px;border:1px solid #9e9e9e;background:#f7f7f7}
+.bar-fill{height:100%;background:repeating-linear-gradient(45deg,#9e9e9e 0 4px,#e0e0e0 4px 8px)}
+.bar-fill.plain{background:#9e9e9e}
+.bar-val{flex:0 0 104px;color:#424242}
+
+/* ==================== 15. 图表占位（网格 + CSS 折线） ==================== */
+.chart-block{border:1px solid #9e9e9e;background:#ffffff;padding:10px;margin-bottom:14px}
+.chart-title{font-size:12px;font-weight:bold;margin-bottom:8px}
+.chart-title .sub{font-weight:normal;font-size:11px;color:#9e9e9e;margin-left:8px}
+.chart-flex{display:flex;align-items:flex-start}
+.y-axis{position:relative;flex:0 0 46px;width:46px;height:300px}
+.y-axis.s240{height:240px}
+.y-axis span{position:absolute;right:8px;font-size:11px;color:#9e9e9e;transform:translateY(-50%);white-space:nowrap}
+.x-axis{position:relative;height:20px}
+.x-axis span{position:absolute;top:2px;font-size:11px;color:#9e9e9e;transform:translateX(-50%);white-space:nowrap}
+.x-axis.tri span{top:0}
+.x-axis.tri span b{display:block;font-size:9px;line-height:9px;font-weight:normal;color:#424242;text-align:center}
+.plot{position:relative;border:1px solid #9e9e9e;background:#ffffff}
+.plot.p560{width:562px;height:302px}
+.plot.p1080{width:1082px;height:242px}
+.gridbg{position:absolute;left:0;top:0;right:0;bottom:0;
+        background-image:repeating-linear-gradient(to right,#e0e0e0 0 1px,transparent 1px 112px),
+                         repeating-linear-gradient(to bottom,#e0e0e0 0 1px,transparent 1px 60px)}
+.gridbg.g270{background-image:repeating-linear-gradient(to right,#e0e0e0 0 1px,transparent 1px 270px),
+                         repeating-linear-gradient(to bottom,#e0e0e0 0 1px,transparent 1px 48px)}
+.gridbg.g180{background-image:repeating-linear-gradient(to right,#e0e0e0 0 1px,transparent 1px 180px),
+                         repeating-linear-gradient(to bottom,#e0e0e0 0 1px,transparent 1px 48px)}
+.seg{position:absolute;height:2px;background:#424242;transform-origin:left center}
+.seg.thick{height:3px}
+.seg.dash{background:repeating-linear-gradient(to right,#9e9e9e 0 7px,transparent 7px 14px)}
+.seg.light{background:#e0e0e0}
+.dot{position:absolute;width:8px;height:8px;border-radius:50%;background:#424242}
+.dot.light{background:#e0e0e0;border:1px solid #9e9e9e}
+.resultbox{position:absolute;border:1px solid #424242;background:#ffffff;padding:3px 8px;font-size:12px;font-weight:bold;white-space:nowrap}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11px;margin-bottom:8px}
+.legend i{display:inline-block;width:24px;height:0;border-top:2px solid #424242;position:relative;top:-4px;margin-right:6px}
+.legend i.dash{border-top:2px dashed #9e9e9e}
+.legend i.light{border-top:3px solid #e0e0e0}
+.legend i.gray{border-top:2px solid #9e9e9e}
+.axis-cap{font-size:11px;color:#9e9e9e;margin-top:6px}
+.ph-img{border:1px solid #9e9e9e;background-image:repeating-linear-gradient(45deg,#f7f7f7 0 6px,#e0e0e0 6px 12px)}
+
+/* ==================== 16. 归因解释双向条形图 ==================== */
+.attrib{border:1px solid #9e9e9e;padding:8px 10px}
+.attrib-head{display:flex;font-size:11px;color:#9e9e9e;margin-bottom:4px}
+.attrib-head .h-lb{flex:0 0 132px}
+.attrib-head .h-ctr{flex:1;text-align:center}
+.attrib-head .h-val{flex:0 0 58px;text-align:right}
+.attrib-row{display:flex;align-items:center;height:24px;font-size:11px}
+.attrib-lb{flex:0 0 132px;text-align:right;padding-right:8px}
+.attrib-area{flex:1;position:relative;height:18px;background:#f7f7f7;border:1px solid #e0e0e0}
+.attrib-area .midaxis{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#9e9e9e}
+.attrib-bar{position:absolute;top:3px;height:12px;background:#9e9e9e;border:1px solid #424242}
+.attrib-bar.pos{left:50%}
+.attrib-bar.neg{right:50%}
+.attrib-val{flex:0 0 58px;text-align:right;font-family:Consolas,"Courier New",monospace}
+
+/* ==================== 17. Diff 视图 ==================== */
+.diff{border:1px solid #9e9e9e;background:#ffffff}
+.diff-hd{background:#e0e0e0;border-bottom:1px solid #9e9e9e;padding:5px 8px;font-size:11px;font-weight:bold}
+.diff-file{background:#f7f7f7;border-bottom:1px solid #e0e0e0;border-top:1px solid #e0e0e0;padding:3px 8px;font-size:11px}
+.diff-line{padding:1px 8px;font-family:Consolas,"Courier New",monospace;font-size:12px;white-space:pre;overflow:hidden}
+.diff-line .ln{display:inline-block;width:38px;color:#9e9e9e}
+.diff-line.add{background:#e0e0e0}
+.diff-line.del{background:#f7f7f7;text-decoration:line-through;color:#9e9e9e}
+.diff-line.ctx{color:#9e9e9e}
+.diff-line.hunk{background:#f7f7f7;color:#9e9e9e;font-weight:bold}
+
+/* ==================== 18. 登录卡 ==================== */
+.login-wrap{display:flex;justify-content:center;padding:26px 0;background:#f7f7f7;border:1px solid #e0e0e0}
+.login-card{width:430px;border:1px solid #9e9e9e;background:#ffffff;padding:26px 34px 20px}
+.brand{font-size:26px;font-weight:bold;letter-spacing:1px;text-align:center}
+.brand-sub{font-size:12px;color:#9e9e9e;text-align:center;margin:4px 0 20px;padding-bottom:14px;border-bottom:1px solid #e0e0e0}
+.login-field{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.login-lb{flex:0 0 52px;text-align:right;font-size:12px}
+.login-btn{width:100%;padding:9px 0;font-size:14px;margin-top:6px}
+.login-err{border:1px solid #9e9e9e;border-left:4px solid #424242;background:#f7f7f7;font-size:11px;padding:6px 8px;margin-top:12px}
+.login-foot{text-align:center;font-size:11px;color:#9e9e9e;margin-top:14px;padding-top:10px;border-top:1px dashed #e0e0e0}
+
+/* ==================== 19. 三列排行 ==================== */
+.rank-wrap{display:flex;gap:12px;align-items:flex-start}
+.rank-wrap .panel{flex:1;min-width:0;margin-bottom:0}
+.rank-wrap .tbl th,.rank-wrap .tbl td{padding:4px 5px;font-size:11px}
+
+/* ==================== 20. 打印（逐屏导出 PDF / 截图） ==================== */
+@media print{
+  body{background:#ffffff}
+  .topnav{display:none}
+  .overview{page-break-after:always;break-after:page}
+  .screen{page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+  *{print-color-adjust:exact;-webkit-print-color-adjust:exact;color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>JITGuard · 即时软件缺陷预测系统 —— 低保真原型线框图</h1>
+<div class="doc-meta">软件工程课程项目 · 需求分析阶段交付物 ｜ 版本 v0.1 ｜ 共 9 屏 ｜ 单文件自包含 HTML，离线双击打开即可浏览 ｜ 界面文案为中文，图形均为灰阶占位，不含真实图片与脚本</div>
+
+<!-- ==================== 总览表 ==================== -->
+<div class="overview">
+<div class="sec-h">一、九屏总览与任务书功能模块映射</div>
+<table class="tbl">
+  <colgroup>
+    <col style="width:70px"><col style="width:210px"><col style="width:210px"><col style="width:240px"><col style="width:100px">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>屏号</th><th>页面名</th><th>主要角色</th><th>对应任务书功能模块</th><th>用户故事编号</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td class="nowrap">屏 01</td><td>登录</td><td>代码评审员 / 研发团队负责人 / 算法工程师</td><td>工程化</td><td>待关联</td></tr>
+    <tr class="alt"><td class="nowrap">屏 02</td><td>仓库接入与管理</td><td>算法工程师</td><td>数据采集与仓库解析</td><td>待关联</td></tr>
+    <tr><td class="nowrap">屏 03</td><td>采集任务监控</td><td>算法工程师</td><td>数据采集与仓库解析</td><td>待关联</td></tr>
+    <tr class="alt"><td class="nowrap">屏 04</td><td>提交浏览与数据质量</td><td>算法工程师（研发团队负责人可只读查看）</td><td>特征工程与样本构建</td><td>待关联</td></tr>
+    <tr><td class="nowrap">屏 05</td><td>特征与样本集构建</td><td>算法工程师</td><td>特征工程与样本构建</td><td>待关联</td></tr>
+    <tr class="alt"><td class="nowrap">屏 06</td><td>模型训练与评估</td><td>算法工程师</td><td>模型训练与评估</td><td>待关联</td></tr>
+    <tr><td class="nowrap">屏 07</td><td>风险提交列表 ★核心页</td><td>代码评审员</td><td>预测与解释</td><td>待关联</td></tr>
+    <tr class="alt"><td class="nowrap">屏 08</td><td>提交详情与归因解释</td><td>代码评审员</td><td>预测与解释</td><td>待关联</td></tr>
+    <tr><td class="nowrap">屏 09</td><td>缺陷引入趋势看板</td><td>研发团队负责人</td><td>可视化前端</td><td>待关联</td></tr>
+  </tbody>
+</table>
+<div class="note">说明：①「用户故事编号」列统一填写「待关联」，团队尚未产出用户故事，本表不编造编号，待用户故事产出后回填。② 六个功能模块均已被覆盖：数据采集与仓库解析（屏 02、03）、特征工程与样本构建（屏 04、05）、模型训练与评估（屏 06）、预测与解释（屏 07、08）、可视化前端（屏 09）、工程化（屏 01）。</div>
+</div>
+
+<!-- ==================== 顶部固定导航条 ==================== -->
+<nav class="topnav">
+  <span class="nav-label">线框图导航</span>
+  <a href="#s1">屏 01 · 登录</a>
+  <a href="#s2">屏 02 · 仓库接入与管理</a>
+  <a href="#s3">屏 03 · 采集任务监控</a>
+  <a href="#s4">屏 04 · 提交浏览与数据质量</a>
+  <a href="#s5">屏 05 · 特征与样本集构建</a>
+  <a href="#s6">屏 06 · 模型训练与评估</a>
+  <a href="#s7">屏 07 · 风险提交列表</a>
+  <a href="#s8">屏 08 · 提交详情与归因解释</a>
+  <a href="#s9">屏 09 · 缺陷引入趋势看板</a>
+</nav>
+
+<div class="sec-h">二、九屏低保真线框图</div>
+
+<!-- ==================== 屏 01 ==================== -->
+<section class="screen" id="s1">
+  <div class="screen-title">屏 01 / 09 · 登录</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">代码评审员 / 研发团队负责人 / 算法工程师（三类角色共用同一登录入口，登录后按角色进入各自首页）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">未持有有效登录态（从未登录或会话已过期），访问任意受保护页面时被拦截并跳转至本屏</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">完成身份认证并建立会话，随后回跳到用户原本想访问的页面</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">用户名输入框、密码输入框（掩码显示）、「记住我」复选框、登录按钮、统一错误提示区</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">登录成功 → 代码评审员进入「屏 07 风险提交列表」；研发团队负责人进入「屏 09 缺陷引入趋势看板」；算法工程师进入「屏 02 仓库接入与管理」。若由拦截跳转而来，则回跳原路径</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 用户名或密码错误 → 给出<b>统一提示</b>「用户名或密码错误」，不区分「用户不存在」与「密码错误」，避免账号枚举；两类失败在提示文案与响应耗时上保持一致</span>
+        <span class="ex">② 连续失败 5 次 → 锁定该账号 10 分钟，提示「账号已锁定，请于 10 分钟后重试」，锁定期间登录按钮与输入框置灰</span>
+        <span class="ex">③ 未登录直接访问业务页面 → 跳转登录页，并在登录成功后回跳原路径（原查询参数一并保留）</span>
+      </div></div>
+    </div>
+
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="brand">JITGuard</div>
+        <div class="brand-sub">即时软件缺陷预测系统</div>
+        <div class="login-field"><span class="login-lb">用户名</span><input class="inp" type="text" placeholder="请输入用户名"></div>
+        <div class="login-field"><span class="login-lb">密码</span><input class="inp" type="password" placeholder="请输入密码"></div>
+        <div class="login-field"><span class="login-lb"></span><label class="chk-line"><input type="checkbox" checked> 记住我（7 天内免登录）</label></div>
+        <button class="btn btn-primary login-btn">登 录</button>
+        <div class="login-err">错误提示区（统一文案）：用户名或密码错误 ／ 账号已锁定，请于 10 分钟后重试</div>
+        <div class="login-foot">登录即表示已知悉系统使用与数据保密约定 ｜ 忘记密码请联系管理员</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 02 ==================== -->
+<section class="screen" id="s2">
+  <div class="screen-title">屏 02 / 09 · 仓库接入与管理</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">算法工程师（负责仓库接入、采集配置与数据同步）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">以算法工程师身份登录后从主导航进入；或从「屏 03 采集任务监控」返回</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">接入待分析的代码仓库（Git 地址 + 缺陷跟踪系统 + 采集时间窗口），并维护已接入仓库的可用状态</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">仓库名称、仓库地址、平台下拉（GitHub / GitLab / Gitee / 本地路径）、访问凭据（Token）、缺陷跟踪系统下拉（JIRA / GitHub Issues / 无）、缺陷单项目键、采集时间窗口（起始日期 / 结束日期）、排除路径规则、<b>校验连通性</b>按钮、<b>保存并接入</b>按钮；下方仓库列表表格及其行内操作（触发采集 / 编辑配置 / 停用）</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">点击「保存并接入」成功 → 提示接入成功并提供「前往采集任务」入口，跳转「屏 03 采集任务监控」；列表行「触发采集」→ 同样跳转屏 03；「编辑配置」→ 就地展开表单或进入本屏编辑态</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 地址格式非法（非 Git 协议地址 / 本地路径不存在 / 填写了网页地址）→ 字段级报错且<b>不发起任何网络请求</b>，提交按钮保持禁用</span>
+        <span class="ex">② Token 失效或无权限 → 返回可读错误（含 HTTP 状态码，如「凭据校验失败：HTTP 401」），<b>数据库不留半成品记录</b>，表单内容保留以便修改后重试</span>
+        <span class="ex">③ 重复接入同一仓库 → 拒绝保存，并提示已存在仓库的名称与接入时间，提供「查看已有配置」入口</span>
+      </div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">新增仓库 <span class="hd-note">（带 * 为必填项；「校验连通性」通过后方可保存）</span></div>
+      <div class="panel-bd">
+        <div class="form-grid">
+          <div class="field"><span class="field-lb"><span class="req">*</span> 仓库名称</span><input class="inp" type="text" value="Apache ActiveMQ"></div>
+          <div class="field"><span class="field-lb"><span class="req">*</span> 仓库地址</span><input class="inp" type="text" value="https://github.com/apache/activemq"></div>
+          <div class="field"><span class="field-lb"><span class="req">*</span> 平台</span>
+            <select class="inp"><option>GitHub</option><option>GitLab</option><option>Gitee</option><option>本地路径</option></select></div>
+          <div class="field"><span class="field-lb">访问凭据（Token）</span><input class="inp" type="password" value="**********"></div>
+          <div class="field"><span class="field-lb"><span class="req">*</span> 缺陷跟踪系统</span>
+            <select class="inp"><option>JIRA</option><option>GitHub Issues</option><option>无</option></select></div>
+          <div class="field"><span class="field-lb">缺陷单项目键</span><input class="inp" type="text" value="AMQ"><span class="hint">例：AMQ</span></div>
+          <div class="field"><span class="field-lb">采集起始日期</span><input class="inp" type="text" value="2015-01-01"></div>
+          <div class="field"><span class="field-lb">采集结束日期</span><input class="inp" type="text" value="2021-12-31"></div>
+          <div class="field" style="grid-column:1 / span 2"><span class="field-lb">排除路径规则</span><input class="inp" type="text" value="**/test/**, **/*.md, **/resources/**"><span class="hint">逗号分隔，按 glob 匹配</span></div>
+        </div>
+        <div class="err-text">字段级校验提示占位：仓库地址格式非法，请输入 Git 仓库地址（如 git@host:group/repo.git），当前输入未发起网络请求。</div>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-ghost">校验连通性</button>
+          <button class="btn btn-primary">保存并接入</button>
+          <span class="hint">连通性校验结果占位：✔ 连接成功 ｜ 默认分支 main ｜ 最近提交 2021-12-31 01:47</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">已接入仓库列表 <span class="hd-note">（共 3 个仓库，其中 1 个已停用）</span></div>
+      <table class="tbl">
+        <colgroup>
+          <col style="width:170px"><col style="width:90px"><col style="width:300px"><col style="width:90px">
+          <col style="width:150px"><col style="width:90px"><col style="width:230px">
+        </colgroup>
+        <thead>
+          <tr><th>仓库名</th><th>平台</th><th>地址</th><th>默认分支</th><th>最近同步时间</th><th>状态</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Apache ActiveMQ</td><td>GitHub</td><td class="mono" style="font-size:11px">https://github.com/apache/activemq</td><td>main</td>
+            <td class="nowrap">2021-12-31 02:00</td><td><span class="pill pill-dark">已连接</span></td>
+            <td><div class="ops"><button class="btn">触发采集</button><button class="btn btn-ghost">编辑配置</button><button class="btn btn-ghost">停用</button></div></td>
+          </tr>
+          <tr class="alt">
+            <td>Apache Lucene</td><td>GitHub</td><td class="mono" style="font-size:11px">https://github.com/apache/lucene</td><td>main</td>
+            <td class="nowrap">2021-12-30 02:00</td><td><span class="pill pill-mid">采集中</span></td>
+            <td><div class="ops"><button class="btn">触发采集</button><button class="btn btn-ghost">编辑配置</button><button class="btn btn-ghost">停用</button></div></td>
+          </tr>
+          <tr>
+            <td>本地镜像仓库（内网）</td><td>本地路径</td><td class="mono" style="font-size:11px">/data/mirror/demo-repo.git</td><td>master</td>
+            <td class="nowrap">2021-11-18 09:12</td><td><span class="pill">已停用</span></td>
+            <td><div class="ops"><button class="btn" disabled>触发采集</button><button class="btn btn-ghost">编辑配置</button><button class="btn btn-ghost">启用</button></div></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="panel-note">状态取值：已连接 / 采集中 / 校验失败 / 已停用。停用仓库不出现在预测与看板的仓库筛选项中，历史数据保留。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 03 ==================== -->
+<section class="screen" id="s3">
+  <div class="screen-title">屏 03 / 09 · 采集任务监控</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">算法工程师</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">从「屏 02 仓库接入与管理」点击「触发采集」或「前往采集任务」进入；也可直接进入查看历史任务</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">观察 Git 历史采集与 SZZ 标注任务的运行状态与进度，处理失败任务与被跳过条目</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">任务列表表格（任务类型 / 目标仓库 / 状态 / 当前阶段 / 进度 / 已处理-总数 / 耗时 / 触发人 / 操作）、四阶段进度条、阶段日志表格（阶段 / 状态 / 消息 / 计数指标）、行内操作：重试、取消、查看跳过清单</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">任务完成后 → 提供「查看提交数据」入口跳转「屏 04 提交浏览与数据质量」；「查看跳过清单」→ 弹出或就地展开被跳过/失败的提交明细；「取消」→ 二次确认后终止任务</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 同一仓库已有任务运行中 → 拒绝创建新任务，并提示正在运行的任务 ID 与启动时间，提供「查看该任务」入口</span>
+        <span class="ex">② 任务中断后重试 → 从<b>断点继续</b>（已完成的阶段与已处理的提交范围直接复用），不重复抓取，耗时字段区分本次耗时与累计耗时</span>
+        <span class="ex">③ 单个提交解析失败 → <b>不终止整个任务</b>，该提交进入错误清单并计入失败计数，任务继续执行，结束后汇总「成功 / 跳过 / 失败」三项数量</span>
+      </div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">采集任务列表 <span class="hd-note">（共 12 条，按开始时间倒序）</span></div>
+      <table class="tbl">
+        <colgroup>
+          <col style="width:150px"><col style="width:160px"><col style="width:80px"><col style="width:110px"><col style="width:150px">
+          <col style="width:150px"><col style="width:90px"><col style="width:90px"><col style="width:210px">
+        </colgroup>
+        <thead>
+          <tr><th>任务类型</th><th>目标仓库</th><th>状态</th><th>当前阶段</th><th>进度</th><th>已处理-总数</th><th>耗时</th><th>触发人</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="nowrap">历史采集 + SZZ 标注</td><td>Apache ActiveMQ</td><td><span class="pill pill-dark">运行中</span></td><td class="nowrap">SZZ 标注</td>
+            <td>
+              <div class="track" style="width:120px"><div class="fill" style="width:92%"></div></div>
+              <span class="hint">92%</span>
+            </td>
+            <td class="nowrap">已处理 18432 / 20005</td><td>01:42:18</td><td>管理*</td>
+            <td><div class="ops"><button class="btn" disabled>重试</button><button class="btn">取消</button><button class="btn btn-ghost">查看跳过清单</button></div></td>
+          </tr>
+          <tr class="alt">
+            <td class="nowrap">增量同步</td><td>Apache Lucene</td><td><span class="pill pill-mid">排队中</span></td><td class="nowrap">拉取提交</td>
+            <td><div class="track" style="width:120px"><div class="fill" style="width:0%"></div></div><span class="hint">0%</span></td>
+            <td class="nowrap">已处理 0 / 3408</td><td>00:00:00</td><td>管理*</td>
+            <td><div class="ops"><button class="btn" disabled>重试</button><button class="btn">取消</button><button class="btn btn-ghost">查看跳过清单</button></div></td>
+          </tr>
+          <tr>
+            <td class="nowrap">历史采集 + SZZ 标注</td><td>本地镜像仓库（内网）</td><td><span class="pill">已失败</span></td><td class="nowrap">关联缺陷单</td>
+            <td><div class="track" style="width:120px"><div class="fill" style="width:37%"></div></div><span class="hint">37%（中断于断点）</span></td>
+            <td class="nowrap">已处理 1024 / 2760</td><td>00:12:41</td><td>管理*</td>
+            <td><div class="ops"><button class="btn">重试</button><button class="btn" disabled>取消</button><button class="btn btn-ghost">查看跳过清单</button></div></td>
+          </tr>
+          <tr class="alt">
+            <td class="nowrap">缺陷单重关联</td><td>Apache ActiveMQ</td><td><span class="pill">已完成</span></td><td class="nowrap">SZZ 标注</td>
+            <td><div class="track" style="width:120px"><div class="fill" style="width:100%"></div></div><span class="hint">100%</span></td>
+            <td class="nowrap">已处理 20005 / 20005</td><td>02:05:33</td><td>管理*</td>
+            <td><div class="ops"><button class="btn">重试</button><button class="btn" disabled>取消</button><button class="btn btn-ghost">查看跳过清单</button></div></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="panel-note">状态取值：排队中 / 运行中 / 已完成 / 已失败 / 已取消。耗时列显示「本次耗时 / 累计耗时」，任务中断重试后累计耗时不重置。</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">当前任务阶段进度 <span class="hd-note">任务 ID：TASK-20211231-0007 ｜ 目标仓库：Apache ActiveMQ ｜ 状态：运行中</span></div>
+      <div class="panel-bd">
+        <div class="stages">
+          <div class="stage done"><div class="st-name">1. 拉取提交</div><div class="st-st">已完成 ｜ 20005 个提交 ｜ 00:18:42</div></div>
+          <div class="stage done"><div class="st-name">2. 解析文件变更</div><div class="st-st">已完成 ｜ 19863 个提交有文件变更 ｜ 01:05:10</div></div>
+          <div class="stage done"><div class="st-name">3. 关联缺陷单</div><div class="st-st">已完成 ｜ 命中 3120 张缺陷单 ｜ 00:07:26</div></div>
+          <div class="stage run"><div class="st-name">4. SZZ 标注</div><div class="st-st">运行中 92% ｜ 已标注 18432 / 20005</div></div>
+        </div>
+        <div class="track"><div class="fill" style="width:92%"></div></div>
+        <div class="track-lb"><span>总进度 92%</span><span>已处理 18432 / 20005 ｜ 预计剩余 00:08:40</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">阶段日志 <span class="hd-note">（按阶段聚合，非逐行滚动日志）</span></div>
+      <table class="tbl">
+        <colgroup><col style="width:150px"><col style="width:90px"><col style="width:560px"><col style="width:300px"></colgroup>
+        <thead><tr><th>阶段</th><th>状态</th><th>消息</th><th>计数指标</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">拉取提交</td><td><span class="pill pill-mid">已完成</span></td><td>已从默认分支 main 拉取全部提交，时间窗口 2015-01-01 ~ 2021-12-31</td><td class="nowrap">提交总数 20005 ｜ 跳过 0</td></tr>
+          <tr class="alt"><td class="nowrap">解析文件变更</td><td><span class="pill pill-mid">已完成</span></td><td>二进制文件与单文件超 5000 行的变更已标记排除，不计入特征计算</td><td class="nowrap">排除二进制文件 216 ｜ 排除超大变更 34</td></tr>
+          <tr><td class="nowrap">关联缺陷单</td><td><span class="pill pill-mid">已完成</span></td><td>按提交信息中的缺陷单号与 JIRA 项目键 AMQ 进行关联，未命中缺陷单的提交保留但标记为无关联</td><td class="nowrap">关联成功 3120 ｜ 未关联 16885</td></tr>
+          <tr class="alt"><td class="nowrap">SZZ 标注</td><td><span class="pill pill-dark">运行中</span></td><td>回溯缺陷修复提交的改动行，定位缺陷引入提交；无法定责的改动行单独计数并写入跳过清单</td><td class="nowrap">已标注 18432 ｜ 无法定责行数 142 ｜ 失败 6</td></tr>
+        </tbody>
+      </table>
+      <div class="panel-note">计数指标口径：「无法定责行数」= 无法回溯到引入提交的改动行数；「失败」= 解析异常的提交数，进入错误清单但不终止任务。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 04 ==================== -->
+<section class="screen" id="s4">
+  <div class="screen-title">屏 04 / 09 · 提交浏览与数据质量</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">算法工程师（研发团队负责人可只读查看，不显示任何写入类按钮）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">从「屏 03 采集任务监控」任务完成后的「查看提交数据」入口进入；或从本屏筛选器直接浏览已采集数据</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">浏览采集到的提交明细，核对数据质量（是否修复提交、关联缺陷单、是否被标注为缺陷引入提交 BIC），确认数据可用于建模</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">筛选器（仓库 / 时间范围 / 作者 / 是否修复提交 / 是否 merge 提交）、提交主表格、右侧「选中提交的文件变更列表」面板、导出按钮</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">点击表格行 → 右侧面板加载该提交的文件变更明细（选中行高亮）；点击文件行 → 展示该文件的 diff 摘要占位；「进入样本构建」→ 跳转「屏 05 特征与样本集构建」</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 二进制文件与单文件超 5000 行的变更 → 被标记为「已排除」并在数据质量报告中单独计数，不参与特征计算，界面上以灰底 + 排除标签呈现</span>
+        <span class="ex">② merge 提交（父提交数 ≥ 2）→ 标记为「不参与建模」，但<b>仍保留在提交表中</b>可被检索与查看，导出时该列一并输出标记</span>
+        <span class="ex">③ 筛选条件无命中 → 表格区显示空状态提示与「清除筛选条件」按钮，右侧面板同步清空并提示未选中提交</span>
+        <span class="ex">④ 缺陷单关联为空 → 「关联缺陷单」列显示「—」而非空白，避免与「未采集到」混淆</span>
+      </div></div>
+    </div>
+
+    <div class="filters">
+      <div class="fitem"><span class="flb">仓库</span><select class="inp" style="width:180px"><option>Apache ActiveMQ</option><option>Apache Lucene</option></select></div>
+      <div class="fitem"><span class="flb">时间范围（起）</span><input class="inp" style="width:120px" type="text" value="2021-06-01"></div>
+      <div class="fitem"><span class="flb">时间范围（止）</span><input class="inp" style="width:120px" type="text" value="2021-06-30"></div>
+      <div class="fitem"><span class="flb">作者</span><input class="inp" style="width:120px" type="text" placeholder="如 张*"></div>
+      <div class="fitem"><span class="flb">是否修复提交</span><select class="inp" style="width:110px"><option>全部</option><option>是</option><option>否</option></select></div>
+      <div class="fitem"><span class="flb">是否 merge 提交</span><select class="inp" style="width:130px"><option>全部</option><option>是（不参与建模）</option><option>否</option></select></div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-primary">查询</button></div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-ghost">重置</button></div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-ghost">导出 CSV</button></div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-ghost">进入样本构建</button></div>
+    </div>
+
+    <div class="row">
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">提交列表 <span class="hd-note">（共 20,005 条 ｜ 当前为第 1 页 ｜ 每页 20 条 ｜ 已排除 250 条超阈值变更）</span></div>
+          <table class="tbl wrap">
+            <colgroup>
+              <col style="width:84px"><col style="width:62px"><col style="width:110px"><col style="width:78px"><col style="width:64px">
+              <col style="width:64px"><col style="width:82px"><col style="width:96px"><col style="width:110px">
+            </colgroup>
+            <thead>
+              <tr><th>短哈希</th><th>作者</th><th>提交时间</th><th>变更文件数</th><th>新增行</th><th>删除行</th><th>是否修复提交</th><th>关联缺陷单</th><th>是否缺陷引入提交（BIC）</th></tr>
+            </thead>
+            <tbody>
+              <tr class="hl">
+                <td class="mono">a1b2c3d</td><td>张*</td><td class="nowrap" style="font-size:11px">2021-06-14 10:23</td><td class="num">14</td><td class="num">320</td><td class="num">45</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1234</td><td><span class="pill pill-dark">BIC</span></td>
+              </tr>
+              <tr>
+                <td class="mono">7f8e9d0</td><td>李*</td><td class="nowrap" style="font-size:11px">2021-06-14 09:41</td><td class="num">11</td><td class="num">268</td><td class="num">30</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1230</td><td><span class="pill pill-dark">BIC</span></td>
+              </tr>
+              <tr class="alt">
+                <td class="mono">3c4d5e6</td><td>王*</td><td class="nowrap" style="font-size:11px">2021-06-13 18:02</td><td class="num">9</td><td class="num">210</td><td class="num">12</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr>
+                <td class="mono">9b0a1f2</td><td>赵*</td><td class="nowrap" style="font-size:11px">2021-06-13 15:30</td><td class="num">7</td><td class="num">180</td><td class="num">64</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1228</td><td><span class="pill pill-dark">BIC</span></td>
+              </tr>
+              <tr class="alt">
+                <td class="mono">5d6e7f8</td><td>陈*</td><td class="nowrap" style="font-size:11px">2021-06-13 11:12</td><td class="num">6</td><td class="num">142</td><td class="num">20</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr>
+                <td class="mono">2a3b4c5</td><td>刘*</td><td class="nowrap" style="font-size:11px">2021-06-12 20:55</td><td class="num">5</td><td class="num">96</td><td class="num">8</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1224</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr class="alt">
+                <td class="mono">8e9f0a1</td><td>周*</td><td class="nowrap" style="font-size:11px">2021-06-12 16:20</td><td class="num">4</td><td class="num">64</td><td class="num">15</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">已排除</span></td>
+              </tr>
+              <tr>
+                <td class="mono">4b5c6d7</td><td>吴*</td><td class="nowrap" style="font-size:11px">2021-06-12 10:05</td><td class="num">3</td><td class="num">48</td><td class="num">6</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1219</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr class="alt">
+                <td class="mono">6f7a8b9</td><td>郑*</td><td class="nowrap" style="font-size:11px">2021-06-11 17:44</td><td class="num">2</td><td class="num">22</td><td class="num">3</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr>
+                <td class="mono">0c1d2e3</td><td>孙*</td><td class="nowrap" style="font-size:11px">2021-06-11 09:30</td><td class="num">1</td><td class="num">12</td><td class="num">1</td>
+                <td><span class="pill pill-mid">是</span></td><td class="mono">AMQ-1215</td><td><span class="pill">非 BIC</span></td>
+              </tr>
+              <tr class="alt">
+                <td class="mono">b7c8d9e</td><td>张*</td><td class="nowrap" style="font-size:11px">2021-06-10 21:07</td><td class="num">2</td><td class="num">36</td><td class="num">4</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">merge</span></td>
+              </tr>
+              <tr>
+                <td class="mono">c8d9e0f</td><td>李*</td><td class="nowrap" style="font-size:11px">2021-06-10 14:52</td><td class="num">1</td><td class="num">6210</td><td class="num">0</td>
+                <td><span class="pill">否</span></td><td class="mono">—</td><td><span class="pill">已排除</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pager"><span>共 20,005 条</span><span>1 / 1001</span><button class="btn btn-ghost" disabled>上一页</button><button class="btn">下一页</button></div>
+          <div class="panel-note">「是否缺陷引入提交（BIC）」由 SZZ 算法回溯标注得出；「已排除」与「merge（不参与建模）」的提交保留在表中但不进入样本集。</div>
+        </div>
+      </div>
+
+      <div class="col480">
+        <div class="panel">
+          <div class="panel-hd">选中提交的文件变更列表 <span class="hd-note">a1b2c3d</span></div>
+          <table class="tbl">
+            <colgroup><col style="width:250px"><col style="width:80px"><col style="width:62px"><col style="width:62px"></colgroup>
+            <thead><tr><th>路径</th><th>变更类型</th><th>新增行</th><th>删除行</th></tr></thead>
+            <tbody>
+              <tr><td class="mono" style="font-size:11px">broker/src/main/java/.../Transport.java</td><td>修改</td><td class="num">86</td><td class="num">12</td></tr>
+              <tr class="alt"><td class="mono" style="font-size:11px">broker/src/main/java/.../Session.java</td><td>修改</td><td class="num">54</td><td class="num">9</td></tr>
+              <tr><td class="mono" style="font-size:11px">activemq-core/src/.../Policy.java</td><td>修改</td><td class="num">41</td><td class="num">7</td></tr>
+              <tr class="alt"><td class="mono" style="font-size:11px">activemq-core/src/.../Broker.java</td><td>修改</td><td class="num">38</td><td class="num">11</td></tr>
+              <tr><td class="mono" style="font-size:11px">assembly/src/main/resources/.../log4j2.xml</td><td>修改</td><td class="num">12</td><td class="num">2</td></tr>
+              <tr class="alt"><td class="mono" style="font-size:11px">docs/user-guide.md</td><td>修改</td><td class="num">9</td><td class="num">0</td></tr>
+              <tr><td class="mono" style="font-size:11px">activemq-unit-tests/.../TransportTest.java</td><td>新增</td><td class="num">62</td><td class="num">0</td></tr>
+              <tr class="alt"><td class="mono" style="font-size:11px">activemq-core/src/.../LegacyCodec.java</td><td>删除</td><td class="num">0</td><td class="num">4</td></tr>
+              <tr><td class="mono" style="font-size:11px">broker/src/main/java/.../Util.java</td><td>重命名</td><td class="num">18</td><td class="num">0</td></tr>
+              <tr class="alt"><td class="mono" style="font-size:11px">assembly/src/main/resources/.../logo.png</td><td>修改</td><td class="num">—</td><td class="num">—</td></tr>
+            </tbody>
+          </table>
+          <div class="panel-note">变更类型：新增 / 修改 / 删除 / 重命名 / 二进制（已排除）。第 10 行为二进制文件，新增删除行数以「—」表示并标记排除。</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">提交数据质量摘要 <span class="hd-note">当前筛选范围</span></div>
+          <div class="panel-bd">
+            <div class="bars">
+              <div class="bar-row"><span class="bar-lb">纳入建模提交</span><span class="bar-track"><span class="bar-fill" style="display:block;width:92%"></span></span><span class="bar-val">19755 条（98.8%）</span></div>
+              <div class="bar-row"><span class="bar-lb">已排除（超阈值）</span><span class="bar-track"><span class="bar-fill" style="display:block;width:8%"></span></span><span class="bar-val">250 条（1.2%）</span></div>
+              <div class="bar-row"><span class="bar-lb">merge 提交</span><span class="bar-track"><span class="bar-fill" style="display:block;width:5%"></span></span><span class="bar-val">142 条</span></div>
+              <div class="bar-row"><span class="bar-lb">已标注 BIC</span><span class="bar-track"><span class="bar-fill" style="display:block;width:12%"></span></span><span class="bar-val">2211 条</span></div>
+              <div class="bar-row"><span class="bar-lb">无法定责行数</span><span class="bar-track"><span class="bar-fill" style="display:block;width:3%"></span></span><span class="bar-val">142 行</span></div>
+            </div>
+            <div class="axis-cap">上图均为占位条形，仅表达数量级对比，不代表最终统计结果。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 05 ==================== -->
+<section class="screen" id="s5">
+  <div class="screen-title">屏 05 / 09 · 特征与样本集构建</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">算法工程师</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">从「屏 04 提交浏览与数据质量」点击「进入样本构建」进入；或从模型训练页需要新建样本集时进入</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">勾选 Kamei 14 维代码变更度量元，配置过滤规则与数据集切分策略，生成带版本号的训练样本集并查看标签分布是否健康</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">左侧 14 维特征开关列表（勾选框 + 特征代号 + 中文名 + 分组）、右侧样本集配置（时间范围、过滤规则、切分策略、随机种子）、样本集摘要卡 4 个、标签分布占位条形图、底部样本集版本列表、<b>生成样本集</b>与<b>另存为新版本</b>按钮</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">生成成功 → 摘要卡与版本列表就地刷新，并提示「前往模型训练」跳转「屏 06 模型训练与评估」；点击版本行「查看构成」→ 展开该版本的过滤规则快照（只读）</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 过滤后正样本率低于 1% 或正样本数低于 50 → 给出<b>明确警告</b>（黄色告警条 + 高亮正样本率数值），要求人工确认后才可继续，不静默继续生成</span>
+        <span class="ex">② 某特征非空率低于 90% → 该特征行标记 <b>LOW_COVERAGE</b> 并给出建议（更换数据源时间窗口 / 取消勾选该特征 / 先补充采集）</span>
+        <span class="ex">③ 未勾选任何特征 → 「生成样本集」按钮置灰，并提示至少选择 1 个特征</span>
+        <span class="ex">④ 时间范围内无提交数据 → 提示「该时间范围无可用提交」，摘要卡显示「—」而不是 0，避免误判为空样本集</span>
+      </div></div>
+    </div>
+
+    <div class="row">
+      <div class="col-l">
+        <div class="panel">
+          <div class="panel-hd">Kamei 14 维特征开关 <span class="hd-note">已选 14 / 14</span></div>
+          <div class="panel-bd">
+            <div class="feat-group">
+              <div class="feat-group-hd">变更规模组（Dimension: Diffusion / Size）</div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">LA</span><span class="feat-name">新增行数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">LD</span><span class="feat-name">删除行数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">NF</span><span class="feat-name">变更文件数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">Entropy</span><span class="feat-name">变更熵（变更在文件间分布的离散程度）</span><span class="feat-tag">非空率 99.6%</span></div>
+            </div>
+            <div class="feat-group">
+              <div class="feat-group-hd">变更目的组（Dimension: Purpose）</div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">FIX</span><span class="feat-name">是否缺陷修复提交</span><span class="feat-tag">非空率 100%</span></div>
+            </div>
+            <div class="feat-group">
+              <div class="feat-group-hd">代码历史组（Dimension: History）</div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">ND</span><span class="feat-name">涉及开发者数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">NFC</span><span class="feat-name">文件历史修改次数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">NS</span><span class="feat-name">修改子系统数</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">NUC</span><span class="feat-name">独立修改次数（本次涉及文件在历史中被独立修改的次数）</span><span class="feat-tag">非空率 98.2%</span></div>
+            </div>
+            <div class="feat-group">
+              <div class="feat-group-hd">经验组（Dimension: Experience）</div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">AEXP</span><span class="feat-name">作者平均经验（作者历史提交的平均变更规模）</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">DEXP</span><span class="feat-name">提交者经验（累计提交数）</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">REXP</span><span class="feat-name">近期经验（最近一段时间内的提交数）</span><span class="feat-tag">非空率 100%</span></div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">SEXP</span><span class="feat-name">子系统经验（在该子系统的历史提交数）</span><span class="feat-tag" style="color:#424242;font-weight:bold">LOW_COVERAGE 非空率 86.4%</span></div>
+            </div>
+            <div class="feat-group" style="margin-bottom:0">
+              <div class="feat-group-hd">文件历史组（Dimension: Age）</div>
+              <div class="feat-row"><input type="checkbox" checked><span class="feat-code">AGE</span><span class="feat-name">文件距上次修改时间</span><span class="feat-tag">非空率 97.1%</span></div>
+            </div>
+            <div class="err-text" style="margin-top:8px">覆盖度提示：SEXP 非空率 86.4% 低于 90% 阈值，已标记 LOW_COVERAGE。建议：延长采集时间窗口以积累子系统历史，或取消勾选该特征后重新生成样本集。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-r">
+        <div class="panel">
+          <div class="panel-hd">样本集配置</div>
+          <div class="panel-bd">
+            <div class="form-grid one">
+              <div class="field"><span class="field-lb">时间范围</span><input class="inp" type="text" value="2015-01-01 ~ 2021-12-31"></div>
+              <div class="field"><span class="field-lb">仓库</span><select class="inp"><option>Apache ActiveMQ</option><option>Apache Lucene</option></select></div>
+            </div>
+            <div style="margin:10px 0 4px;font-size:12px;font-weight:bold">过滤规则</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label class="chk-line"><input type="checkbox" checked> 排除 merge 提交（父提交数 ≥ 2）<span class="hint">已排除 142 条</span></label>
+              <label class="chk-line"><input type="checkbox" checked> 排除机器人账号<span class="hint">已排除 96 条</span></label>
+              <label class="chk-line"><input type="checkbox" checked> 排除零变更提交<span class="hint">已排除 218 条</span></label>
+              <label class="chk-line"><input type="checkbox" checked> 排除超阈值变更（单文件 &gt; 5000 行 / 二进制文件）<span class="hint">已排除 250 条</span></label>
+            </div>
+            <div style="margin:12px 0 4px;font-size:12px;font-weight:bold">切分策略</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label class="chk-line"><input type="radio" name="split" checked> 时间切分 6:2:2（按提交时间先后，避免未来信息泄漏）</label>
+              <label class="chk-line"><input type="radio" name="split"> 前向滚动切分（按时间窗口滚动训练 / 验证）</label>
+              <label class="chk-line"><input type="radio" name="split"> 随机切分（仅用于对照实验，需显式确认）</label>
+            </div>
+            <div class="form-grid" style="margin-top:12px">
+              <div class="field"><span class="field-lb">随机种子</span><input class="inp" type="text" value="42"></div>
+              <div class="field"><span class="field-lb">正样本权重</span><input class="inp" type="text" value="auto"></div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+              <button class="btn btn-primary">生成样本集</button>
+              <button class="btn btn-ghost">另存为新版本</button>
+              <button class="btn btn-ghost">前往模型训练</button>
+            </div>
+            <div class="err-text" style="margin-top:8px">告警占位：过滤后正样本率 12.0%（≥ 1%）且正样本数 2211（≥ 50），满足继续条件；若低于阈值将在此处显示拦截性警告并要求人工确认。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="card-k">总样本数</div><div class="card-v">18432 <small>条</small></div></div>
+      <div class="card"><div class="card-k">正样本数（缺陷引入提交 BIC）</div><div class="card-v">2211 <small>条</small></div></div>
+      <div class="card"><div class="card-k">正样本率</div><div class="card-v">12.0% <small>类别不平衡</small></div></div>
+      <div class="card"><div class="card-k">训练 / 验证 / 测试</div><div class="card-v" style="font-size:16px">11059 / 3686 / 3687</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">标签分布 <span class="hd-note">样本集 v3 ｜ 正负样本比例与各切分集合分布（占位条形图）</span></div>
+      <div class="panel-bd">
+        <div class="bars">
+          <div class="bar-row"><span class="bar-lb">负样本（非 BIC）</span><span class="bar-track"><span class="bar-fill" style="display:block;width:88%"></span></span><span class="bar-val">16221 条 ｜ 88.0%</span></div>
+          <div class="bar-row"><span class="bar-lb">正样本（BIC）</span><span class="bar-track"><span class="bar-fill plain" style="display:block;width:12%"></span></span><span class="bar-val">2211 条 ｜ 12.0%</span></div>
+          <div class="bar-row"><span class="bar-lb">训练集</span><span class="bar-track"><span class="bar-fill" style="display:block;width:60%"></span></span><span class="bar-val">11059 条 ｜ 60%</span></div>
+          <div class="bar-row"><span class="bar-lb">验证集</span><span class="bar-track"><span class="bar-fill" style="display:block;width:20%"></span></span><span class="bar-val">3686 条 ｜ 20%</span></div>
+          <div class="bar-row"><span class="bar-lb">测试集</span><span class="bar-track"><span class="bar-fill" style="display:block;width:20%"></span></span><span class="bar-val">3687 条 ｜ 20%</span></div>
+        </div>
+        <div class="axis-cap">横轴为条形容器，仅表达比例关系；真实实现中此处由前端图表组件按标签与数据集分组渲染柱状/环形图。（占位，不含真实图表脚本）</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">样本集版本列表 <span class="hd-note">（共 3 个版本，v3 为当前使用版本）</span></div>
+      <table class="tbl">
+        <colgroup><col style="width:100px"><col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:120px"><col style="width:120px"><col style="width:200px"><col style="width:140px"></colgroup>
+        <thead><tr><th>版本号</th><th>样本量</th><th>正样本率</th><th>创建人</th><th>状态</th><th>被引用次数</th><th>特征组合</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td class="mono">dataset-v3</td><td class="num">18432</td><td class="num">12.0%</td><td>管理*</td><td><span class="pill pill-dark">使用中</span></td><td class="num">4 次</td><td>Kamei 14 维（全选）</td><td><div class="ops"><button class="btn btn-ghost">查看构成</button><button class="btn btn-ghost">生成副本</button></div></td></tr>
+          <tr><td class="mono">dataset-v2</td><td class="num">16380</td><td class="num">9.4%</td><td>管理*</td><td><span class="pill pill-mid">已归档</span></td><td class="num">2 次</td><td>Kamei 14 维（不含 SEXP）</td><td><div class="ops"><button class="btn btn-ghost">查看构成</button><button class="btn btn-ghost">生成副本</button></div></td></tr>
+          <tr class="alt"><td class="mono">dataset-v1</td><td class="num">9210</td><td class="num">7.8%</td><td>管理*</td><td><span class="pill">已归档</span></td><td class="num">0 次</td><td>Kamei 8 维（规模 + 目的 + 历史）</td><td><div class="ops"><button class="btn btn-ghost">查看构成</button><button class="btn btn-ghost">生成副本</button></div></td></tr>
+        </tbody>
+      </table>
+      <div class="panel-note">版本号规则：dataset-v&lt;序号&gt;，一经生成不可修改，仅可生成副本后调整。被引用次数 = 引用该样本集版本的模型版本数量，被引用的样本集不可删除。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 06 ==================== -->
+<section class="screen" id="s6">
+  <div class="screen-title">屏 06 / 09 · 模型训练与评估</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">算法工程师（负责模型训练、对比、发布与回滚）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">从「屏 05 特征与样本集构建」点击「前往模型训练」进入；或从主导航「模型训练与评估」进入</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">基于选定样本集版本训练并对比不少于 8 种模型（经典机器学习 6 种 + 深度学习 2 种），用 Effort-unaware 与 Effort-aware 两类指标评估，并把达标模型发布为可用预测服务</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">训练任务配置表单（样本集版本 / 算法 / 超参数：树数量·最大深度·学习率·正样本权重 / 随机种子 / 评估协议）、模型清单表格、Effort-aware 曲线图、模型版本列表及其「发布」「回滚」操作</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">点击模型行 → 就地展开指标明细与混淆矩阵占位；「发布」成功后该模型的版本状态变为 PRODUCTION，<b>屏 07 / 屏 08 的在线预测立刻切换到该版本</b>；「回滚」→ 二次确认后切回上一个 PRODUCTION 版本</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 选择需要语义特征的模型（如 LSTM）但所选样本集版本不含语义特征 → 提交训练时校验失败，提示「请更换包含语义特征的样本集版本」，不消耗训练资源</span>
+        <span class="ex">② Popt 落在 (-1, 1] 之外 → 判定为无效评估结果，<b>报错并拒绝落库</b>，而不是记录一条无意义的指标</span>
+        <span class="ex">③ 发布未通过评估门槛的模型 → 默认阻止发布；若强制发布必须填写理由（理由写入变更记录并在看板标注为「例外发布」）</span>
+        <span class="ex">④ 训练任务失败或超时 → 任务标记为「训练失败」并保留日志入口，不生成模型版本记录</span>
+      </div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">训练任务配置</div>
+      <div class="panel-bd">
+        <div class="form-grid three">
+          <div class="field"><span class="field-lb">样本集版本</span><select class="inp"><option>dataset-v3（18432 条 ｜ 正样本率 12.0%）</option><option>dataset-v2（16380 条 ｜ 正样本率 9.4%）</option></select></div>
+          <div class="field"><span class="field-lb">算法</span><select class="inp"><option>XGBoost</option><option>LightGBM</option><option>Random Forest</option><option>Logistic Regression</option><option>Naive Bayes</option><option>KNN</option><option>MLP</option><option>LSTM</option></select></div>
+          <div class="field"><span class="field-lb">评估协议</span><select class="inp"><option>时间切分 6:2:2（Effort-unaware + Effort-aware）</option><option>前向滚动（Effort-aware 为主）</option></select></div>
+          <div class="field"><span class="field-lb">树数量</span><input class="inp" type="text" value="600"></div>
+          <div class="field"><span class="field-lb">最大深度</span><input class="inp" type="text" value="6"></div>
+          <div class="field"><span class="field-lb">学习率</span><input class="inp" type="text" value="0.05"></div>
+          <div class="field"><span class="field-lb">正样本权重</span><input class="inp" type="text" value="8.0"></div>
+          <div class="field"><span class="field-lb">随机种子</span><input class="inp" type="text" value="42"></div>
+          <div class="field"><span class="field-lb">&nbsp;</span><span></span></div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary">开始训练</button>
+          <button class="btn btn-ghost">批量对比全部算法</button>
+          <span class="hint">评估指标：Effort-unaware → AUC / F1 / Precision / Recall / MCC；Effort-aware → Popt / Recall@20%Effort / AUCEC</span>
+        </div>
+        <div class="err-text" style="margin-top:8px">校验提示占位：所选算法为 LSTM（需要语义特征），当前样本集 dataset-v3 不含语义特征 → 提交校验失败，请更换样本集版本。</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">模型清单 <span class="hd-note">（2 个模型族 ｜ 共 8 个模型 ｜ 按 Recall@20%Effort 倒序 ｜ 加粗行为本模型）</span></div>
+      <table class="tbl">
+        <colgroup>
+          <col style="width:180px"><col style="width:130px"><col style="width:100px"><col style="width:90px"><col style="width:90px">
+          <col style="width:90px"><col style="width:170px"><col style="width:396px">
+        </colgroup>
+        <thead>
+          <tr><th>算法</th><th>模型族</th><th>状态</th><th>AUC</th><th>F1</th><th>MCC</th><th>Recall@20%Effort</th><th>是否支持归因解释</th></tr>
+        </thead>
+        <tbody>
+          <tr class="hl"><td>XGBoost（本模型）</td><td>经典机器学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.79</td><td class="num">0.46</td><td class="num">0.31</td><td class="num best">0.41</td><td>是（树模型增益 / SHAP）</td></tr>
+          <tr><td>LightGBM</td><td>经典机器学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.78</td><td class="num">0.45</td><td class="num">0.30</td><td class="num">0.39</td><td>是（树模型增益 / SHAP）</td></tr>
+          <tr class="alt"><td>MLP</td><td>深度学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.77</td><td class="num">0.43</td><td class="num">0.28</td><td class="num">0.36</td><td>是（需语义特征，SHAP 近似）</td></tr>
+          <tr><td>Random Forest</td><td>经典机器学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.76</td><td class="num">0.41</td><td class="num">0.26</td><td class="num">0.33</td><td>是（树模型增益 / SHAP）</td></tr>
+          <tr class="alt"><td>LSTM</td><td>深度学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.74</td><td class="num">0.40</td><td class="num">0.25</td><td class="num">0.31</td><td>是（需语义特征，注意力权重）</td></tr>
+          <tr><td>Logistic Regression</td><td>经典机器学习</td><td><span class="pill pill-dark">已训练</span></td><td class="num">0.71</td><td class="num">0.34</td><td class="num">0.19</td><td class="num">0.22</td><td>是（系数线性归因）</td></tr>
+          <tr class="alt"><td>KNN</td><td>经典机器学习</td><td><span class="pill pill-mid">已训练</span></td><td class="num">0.70</td><td class="num">0.31</td><td class="num">0.16</td><td class="num">0.20</td><td>否（无稳定归因）</td></tr>
+          <tr><td>Naive Bayes</td><td>经典机器学习</td><td><span class="pill pill-mid">已训练</span></td><td class="num">0.68</td><td class="num">0.29</td><td class="num">0.14</td><td class="num">0.18</td><td>否（无稳定归因）</td></tr>
+        </tbody>
+      </table>
+      <div class="panel-note">说明：所有 AUC 落在 0.68 ~ 0.79 的合理区间；「Recall@20%Effort」最优行为 XGBoost（0.41），即屏 07 / 屏 08 在线预测所用的 v7 版本。指标均为占位示例数据，非真实实验结果。</div>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-title">Effort-aware 曲线（累计评审代价 — 缺陷召回率）<span class="sub">样本集 dataset-v3 ｜ 测试集 3687 条 ｜ 模型 XGBoost v7 ｜ 占位示意图</span></div>
+      <div class="legend">
+        <span><i></i>本模型（XGBoost v7）</span>
+        <span><i class="dash"></i>随机排序基线</span>
+        <span><i class="light"></i>按变更规模排序基线</span>
+        <span><i class="gray"></i>20% 评审代价参考线</span>
+      </div>
+      <div class="chart-flex">
+        <div class="y-axis">
+          <span style="top:0px">100</span>
+          <span style="top:60px">80</span>
+          <span style="top:120px">60</span>
+          <span style="top:180px">40</span>
+          <span style="top:240px">20</span>
+          <span style="top:300px">0</span>
+        </div>
+        <div>
+          <div class="plot p560">
+            <div class="gridbg"></div>
+            <!-- 20% 评审代价参考线（x = 112px） -->
+            <div class="seg dash" style="left:112px;top:0px;width:300px;transform:rotate(90deg)"></div>
+            <!-- 按变更规模排序基线（浅灰实线） -->
+            <div class="seg light thick" style="left:0px;top:299px;width:127px;transform:rotate(-28.2deg)"></div>
+            <div class="seg light thick" style="left:112px;top:239px;width:247px;transform:rotate(-25.1deg)"></div>
+            <div class="seg light thick" style="left:336px;top:134px;width:236px;transform:rotate(-18.5deg)"></div>
+            <div class="dot light" style="left:109px;top:237px"></div>
+            <div class="dot light" style="left:333px;top:132px"></div>
+            <!-- 随机排序基线（虚线，对角线） -->
+            <div class="seg dash" style="left:0px;top:299px;width:636px;transform:rotate(-28.2deg)"></div>
+            <!-- 本模型（实线折线） -->
+            <div class="seg" style="left:0px;top:299px;width:106px;transform:rotate(-58.1deg)"></div>
+            <div class="seg" style="left:56px;top:209px;width:65px;transform:rotate(-30.5deg)"></div>
+            <div class="seg" style="left:112px;top:176px;width:129px;transform:rotate(-29.4deg)"></div>
+            <div class="seg" style="left:224px;top:113px;width:122px;transform:rotate(-23.2deg)"></div>
+            <div class="seg" style="left:336px;top:65px;width:120px;transform:rotate(-20.6deg)"></div>
+            <div class="seg" style="left:448px;top:23px;width:115px;transform:rotate(-12.1deg)"></div>
+            <div class="dot" style="left:52px;top:206px"></div>
+            <div class="dot" style="left:108px;top:173px"></div>
+            <div class="dot" style="left:220px;top:110px"></div>
+            <div class="dot" style="left:332px;top:62px"></div>
+            <div class="dot" style="left:444px;top:20px"></div>
+            <!-- 图内结果框 -->
+            <div class="resultbox" style="left:20px;top:14px">Recall@20%Effort = 0.41</div>
+            <div class="resultbox" style="left:20px;top:48px">Popt = 0.71</div>
+          </div>
+          <div class="x-axis" style="width:560px">
+            <span style="left:0px">0</span>
+            <span style="left:112px">20</span>
+            <span style="left:224px">40</span>
+            <span style="left:336px">60</span>
+            <span style="left:448px">80</span>
+            <span style="left:560px">100</span>
+          </div>
+          <div class="axis-cap">X 轴：累计评审代价占比 (%)　｜　Y 轴：缺陷召回率 (%)　｜　曲线越靠左上，说明在同样的评审预算下能捞回更多缺陷引入提交。</div>
+        </div>
+      </div>
+      <div class="axis-cap">读图说明：本模型在评审代价 20% 处即可召回 41% 的缺陷引入提交（虚线参考线交点为 0.41），明显高于随机排序基线（20% → 约 20%）与按变更规模排序基线（20% → 约 22%）。Popt = 0.71 表示相对最优排序可获取的代价收益比例，取值范围 (-1, 1]。</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">模型版本列表 <span class="hd-note">（PRODUCTION 行为当前线上服务版本，高亮显示）</span></div>
+      <table class="tbl">
+        <colgroup><col style="width:80px"><col style="width:160px"><col style="width:120px"><col style="width:380px"><col style="width:110px"><col style="width:160px"><col style="width:236px"></colgroup>
+        <thead><tr><th>版本号</th><th>算法</th><th>状态</th><th>指标摘要</th><th>发布人</th><th>发布时间</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td class="mono">v7</td><td>XGBoost</td><td><span class="pill pill-dark">PRODUCTION</span></td><td>AUC 0.79 ｜ F1 0.46 ｜ MCC 0.31 ｜ Recall@20%Effort 0.41 ｜ Popt 0.71</td><td>管理*</td><td class="nowrap">2021-12-31 02:14</td><td><div class="ops"><button class="btn" disabled>发布</button><button class="btn btn-ghost">回滚</button></div></td></tr>
+          <tr><td class="mono">v6</td><td>LightGBM</td><td><span class="pill pill-mid">CANDIDATE</span></td><td>AUC 0.78 ｜ F1 0.45 ｜ MCC 0.30 ｜ Recall@20%Effort 0.39 ｜ Popt 0.68</td><td>管理*</td><td class="nowrap">2021-12-28 21:40</td><td><div class="ops"><button class="btn">发布</button><button class="btn btn-ghost">回滚</button></div></td></tr>
+          <tr class="alt"><td class="mono">v5</td><td>Random Forest</td><td><span class="pill">ARCHIVED</span></td><td>AUC 0.76 ｜ F1 0.41 ｜ MCC 0.26 ｜ Recall@20%Effort 0.33 ｜ Popt 0.59</td><td>管理*</td><td class="nowrap">2021-12-20 15:08</td><td><div class="ops"><button class="btn">发布</button><button class="btn btn-ghost">回滚</button></div></td></tr>
+          <tr><td class="mono">v4</td><td>Logistic Regression</td><td><span class="pill">ARCHIVED</span></td><td>AUC 0.71 ｜ F1 0.34 ｜ MCC 0.19 ｜ Recall@20%Effort 0.22 ｜ Popt 0.41</td><td>管理*</td><td class="nowrap">2021-12-12 10:22</td><td><div class="ops"><button class="btn">发布</button><button class="btn btn-ghost">回滚</button></div></td></tr>
+        </tbody>
+      </table>
+      <div class="panel-note">状态取值：PRODUCTION（线上唯一生效版本）/ CANDIDATE（通过评估待发布）/ ARCHIVED（历史版本，可回滚）。发布门槛占位：AUC ≥ 0.70 且 Recall@20%Effort ≥ 0.25 且 Popt ∈ (-1, 1]。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 07 ==================== -->
+<section class="screen" id="s7">
+  <div class="screen-title">屏 07 / 09 · 风险提交列表 ★核心页</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">代码评审员（主用户）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">以代码评审员身份登录后的默认首页；或由「屏 09 缺陷引入趋势看板」点击某数据点下钻进入（携带时间范围与仓库筛选条件）</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">在有限的评审预算内，按缺陷概率从高到低审查待评审提交，把预算花在风险最高的提交上，并逐条给出处置结论</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">筛选器（仓库 / 分支 / 时间范围 / 作者 / 处置状态 / 排序方式 / 关键词）、<b>缺陷概率阈值滑块（当前值 0.50）</b>、评审预算行（预算输入框 + 按预算选取 + 覆盖率预估）、4 个统计卡、批量操作条（批量标记已评审 / 标记为误报 / 指派 / 导出 CSV）、主表格 10 列（复选框 / 短哈希 / 作者 / 提交时间 / 变更文件数 / 新增·删除行 / 缺陷概率 / 推荐优先级 / 处置状态 / 操作）、分页器</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">点击短哈希或「详情」→ 跳转「屏 08 提交详情与归因解释」（携带提交哈希，返回时保留本页筛选与分页状态）；「按预算选取」→ 按概率降序累加变更行数至预算上限，自动勾选命中的提交并提示覆盖率；「导出 CSV」→ 导出当前筛选结果或当前选中项</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 筛选无结果 → 表格区显示空状态提示（「没有符合条件的提交」）与<b>「清除筛选条件」</b>按钮，统计卡显示 0 而不是保留上一次的数字</span>
+        <span class="ex">② 模型服务不可用 → 页面顶部显示提示条「预测服务暂不可用，以下为最近一次结果」，同时给出结果生成时间与只读标记，<b>不出现空白页或报错堆栈</b></span>
+        <span class="ex">③ 只读角色（如研发团队负责人）访问 → 所有处置类按钮（批量标记已评审 / 标记为误报 / 指派 / 单行处置）均为禁用态，仅保留筛选、查看详情与导出</span>
+        <span class="ex">④ 预算小于单条最低变更行数 → 「按预算选取」提示「预算不足以覆盖任何提交，请提高预算」并保持原选择不变</span>
+      </div></div>
+    </div>
+
+    <div class="alertbar">异常态示意（非默认展示）：⚠ 预测服务暂不可用，以下为最近一次结果 ｜ 结果生成时间 2021-12-31 02:14 ｜ 模型版本 v7 ｜ 当前列表为只读快照</div>
+
+    <div class="filters">
+      <div class="fitem"><span class="flb">仓库</span><select class="inp" style="width:170px"><option>Apache ActiveMQ</option><option>Apache Lucene</option></select></div>
+      <div class="fitem"><span class="flb">分支</span><select class="inp" style="width:110px"><option>main</option><option>develop</option></select></div>
+      <div class="fitem"><span class="flb">时间范围</span><input class="inp" style="width:150px" type="text" value="2021-06-01 ~ 2021-06-30"></div>
+      <div class="fitem"><span class="flb">作者</span><input class="inp" style="width:100px" type="text" placeholder="如 张*"></div>
+      <div class="fitem"><span class="flb">处置状态</span><select class="inp" style="width:110px"><option>全部</option><option>待评审</option><option>已评审</option><option>误报</option></select></div>
+      <div class="fitem"><span class="flb">排序方式</span><select class="inp" style="width:150px"><option>缺陷概率从高到低</option><option>变更规模从大到小</option><option>提交时间从新到旧</option></select></div>
+      <div class="fitem"><span class="flb">关键词</span><input class="inp" style="width:150px" type="text" placeholder="提交信息 / 缺陷单号"></div>
+      <div class="fitem" style="min-width:330px">
+        <span class="flb">缺陷概率阈值：当前值 0.50</span>
+        <div style="display:flex;align-items:center;gap:8px;height:26px">
+          <span class="hint">0.00</span>
+          <input class="slider" type="range" min="0" max="1" step="0.01" value="0.5">
+          <span class="hint">1.00</span>
+        </div>
+      </div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-primary">应用筛选</button></div>
+      <div class="fitem"><span class="flb">&nbsp;</span><button class="btn btn-ghost">重置</button></div>
+    </div>
+
+    <div class="budget">
+      <span style="font-size:12px">本次可用评审预算 =</span>
+      <input class="inp" style="width:90px" type="text" value="500">
+      <span style="font-size:12px">行</span>
+      <button class="btn btn-primary">按预算选取</button>
+      <span class="hint">预计覆盖该窗口 78% 的缺陷引入提交（按缺陷概率降序累加变更行数至预算上限 500 行）</span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="card-k">待评审提交</div><div class="card-v">1284 <small>条</small></div></div>
+      <div class="card"><div class="card-k">高风险（概率 ≥ 0.70）</div><div class="card-v">137 <small>条</small></div></div>
+      <div class="card"><div class="card-k">预计覆盖率</div><div class="card-v">78% <small>当前预算下</small></div></div>
+      <div class="card"><div class="card-k">累计评审代价</div><div class="card-v">498 <small>行</small></div></div>
+    </div>
+
+    <div class="batchbar">
+      <span class="selinfo">已选 3 条（合计 1024 行变更）</span>
+      <button class="btn">批量标记已评审</button>
+      <button class="btn">标记为误报</button>
+      <button class="btn">指派</button>
+      <button class="btn btn-ghost">导出 CSV</button>
+      <span class="hint">只读角色下上述按钮均为禁用态（见异常态 ③）</span>
+    </div>
+
+    <table class="tbl">
+      <colgroup>
+        <col style="width:44px"><col style="width:96px"><col style="width:70px"><col style="width:130px"><col style="width:110px">
+        <col style="width:130px"><col style="width:150px"><col style="width:110px"><col style="width:110px"><col style="width:296px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>☐</th><th>短哈希</th><th>作者</th><th>提交时间</th><th>变更文件数</th><th>新增·删除行</th>
+          <th>缺陷概率</th><th>推荐优先级</th><th>处置状态</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="hl">
+          <td class="ctr"><input type="checkbox" checked></td><td class="mono">a1b2c3d</td><td>张*</td><td class="nowrap" style="font-size:11px">2021-06-14 10:23</td><td class="num">14</td><td class="nowrap">+320 / -45</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:87%"></i></span><b>0.87</b></td><td class="ctr"><span class="pill pill-dark">P0</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr>
+          <td class="ctr"><input type="checkbox" checked></td><td class="mono">7f8e9d0</td><td>李*</td><td class="nowrap" style="font-size:11px">2021-06-14 09:41</td><td class="num">11</td><td class="nowrap">+268 / -30</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:81%"></i></span><b>0.81</b></td><td class="ctr"><span class="pill pill-dark">P0</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr class="alt">
+          <td class="ctr"><input type="checkbox" checked></td><td class="mono">3c4d5e6</td><td>王*</td><td class="nowrap" style="font-size:11px">2021-06-13 18:02</td><td class="num">9</td><td class="nowrap">+210 / -12</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:76%"></i></span><b>0.76</b></td><td class="ctr"><span class="pill pill-mid">P1</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr>
+          <td class="ctr"><input type="checkbox"></td><td class="mono">9b0a1f2</td><td>赵*</td><td class="nowrap" style="font-size:11px">2021-06-13 15:30</td><td class="num">7</td><td class="nowrap">+180 / -64</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:71%"></i></span><b>0.71</b></td><td class="ctr"><span class="pill pill-mid">P1</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr class="alt">
+          <td class="ctr"><input type="checkbox"></td><td class="mono">5d6e7f8</td><td>陈*</td><td class="nowrap" style="font-size:11px">2021-06-13 11:12</td><td class="num">6</td><td class="nowrap">+142 / -20</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:65%"></i></span><b>0.65</b></td><td class="ctr"><span class="pill">P2</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr>
+          <td class="ctr"><input type="checkbox"></td><td class="mono">2a3b4c5</td><td>刘*</td><td class="nowrap" style="font-size:11px">2021-06-12 20:55</td><td class="num">5</td><td class="nowrap">+96 / -8</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:58%"></i></span><b>0.58</b></td><td class="ctr"><span class="pill">P2</span></td><td class="ctr"><span class="pill pill-mid">待评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">标记已评审</button><button class="btn btn-ghost">误报</button></div></td>
+        </tr>
+        <tr class="alt">
+          <td class="ctr"><input type="checkbox"></td><td class="mono">8e9f0a1</td><td>周*</td><td class="nowrap" style="font-size:11px">2021-06-12 16:20</td><td class="num">4</td><td class="nowrap">+64 / -15</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:44%"></i></span><b>0.44</b></td><td class="ctr"><span class="pill">P3</span></td><td class="ctr"><span class="pill">已评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">查看处置</button></div></td>
+        </tr>
+        <tr>
+          <td class="ctr"><input type="checkbox"></td><td class="mono">4b5c6d7</td><td>吴*</td><td class="nowrap" style="font-size:11px">2021-06-12 10:05</td><td class="num">3</td><td class="nowrap">+48 / -6</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:39%"></i></span><b>0.39</b></td><td class="ctr"><span class="pill">P3</span></td><td class="ctr"><span class="pill">已评审</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">查看处置</button></div></td>
+        </tr>
+        <tr class="alt">
+          <td class="ctr"><input type="checkbox"></td><td class="mono">6f7a8b9</td><td>郑*</td><td class="nowrap" style="font-size:11px">2021-06-11 17:44</td><td class="num">2</td><td class="nowrap">+22 / -3</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:22%"></i></span><b>0.22</b></td><td class="ctr"><span class="pill">P3</span></td><td class="ctr"><span class="pill">误报</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">撤销误报</button></div></td>
+        </tr>
+        <tr>
+          <td class="ctr"><input type="checkbox"></td><td class="mono">0c1d2e3</td><td>孙*</td><td class="nowrap" style="font-size:11px">2021-06-11 09:30</td><td class="num">1</td><td class="nowrap">+12 / -1</td>
+          <td class="nowrap"><span class="cellbar"><i style="width:11%"></i></span><b>0.11</b></td><td class="ctr"><span class="pill">P3</span></td><td class="ctr"><span class="pill">误报</span></td>
+          <td><div class="ops"><button class="btn">详情</button><button class="btn btn-ghost">撤销误报</button></div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="pager">
+      <span>共 1,284 条</span>
+      <span>第 1 / 129 页</span>
+      <span>每页
+        <select class="inp" style="width:70px;display:inline-block"><option>10 条</option><option>20 条</option><option>50 条</option></select>
+      </span>
+      <button class="btn btn-ghost" disabled>上一页</button>
+      <button class="btn">下一页</button>
+      <button class="btn btn-ghost">跳至首页</button>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">异常态示意 ①：筛选无结果（空状态）</div>
+          <div class="panel-bd" style="text-align:center;padding:26px 10px">
+            <div style="font-size:13px;font-weight:bold">没有符合条件的提交</div>
+            <div class="hint" style="margin:6px 0 12px">当前筛选：仓库 Apache ActiveMQ ｜ 分支 release-9.9 ｜ 时间范围 2021-06-01 ~ 2021-06-30 ｜ 阈值 0.50 ｜ 命中 0 条</div>
+            <button class="btn">清除筛选条件</button>
+          </div>
+          <div class="panel-note">空状态下统计卡同步归零，表格不保留上一次结果，避免评审员误判为「无风险提交」。</div>
+        </div>
+      </div>
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">异常态示意 ③：只读角色的处置按钮禁用态</div>
+          <div class="panel-bd">
+            <div class="ops" style="margin-bottom:8px">
+              <button class="btn" disabled>批量标记已评审</button>
+              <button class="btn" disabled>标记为误报</button>
+              <button class="btn" disabled>指派</button>
+              <button class="btn btn-ghost">导出 CSV</button>
+            </div>
+            <div class="ops">
+              <button class="btn" disabled>标记已评审</button>
+              <button class="btn" disabled>误报</button>
+              <button class="btn">详情</button>
+            </div>
+            <div class="hint" style="margin-top:8px">只读角色（研发团队负责人）可查看全部数据并导出，但不可写入任何处置结论；禁用态采用 #f7f7f7 底 + #9e9e9e 文字。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 08 ==================== -->
+<section class="screen" id="s8">
+  <div class="screen-title">屏 08 / 09 · 提交详情与归因解释</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">代码评审员（主用户）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">从「屏 07 风险提交列表」点击短哈希或「详情」进入，携带提交完整哈希；返回时恢复屏 07 的筛选与分页状态</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">查看该提交的改动内容与预测结论，读懂「为什么被判为高风险」的归因解释，并给出最终处置结论</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">左栏（约 720px）：提交元信息表 + diff 视图（新增行 #e0e0e0 底、删除行 #f7f7f7 底加删除线、行首 + / -）；右栏（约 480px）：预测结论卡（缺陷概率 0.87 / 风险等级 高 / 模型版本 v7 / 预测时间 / 特征快照）、归因解释双向条形图、可读解释文案；底部：处置区（三个单选 + 备注文本框 + 提交处置按钮）与处置历史表格</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">「提交处置」成功后处置历史表立即追加一行，并提示「返回列表」；归因条形图点击某一维 → 就地展开该特征的取值与历史分布说明；「重新生成解释」→ 触发解释重算（不计入预测概率）</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 该预测没有归因数据 → 仍展示缺陷概率与结论，归因区提示「本次预测未生成归因解释」并提供<b>「重新生成解释」</b>按钮，<b>不显示空白图表</b>或残缺坐标轴</span>
+        <span class="ex">② 对已处置提交再次处置 → <b>追加历史记录而非覆盖</b>，界面同时展示「最近一次处置」摘要与完整历史列表，处置结果不一致时给出差异提示</span>
+        <span class="ex">③ 提交 diff 过大（超过 5000 行）→ diff 区仅加载前 500 行并提示「已截断，完整内容请查看仓库」，归因解释照常展示</span>
+        <span class="ex">④ 特征快照缺失（样本集版本被归档导致无法复现）→ 提示「特征快照不可用」，保留概率与归因结论但标注为「历史结果，不可重算」</span>
+      </div></div>
+    </div>
+
+    <div class="row">
+      <div class="col720">
+        <div class="panel">
+          <div class="panel-hd">提交元信息</div>
+          <div class="panel-bd">
+            <div class="form-grid">
+              <div class="field"><span class="field-lb">完整哈希</span><span class="mono" style="font-size:11px">a1b2c3d4e5f60718293a4b5c6d7e8f9012345678</span></div>
+              <div class="field"><span class="field-lb">作者</span><span>张*</span></div>
+              <div class="field"><span class="field-lb">提交时间</span><span>2021-06-14 10:23（分支 main）</span></div>
+              <div class="field"><span class="field-lb">变更规模</span><span>14 个文件 ｜ 新增 320 行 ｜ 删除 45 行 ｜ 变更熵 2.31</span></div>
+              <div class="field"><span class="field-lb">关联缺陷单</span><span class="mono">AMQ-1234</span></div>
+              <div class="field"><span class="field-lb">提交信息</span><span>fix(broker): 修正连接状态校验时机</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">变更内容（diff 视图占位）<span class="hd-note">显示 1 / 14 个文件 ｜ 新增行 #e0e0e0 底、删除行 #f7f7f7 底加删除线</span></div>
+          <div class="diff">
+            <div class="diff-hd">broker/src/main/java/org/apache/activemq/broker/Transport.java　（修改 ｜ +86 / -12）</div>
+            <div class="diff-line hunk">@@ -118,9 +118,13 @@ 修正连接状态校验时机</div>
+            <div class="diff-line ctx"> <span class="ln">117</span>      public void start() throws Exception {</div>
+            <div class="diff-line del">-<span class="ln">118</span>          // 旧实现：在启动前同步校验连接状态</div>
+            <div class="diff-line del">-<span class="ln">119</span>          checkConnection();</div>
+            <div class="diff-line del">-<span class="ln">120</span>          super.start();</div>
+            <div class="diff-line add">+<span class="ln">118</span>          // 新实现：先记录时间戳，再异步校验并统计耗时</div>
+            <div class="diff-line add">+<span class="ln">119</span>          long startTs = System.currentTimeMillis();</div>
+            <div class="diff-line add">+<span class="ln">120</span>          checkConnectionAsync();</div>
+            <div class="diff-line add">+<span class="ln">121</span>          recordLatency(startTs);</div>
+            <div class="diff-line add">+<span class="ln">122</span>          super.start();</div>
+            <div class="diff-line ctx"> <span class="ln">123</span>      }</div>
+            <div class="diff-line hunk">@@ -204,6 +208,18 @@ 新增失败重试与日志</div>
+            <div class="diff-line ctx"> <span class="ln">207</span>      private void checkConnectionAsync() {</div>
+            <div class="diff-line add">+<span class="ln">208</span>          // 异步校验，失败时按退避策略重试 3 次</div>
+            <div class="diff-line add">+<span class="ln">209</span>          for (int i = 0; i &lt; 3; i++) {</div>
+            <div class="diff-line add">+<span class="ln">210</span>              if (probe()) { return; }</div>
+            <div class="diff-line add">+<span class="ln">211</span>              sleep(backoff(i));</div>
+            <div class="diff-line add">+<span class="ln">212</span>          }</div>
+            <div class="diff-line add">+<span class="ln">213</span>          logger.warn("连接校验重试均失败，进入降级模式");</div>
+            <div class="diff-line ctx"> <span class="ln">214</span>      }</div>
+          </div>
+          <div class="panel-note">diff 占位：文档要求行首显示 + / -，新增行用 #e0e0e0 底，删除行用 #f7f7f7 底并加删除线；真实实现中此处由前端代码高亮组件渲染，线框图不体现语法着色。</div>
+        </div>
+      </div>
+
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">预测结论</div>
+          <div class="panel-bd">
+            <div class="cards" style="margin-bottom:10px">
+              <div class="card" style="flex:0 0 150px"><div class="card-k">缺陷概率</div><div class="card-v">0.87</div></div>
+              <div class="card" style="flex:0 0 110px"><div class="card-k">风险等级</div><div class="card-v">高</div></div>
+            </div>
+            <div class="form-grid one">
+              <div class="field"><span class="field-lb">模型版本</span><span>v7（XGBoost，PRODUCTION）</span></div>
+              <div class="field"><span class="field-lb">预测时间</span><span>2021-12-31 02:14</span></div>
+              <div class="field"><span class="field-lb">特征快照</span><span class="mono" style="font-size:11px">8f3a…（点击查看 14 维取值）</span></div>
+              <div class="field"><span class="field-lb">阈值判定</span><span>0.87 ≥ 阈值 0.50 → 高风险</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">归因解释（SHAP 归因，中心为 0 基线的双向条形图）<span class="hd-note">正值提高风险 / 负值降低风险</span></div>
+          <div class="panel-bd">
+            <div class="attrib">
+              <div class="attrib-head"><span class="h-lb">特征</span><span class="h-ctr">← 降低风险　｜　提高风险 →</span><span class="h-val">贡献值</span></div>
+              <div class="attrib-row">
+                <span class="attrib-lb">NF 变更文件数</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar pos" style="width:130px"></span></span>
+                <span class="attrib-val">+0.30</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-lb">Entropy 变更熵</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar pos" style="width:91px"></span></span>
+                <span class="attrib-val">+0.21</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-lb">NS 修改子系统数</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar pos" style="width:52px"></span></span>
+                <span class="attrib-val">+0.12</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-lb">LA 新增行数</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar pos" style="width:35px"></span></span>
+                <span class="attrib-val">+0.08</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-lb">AGE 文件距上次修改</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar neg" style="width:61px"></span></span>
+                <span class="attrib-val">-0.14</span>
+              </div>
+              <div class="attrib-row">
+                <span class="attrib-lb">SEXP 子系统经验</span>
+                <span class="attrib-area"><span class="midaxis"></span><span class="attrib-bar neg" style="width:39px"></span></span>
+                <span class="attrib-val">-0.09</span>
+              </div>
+              <div class="axis-cap">基线 = 该模型在测试集上的平均预测值；条长按贡献值等比缩放（±0.30 对应最长条）。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hd">可读解释</div>
+          <div class="panel-bd">
+            <div style="border:1px solid #e0e0e0;background:#f7f7f7;padding:8px 10px;font-size:12px">
+              该提交修改 14 个文件、变更熵 2.31 偏高，且作者在本子系统历史提交较少，与历史上缺陷引入提交的特征分布接近。
+            </div>
+            <div class="hint" style="margin-top:8px">文案由模板按 Top 归因特征生成，模板变量：变更文件数、变更熵、作者子系统经验、风险等级、模型版本。文案为占位示例，不构成真实缺陷结论。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <div class="panel-hd">处置区 <span class="hd-note">（本提交当前状态：待评审）</span></div>
+      <div class="panel-bd">
+        <div style="display:flex;gap:26px;align-items:center;margin-bottom:10px">
+          <label class="chk-line"><input type="radio" name="disposal" checked> 确认为缺陷</label>
+          <label class="chk-line"><input type="radio" name="disposal"> 标记为误报</label>
+          <label class="chk-line"><input type="radio" name="disposal"> 已评审无需处置</label>
+        </div>
+        <div class="field"><span class="field-lb">备注</span><input class="inp" type="text" value="已核对 diff：异步校验缺少超时保护，确认为缺陷引入风险，已提 issue 跟踪。"></div>
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary">提交处置</button>
+          <button class="btn btn-ghost">重置</button>
+          <span class="hint">再次处置同一提交时，历史记录<b>追加</b>而不覆盖。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">处置历史 <span class="hd-note">（最近一次处置在最上方，历史记录保留全部处置轨迹）</span></div>
+      <table class="tbl">
+        <colgroup><col style="width:170px"><col style="width:120px"><col style="width:150px"><col style="width:806px"></colgroup>
+        <thead><tr><th>时间</th><th>处置人</th><th>处置结果</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr class="hl"><td class="nowrap">2021-12-31 09:12</td><td>评审*</td><td><span class="pill pill-dark">确认为缺陷</span></td><td>已核对 diff：异步校验缺少超时保护，确认为缺陷引入风险，已提 issue 跟踪。</td></tr>
+          <tr><td class="nowrap">2021-12-31 08:40</td><td>评审*</td><td><span class="pill pill-mid">已评审无需处置</span></td><td>初次评审认为属于正常重构，暂不处置；后续复核结论变更，见上一条记录。</td></tr>
+          <tr class="alt"><td class="nowrap">2021-12-31 08:05</td><td>管理*</td><td><span class="pill pill-mid">已评审无需处置</span></td><td>系统自动指派给模块负责人，负责人标记为已看。</td></tr>
+        </tbody>
+      </table>
+      <div class="panel-note">处置结果取值：确认为缺陷 / 标记为误报 / 已评审无需处置。处置结论回写后参与模型误报分析与阈值调优，不直接修改历史预测结果。</div>
+    </div>
+
+    <div class="row">
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">异常态示意 ①：本次预测未生成归因解释（不显示空白图表）</div>
+          <div class="panel-bd" style="text-align:center;padding:22px 10px">
+            <div style="font-size:13px;font-weight:bold">缺陷概率 0.64 ｜ 风险等级 中</div>
+            <div class="hint" style="margin:8px 0 12px">本次预测未生成归因解释（解释计算任务未完成或模型版本不支持）</div>
+            <button class="btn">重新生成解释</button>
+          </div>
+          <div class="panel-note">概率与结论照常展示并可使用；归因区以提示文案替代图表，避免出现只有坐标轴没有数据的空图。</div>
+        </div>
+      </div>
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">异常态示意 ④：特征快照不可用</div>
+          <div class="panel-bd">
+            <div class="err-text">特征快照 8f3a… 已不可用（生成该预测的样本集版本 dataset-v1 已归档）。</div>
+            <div class="hint" style="margin-top:8px">处置建议：仍可依据概率与归因结论做评审判断，但结果标注为「历史结果，不可重算」；如需重算，需先恢复对应样本集版本或使用当前版本重新预测。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 屏 09 ==================== -->
+<section class="screen" id="s9">
+  <div class="screen-title">屏 09 / 09 · 缺陷引入趋势看板</div>
+  <div class="screen-body">
+    <div class="anno">
+      <div class="anno-title">本屏标注</div>
+      <div class="anno-row"><div class="anno-k">角色：</div><div class="anno-v">研发团队负责人（支撑角色；算法工程师可查看，代码评审员无入口）</div></div>
+      <div class="anno-row"><div class="anno-k">进入条件：</div><div class="anno-v">以研发团队负责人身份登录后的默认首页；或从主导航「缺陷引入趋势看板」进入</div></div>
+      <div class="anno-row"><div class="anno-k">本屏主任务：</div><div class="anno-v">观察缺陷引入趋势与模型指标随版本的变化，定位高风险文件 / 作者 / 子系统，判断代码库质量走向并给出治理动作</div></div>
+      <div class="anno-row"><div class="anno-k">关键控件：</div><div class="anno-v">时间范围切换按钮组（近 30 天 / 近 90 天 / 近 12 个月）、折线图占位 1「缺陷引入趋势」、折线图占位 2「模型指标（按版本上线时点）」、三个并列排行表（Top 10 高风险文件 / 高风险作者 / 高风险子系统，均含「样本量」列）、顶部告警条</div></div>
+      <div class="anno-row"><div class="anno-k">交互跳转：</div><div class="anno-v">点击趋势图中的某个月份数据点 → 下钻到「屏 07 风险提交列表」并自动带入该时间范围；点击排行表中某一行 → 同样下钻屏 07（按文件 / 作者 / 子系统预置筛选条件）；点击模型指标图的版本切换标记 → 展示该版本的指标明细</div></div>
+      <div class="anno-row"><div class="anno-k">异常态：</div><div class="anno-v">
+        <span class="ex">① 选定时间范围无数据 → 图表区显示「该时间范围无数据」提示，但<b>保留坐标轴与网格</b>，避免页面塌陷或误读为「缺陷为零」</span>
+        <span class="ex">② 某周样本量低于 10 → 该数据点用浅色/虚线标示，并在旁注中说明「样本量不足（n=7），趋势仅供参考」，排行表中每行也必须展示「样本量」列以避免小样本误导</span>
+        <span class="ex">③ 告警阈值被突破 → 顶部告警条常驻显示并高亮数值；若告警条被关闭，需在下次进入时重新提示，不做永久隐藏</span>
+        <span class="ex">④ 所选时间范围内模型版本发生过切换 → 指标曲线在切换点处断开并以小三角标注，提示跨版本指标不可直接比较</span>
+      </div></div>
+    </div>
+
+    <div class="alertbar">⚠ 本周高风险提交数 27，已超过阈值 20 ｜ 统计窗口 2021-12-25 ~ 2021-12-31 ｜ 建议：优先复核高风险子系统 broker.session 的待评审提交</div>
+
+    <div class="batchbar">
+      <span class="selinfo">时间范围：</span>
+      <div class="btn-group">
+        <button class="btn">近 30 天</button>
+        <button class="btn on">近 90 天</button>
+        <button class="btn">近 12 个月</button>
+      </div>
+      <span class="hint">仓库：Apache ActiveMQ ｜ 分支：main ｜ 数据截至 2021-12-31 02:00</span>
+      <button class="btn btn-ghost">导出报表</button>
+      <button class="btn btn-ghost">刷新</button>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-title">缺陷引入趋势<span class="sub">X 轴：月份　｜　三条系列：缺陷引入提交数 / 总提交数 / 缺陷引入率　｜　占位示意图，非真实数据</span></div>
+      <div class="legend">
+        <span><i></i>缺陷引入提交数</span>
+        <span><i class="dash"></i>总提交数</span>
+        <span><i class="gray"></i>缺陷引入率</span>
+        <span><i class="light"></i>样本量不足的数据点（浅色标示）</span>
+      </div>
+      <div class="chart-flex">
+        <div class="y-axis s240">
+          <span style="top:0px">100</span>
+          <span style="top:48px">80</span>
+          <span style="top:96px">60</span>
+          <span style="top:144px">40</span>
+          <span style="top:192px">20</span>
+          <span style="top:240px">0</span>
+        </div>
+        <div>
+          <div class="plot p1080">
+            <div class="gridbg g270"></div>
+            <!-- 缺陷引入率（浅灰系列，归一化后位于下方） -->
+            <div class="seg light thick" style="left:0px;top:210px;width:271px;transform:rotate(-3.0deg)"></div>
+            <div class="seg light thick" style="left:270px;top:203px;width:271px;transform:rotate(1.5deg)"></div>
+            <div class="seg light thick" style="left:540px;top:203px;width:271px;transform:rotate(-3.6deg)"></div>
+            <div class="seg light thick" style="left:810px;top:186px;width:271px;transform:rotate(1.5deg)"></div>
+            <!-- 总提交数（虚线） -->
+            <div class="seg dash" style="left:0px;top:47px;width:272px;transform:rotate(-6.1deg)"></div>
+            <div class="seg dash" style="left:270px;top:18px;width:271px;transform:rotate(3.6deg)"></div>
+            <div class="seg dash" style="left:540px;top:35px;width:272px;transform:rotate(-5.5deg)"></div>
+            <div class="seg dash" style="left:810px;top:9px;width:271px;transform:rotate(3.0deg)"></div>
+            <!-- 缺陷引入提交数（实线） -->
+            <div class="seg" style="left:0px;top:167px;width:277px;transform:rotate(-12.5deg)"></div>
+            <div class="seg" style="left:270px;top:107px;width:272px;transform:rotate(5.1deg)"></div>
+            <div class="seg" style="left:540px;top:131px;width:277px;transform:rotate(-12.5deg)"></div>
+            <div class="seg" style="left:810px;top:71px;width:271px;transform:rotate(4.0deg)"></div>
+            <div class="dot" style="left:266px;top:104px"></div>
+            <div class="dot" style="left:536px;top:128px"></div>
+            <div class="dot" style="left:806px;top:68px"></div>
+            <!-- 样本量不足的数据点：浅色空心点 + 旁注 -->
+            <div class="dot light" style="left:536px;top:200px"></div>
+            <div class="resultbox" style="left:400px;top:150px;font-weight:normal">⚠ 该月样本量不足（n=7），趋势仅供参考</div>
+          </div>
+          <div class="x-axis" style="width:1080px">
+            <span style="left:0px">2021-01</span>
+            <span style="left:270px">2021-04</span>
+            <span style="left:540px">2021-07</span>
+            <span style="left:810px">2021-10</span>
+            <span style="left:1080px">2021-12</span>
+          </div>
+          <div class="axis-cap">X 轴：月份刻度　｜　Y 轴：为保证线框可读性，三条系列按各自量纲归一化到 0 ~ 100 绘制；真实实现为双 Y 轴（左轴：提交数，右轴：缺陷引入率 %）。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-title">模型指标（按版本上线时点）<span class="sub">两条系列：AUC / Recall@20%Effort　｜　X 轴小三角 = 版本切换事件</span></div>
+      <div class="legend">
+        <span><i></i>AUC</span>
+        <span><i class="dash"></i>Recall@20%Effort</span>
+        <span>▲ 版本切换</span>
+      </div>
+      <div class="chart-flex">
+        <div class="y-axis s240">
+          <span style="top:0px">0.80</span>
+          <span style="top:48px">0.76</span>
+          <span style="top:96px">0.72</span>
+          <span style="top:144px">0.68</span>
+          <span style="top:192px">0.45</span>
+          <span style="top:240px">0.20</span>
+        </div>
+        <div>
+          <div class="plot p1080">
+            <div class="gridbg g180"></div>
+            <!-- Recall@20%Effort（虚线） -->
+            <div class="seg dash" style="left:0px;top:175px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="seg dash" style="left:180px;top:159px;width:182px;transform:rotate(-7.6deg)"></div>
+            <div class="seg dash" style="left:360px;top:135px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="seg dash" style="left:540px;top:119px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="seg dash" style="left:720px;top:103px;width:182px;transform:rotate(-7.6deg)"></div>
+            <div class="seg dash" style="left:900px;top:79px;width:181px;transform:rotate(-2.5deg)"></div>
+            <!-- AUC（实线） -->
+            <div class="seg" style="left:0px;top:175px;width:183px;transform:rotate(-10.1deg)"></div>
+            <div class="seg" style="left:180px;top:143px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="seg" style="left:360px;top:127px;width:183px;transform:rotate(-10.1deg)"></div>
+            <div class="seg" style="left:540px;top:95px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="seg" style="left:720px;top:79px;width:183px;transform:rotate(-10.1deg)"></div>
+            <div class="seg" style="left:900px;top:47px;width:181px;transform:rotate(-5.1deg)"></div>
+            <div class="dot" style="left:176px;top:140px"></div>
+            <div class="dot" style="left:356px;top:124px"></div>
+            <div class="dot" style="left:536px;top:92px"></div>
+            <div class="dot" style="left:716px;top:76px"></div>
+            <div class="dot" style="left:896px;top:44px"></div>
+            <div class="resultbox" style="left:20px;top:14px;font-weight:normal">AUC 0.68 → 0.79（v1 → v7）</div>
+            <div class="resultbox" style="left:20px;top:48px;font-weight:normal">Recall@20%Effort 0.18 → 0.41（v1 → v7）</div>
+          </div>
+          <div class="x-axis tri" style="width:1080px">
+            <span style="left:0px">▲<b>v1</b></span>
+            <span style="left:180px">▲<b>v2</b></span>
+            <span style="left:360px">▲<b>v3</b></span>
+            <span style="left:540px">▲<b>v4</b></span>
+            <span style="left:720px">▲<b>v5</b></span>
+            <span style="left:900px">▲<b>v6</b></span>
+            <span style="left:1080px">▲<b>v7</b></span>
+          </div>
+          <div class="axis-cap">X 轴：模型版本上线时点（v1 ~ v7）　｜　Y 轴：指标值（为同图对比，Recall@20%Effort 使用右侧量纲位置示意）。跨版本比较需注意样本集版本不同。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rank-wrap">
+      <div class="panel">
+        <div class="panel-hd">Top 10 高风险文件 <span class="hd-note">（含样本量）</span></div>
+        <table class="tbl">
+          <colgroup><col style="width:38px"><col style="width:190px"><col style="width:76px"><col style="width:62px"></colgroup>
+          <thead><tr><th>排名</th><th>文件</th><th>风险指数</th><th>样本量</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td class="num">1</td><td class="mono" style="font-size:11px">Transport.java</td><td class="num">0.82</td><td class="num">184</td></tr>
+            <tr><td class="num">2</td><td class="mono" style="font-size:11px">Session.java</td><td class="num">0.79</td><td class="num">171</td></tr>
+            <tr class="alt"><td class="num">3</td><td class="mono" style="font-size:11px">Broker.java</td><td class="num">0.77</td><td class="num">263</td></tr>
+            <tr><td class="num">4</td><td class="mono" style="font-size:11px">Policy.java</td><td class="num">0.74</td><td class="num">146</td></tr>
+            <tr class="alt"><td class="num">5</td><td class="mono" style="font-size:11px">Connection.java</td><td class="num">0.71</td><td class="num">209</td></tr>
+            <tr><td class="num">6</td><td class="mono" style="font-size:11px">Dispatch.java</td><td class="num">0.69</td><td class="num">132</td></tr>
+            <tr class="alt"><td class="num">7</td><td class="mono" style="font-size:11px">Codec.java</td><td class="num">0.66</td><td class="num">118</td></tr>
+            <tr><td class="num">8</td><td class="mono" style="font-size:11px">Reaper.java</td><td class="num">0.64</td><td class="num">97</td></tr>
+            <tr class="alt"><td class="num">9</td><td class="mono" style="font-size:11px">Expiry.java</td><td class="num">0.61</td><td class="num">56</td></tr>
+            <tr><td class="num">10</td><td class="mono" style="font-size:11px">Util.java</td><td class="num">0.58</td><td class="num">21</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">Top 10 高风险作者 <span class="hd-note">（脱敏展示，含样本量）</span></div>
+        <table class="tbl">
+          <colgroup><col style="width:38px"><col style="width:190px"><col style="width:76px"><col style="width:62px"></colgroup>
+          <thead><tr><th>排名</th><th>作者</th><th>风险指数</th><th>样本量</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td class="num">1</td><td>张*</td><td class="num">0.68</td><td class="num">312</td></tr>
+            <tr><td class="num">2</td><td>李*</td><td class="num">0.65</td><td class="num">287</td></tr>
+            <tr class="alt"><td class="num">3</td><td>王*</td><td class="num">0.63</td><td class="num">254</td></tr>
+            <tr><td class="num">4</td><td>赵*</td><td class="num">0.61</td><td class="num">198</td></tr>
+            <tr class="alt"><td class="num">5</td><td>陈*</td><td class="num">0.59</td><td class="num">176</td></tr>
+            <tr><td class="num">6</td><td>刘*</td><td class="num">0.57</td><td class="num">163</td></tr>
+            <tr class="alt"><td class="num">7</td><td>周*</td><td class="num">0.55</td><td class="num">142</td></tr>
+            <tr><td class="num">8</td><td>吴*</td><td class="num">0.53</td><td class="num">121</td></tr>
+            <tr class="alt"><td class="num">9</td><td>郑*</td><td class="num">0.51</td><td class="num">48</td></tr>
+            <tr><td class="num">10</td><td>孙*</td><td class="num">0.49</td><td class="num">16</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hd">Top 10 高风险子系统 <span class="hd-note">（含样本量）</span></div>
+        <table class="tbl">
+          <colgroup><col style="width:38px"><col style="width:190px"><col style="width:76px"><col style="width:62px"></colgroup>
+          <thead><tr><th>排名</th><th>子系统</th><th>风险指数</th><th>样本量</th></tr></thead>
+          <tbody>
+            <tr class="hl"><td class="num">1</td><td class="mono" style="font-size:11px">broker.session</td><td class="num">0.78</td><td class="num">412</td></tr>
+            <tr><td class="num">2</td><td class="mono" style="font-size:11px">broker.transport</td><td class="num">0.75</td><td class="num">388</td></tr>
+            <tr class="alt"><td class="num">3</td><td class="mono" style="font-size:11px">client.core</td><td class="num">0.72</td><td class="num">341</td></tr>
+            <tr><td class="num">4</td><td class="mono" style="font-size:11px">broker.store</td><td class="num">0.70</td><td class="num">296</td></tr>
+            <tr class="alt"><td class="num">5</td><td class="mono" style="font-size:11px">client.thread</td><td class="num">0.67</td><td class="num">244</td></tr>
+            <tr><td class="num">6</td><td class="mono" style="font-size:11px">broker.region</td><td class="num">0.64</td><td class="num">205</td></tr>
+            <tr class="alt"><td class="num">7</td><td class="mono" style="font-size:11px">client.codec</td><td class="num">0.62</td><td class="num">168</td></tr>
+            <tr><td class="num">8</td><td class="mono" style="font-size:11px">tools.console</td><td class="num">0.60</td><td class="num">97</td></tr>
+            <tr class="alt"><td class="num">9</td><td class="mono" style="font-size:11px">assembly.packaging</td><td class="num">0.58</td><td class="num">54</td></tr>
+            <tr><td class="num">10</td><td class="mono" style="font-size:11px">examples.demo</td><td class="num">0.56</td><td class="num">12</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note">排行说明：风险指数 = 该对象关联提交的平均缺陷概率；样本量 = 统计窗口内可归因到该对象的提交数。<b>样本量低于 30 的条目（见第 9、10 名）风险指数置信度较低，需结合样本量判读，避免小样本误导。</b></div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="col-grow">
+        <div class="panel">
+          <div class="panel-hd">异常态示意 ①：选定时间范围无数据（保留坐标轴）</div>
+          <div class="panel-bd">
+            <div class="chart-flex">
+              <div class="y-axis s240">
+                <span style="top:0px">100</span><span style="top:48px">80</span><span style="top:96px">60</span>
+                <span style="top:144px">40</span><span style="top:192px">20</span><span style="top:240px">0</span>
+              </div>
+              <div>
+                <div class="plot p1080" style="height:242px">
+                  <div class="gridbg g270"></div>
+                  <div style="position:absolute;left:0;right:0;top:96px;text-align:center;font-size:13px;font-weight:bold">该时间范围无数据</div>
+                  <div style="position:absolute;left:0;right:0;top:120px;text-align:center;font-size:11px;color:#9e9e9e">已保留坐标轴与网格；请调整时间范围或确认该仓库是否已完成采集</div>
+                </div>
+                <div class="x-axis" style="width:1080px">
+                  <span style="left:0px">2021-01</span><span style="left:270px">2021-04</span><span style="left:540px">2021-07</span>
+                  <span style="left:810px">2021-10</span><span style="left:1080px">2021-12</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel-note">空数据与「缺陷为零」必须视觉可分：空数据展示提示文案，零值展示为贴着 X 轴的折线。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+</div>
+</body>
+</html>

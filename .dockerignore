@@ -6,6 +6,7 @@ runtime
 data
 artifacts
 softwarePrediction
+archive
 .codex
 .agents
 AGENTS.md

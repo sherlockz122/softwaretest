@@ -4,3 +4,7 @@ apps/web/**/*.js text eol=lf
 apps/web/**/*.vue text eol=lf
 apps/web/**/*.css text eol=lf
 apps/web/**/*.html text eol=lf
+# Preserve captured provenance bytes across Windows and Linux checkouts.
+archive/external/** -text
+# Preserve captured provenance bytes across Windows and Linux checkouts.
+archive/external/** -text
