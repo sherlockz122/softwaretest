@@ -19,3 +19,10 @@ models/*.pt
 .idea/
 .vscode/
 .DS_Store
+
+# 探针：克隆下来的仓库（体积大、可重建，不入库）
+# 注意：probe/out/*.csv 是探针结论的原始证据，**要**入库，不在此列
+probe/repos/
+
+# 大结果文件（项目根目录的 out/）
+out/*.csv

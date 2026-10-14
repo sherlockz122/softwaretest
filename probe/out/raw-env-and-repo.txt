@@ -1,0 +1,63 @@
+PS C:\Users\Shadow> Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors
+
+Name                           NumberOfCores NumberOfLogicalProcessors
+----                           ------------- -------------------------
+Intel(R) Core(TM) Ultra 7 155H            16                        22
+
+
+PS C:\Users\Shadow> [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)
+31.5
+PS C:\Users\Shadow> Get-PhysicalDisk | Select-Object FriendlyName,MediaType,Size
+
+FriendlyName                       MediaType          Size
+------------                       ---------          ----
+NVMe WD PC SN560 SDDPNQE-1T00-1202 SSD       1024209543168
+
+
+PS C:\Users\Shadow> python --version
+Python 3.12.10
+
+-------------------------
+PS D:\develop\软件测试实训\jit-defect-prediction> git clone --bare https://github.com/apache/commons-cli.git repos\commons-cli.git
+Cloning into bare repository 'repos\commons-cli.git'...                         
+remote: Enumerating objects: 20264, done.
+remote: Counting objects: 100% (1617/1617), done.
+remote: Compressing objects: 100% (351/351), done.
+remote: Total 20264 (delta 1438), reused 1278 (delta 1266), pack-reused 18647 (from 4)
+Receiving objects: 100% (20264/20264), 4.52 MiB | 1.19 MiB/s, done.             
+Resolving deltas: 100% (9971/9971), done. 
+-------------------------
+
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git rev-list --count HEAD
+2257   
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git log --format=%ad --date=short | sort | Select-Object -First 1   # 最早提交
+2002-06-10
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git log --format=%ad --date=format:%Y | Group-Object | Select-Object Name,Count  # 按年分布
+
+Name Count
+---- -----
+2026   135
+2025   282
+2024   438
+2023   157
+2022   126
+2021   132
+2020    59
+2019    23
+2018     3
+2017    67
+2016    18
+2015    49
+2014     4
+2013    83
+2012    10
+2011    27
+2010    43
+2009    87
+2008   136
+2007   104
+2006    48
+2005    64
+2004    67
+2003    10
+2002    85
