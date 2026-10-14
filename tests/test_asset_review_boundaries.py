@@ -1,6 +1,7 @@
 """Regression for immutable namespaces and conservative negative ancestry evidence."""
 
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Event
 
 import pytest
@@ -39,6 +40,29 @@ def test_pending_atomic_review_is_not_a_committed_revision(monkeypatch):
         history = asset_reviews.case_history(directory, case["case_id"])
         assert len(history["records"]) == 2
         assert not list((directory / "cases" / case["case_id"]).glob("*.part"))
+
+
+def test_private_stage_removed_during_path_validation(monkeypatch):
+    with workspace() as root:
+        directory, _, case, _, _ = review_context(root)
+        folder = directory / "cases" / case["case_id"]
+        folder.mkdir(parents=True)
+        part = folder / f".000001.json.{'a' * 32}.part"
+        part.write_text("inert unpublished staging")
+        stat = Path.stat
+        removed = False
+
+        def remove_after_stat(path, *args, **kwargs):
+            nonlocal removed
+            value = stat(path, *args, **kwargs)
+            if path == part and not removed and kwargs.get("follow_symlinks", True):
+                part.unlink()
+                removed = True
+            return value
+
+        monkeypatch.setattr(Path, "stat", remove_after_stat)
+        assert len(asset_reviews.case_history(directory, case["case_id"])["records"]) == 1
+        assert removed and not part.exists()
 
 
 @pytest.mark.parametrize("kind", ["malformed", "directory", "revision", "excess"])

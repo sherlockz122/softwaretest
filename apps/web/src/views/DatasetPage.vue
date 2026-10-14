@@ -107,31 +107,39 @@ async function download(partition) {
           }}
           · 12项数值，原发布fix标志不作为特征。
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th>分区</th>
-              <th>clean</th>
-              <th>buggy</th>
-              <th>导出</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(count, partition) in data.data.value.summary.partitions"
-              :key="partition"
-            >
-              <td>{{ partition }}</td>
-              <td>{{ count.clean }}</td>
-              <td>{{ count.buggy }}</td>
-              <td>
-                <button :disabled="downloading" @click="download(partition)">
-                  下载 {{ partition }} CSV
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <p class="hint">窄屏下可左右滚动表格，查看全部列与下载操作。</p>
+        <div
+          class="table-scroll"
+          role="region"
+          aria-label="分区与导出"
+          tabindex="0"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>分区</th>
+                <th>clean</th>
+                <th>buggy</th>
+                <th>导出</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(count, partition) in data.data.value.summary.partitions"
+                :key="partition"
+              >
+                <td>{{ partition }}</td>
+                <td>{{ count.clean }}</td>
+                <td>{{ count.buggy }}</td>
+                <td>
+                  <button :disabled="downloading" @click="download(partition)">
+                    下载 {{ partition }} CSV
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <details>
           <summary>来源、分区和能力审计</summary>
           <dl>
@@ -168,49 +176,63 @@ async function download(partition) {
           >
             工程测试数据，不代表真实标签或模型效果。
           </p>
-          <table>
-            <thead>
-              <tr>
-                <th>独立仓库</th>
-                <th>clean</th>
-                <th>buggy</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(count, repository) in data.data.value.summary
-                  .repositories"
-                :key="repository"
-              >
-                <td>{{ repository }}</td>
-                <td>{{ count.clean }}</td>
-                <td>{{ count.buggy }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div
+            class="table-scroll"
+            role="region"
+            aria-label="独立仓库支持数"
+            tabindex="0"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th>独立仓库</th>
+                  <th>clean</th>
+                  <th>buggy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(count, repository) in data.data.value.summary
+                    .repositories"
+                  :key="repository"
+                >
+                  <td>{{ repository }}</td>
+                  <td>{{ count.clean }}</td>
+                  <td>{{ count.buggy }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </details>
         <p class="break-anywhere">
           不可变清单摘要：{{ data.data.value.manifest_hash }}
         </p>
         <h3>成员预览</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>仓库</th>
-              <th>提交</th>
-              <th>分区</th>
-              <th>原发布标签</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in data.data.value.members" :key="row.ordinal">
-              <td>{{ row.canonical_repository }}</td>
-              <td class="break-anywhere">{{ row.commit_id }}</td>
-              <td>{{ row.partition }}</td>
-              <td>{{ row.label ? "buggy" : "clean" }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div
+          class="table-scroll"
+          role="region"
+          aria-label="数据集成员"
+          tabindex="0"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>仓库</th>
+                <th>提交</th>
+                <th>分区</th>
+                <th>原发布标签</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in data.data.value.members" :key="row.ordinal">
+                <td>{{ row.canonical_repository }}</td>
+                <td class="break-anywhere">{{ row.commit_id }}</td>
+                <td>{{ row.partition }}</td>
+                <td>{{ row.label ? "buggy" : "clean" }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div class="actions">
           <button
             :disabled="offset <= 0 || data.loading.value"

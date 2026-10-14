@@ -75,6 +75,18 @@ test("fresh research dataset survives reload and exports frozen train CSV", asyn
     path: info.outputPath("dataset-ready.png"),
     fullPage: true,
   });
+  await page.setViewportSize({ width: 360, height: 800 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.getByText("来源、分区和能力审计", { exact: true }).click();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(360);
+  await page.screenshot({
+    path: info.outputPath("dataset-detail-mobile.png"),
+    fullPage: true,
+  });
 });
 test("dataset list and research controls fit a narrow viewport", async ({
   page,
@@ -91,6 +103,15 @@ test("dataset list and research controls fit a narrow viewport", async ({
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
+  const region = page.getByRole("region", { name: "数据集列表", exact: true });
+  expect(await region.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    true,
+  );
+  await region.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(() => region.evaluate((el) => el.scrollLeft))
+    .toBeGreaterThan(0);
   await page.screenshot({
     path: info.outputPath("dataset-mobile.png"),
     fullPage: true,

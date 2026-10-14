@@ -107,30 +107,41 @@ async function create() {
     </form>
     <p v-else>当前账号可查看数据集；创建需要Member或Admin权限。</p>
     <p v-if="list.loading.value" role="status">正在加载…</p>
-    <table v-if="list.data.value?.items.length">
-      <thead>
-        <tr>
-          <th>名称</th>
-          <th>用途</th>
-          <th>状态</th>
-          <th>成员</th>
-          <th>创建时间</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="item in list.data.value.items" :key="item.id">
-          <td>
-            <RouterLink :to="`/datasets/${item.id}`">{{
-              item.name
-            }}</RouterLink>
-          </td>
-          <td>公开二分类研究</td>
-          <td>{{ labels[item.status] || item.status }}</td>
-          <td>{{ item.processed }} / {{ item.total ?? "—" }}</td>
-          <td>{{ date(item.created_at) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <p v-if="list.data.value?.items.length" class="hint">
+      窄屏下可左右滚动表格，查看全部列；键盘用户可聚焦表格后使用方向键。
+    </p>
+    <div
+      v-if="list.data.value?.items.length"
+      class="table-scroll"
+      role="region"
+      aria-label="数据集列表"
+      tabindex="0"
+    >
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>用途</th>
+            <th>状态</th>
+            <th>成员</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in list.data.value.items" :key="item.id">
+            <td>
+              <RouterLink :to="`/datasets/${item.id}`">{{
+                item.name
+              }}</RouterLink>
+            </td>
+            <td>公开二分类研究</td>
+            <td>{{ labels[item.status] || item.status }}</td>
+            <td>{{ item.processed }} / {{ item.total ?? "—" }}</td>
+            <td>{{ date(item.created_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <p v-else-if="list.data.value">尚无数据集。</p>
     <div class="actions">
       <button :disabled="page <= 1 || list.loading.value" @click="page--">

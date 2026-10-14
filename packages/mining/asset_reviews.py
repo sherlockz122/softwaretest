@@ -227,7 +227,6 @@ def case_history(directory, case_id, *, tick=None):
         pending = 0
         for p in folder.iterdir():
             budget.check()
-            safe_path(p)
             # atomic_json publishes by hard link only after this private file is complete.
             # A concurrent reader must observe committed revisions, not writer staging.
             staging = re.fullmatch(r"\.([0-9]{6})\.json\.[0-9a-f]{32}\.part", p.name)
@@ -238,12 +237,14 @@ def case_history(directory, case_id, *, tick=None):
                 if pending > MAX_REVISIONS:
                     raise AssetError("REVIEW_REVISION_LIMIT")
                 try:
+                    safe_path(p)
                     mode = p.lstat().st_mode
                 except FileNotFoundError:
                     continue  # The publishing writer has already removed its own staging.
                 if not stat.S_ISREG(mode):
                     raise AssetError("REVIEW_CHAIN_INVALID")
                 continue
+            safe_path(p)
             if not re.fullmatch("[0-9]{6}\\.json", p.name) or not p.is_file():
                 raise AssetError("REVIEW_CHAIN_INVALID")
             paths.append(p)
