@@ -1,6 +1,6 @@
 # DefectGuard API 与数据库规格
 
-2026-10-14 第十九阶段当前边界（优先于历史批次状态）：独立apachejit-raw-provenance-v1已交付固定十四项目链接审计和85条复核包；106674发布/162818原链接、28239正例来源时钟匹配、5740非最早修复、334 clean候选重叠，均非金标/完整负例认证。旧v1/v2与标签不改；schema0008_features/35接口/1000提交/10000文件/32MiB/数值30秒保留。A17～19和模型仍未实现，下一批做逐条复核/原生链接与覆盖证据，独立published-13研究数据集/LR/RF工程可并行准备。见 [当前指导](development/固定标签来源审计与验收.md)。
+2026-10-14 当前状态：第十九阶段固定标签来源审计已交付，数据集纵向/API、模型训练与候选评审闭环尚未交付。本日规划补强公开数据资产/安全导入与质量（P0）、预训练语义/融合（P1）、类型与语言分层验收；保留 Kamei 基线和旧 v1/v2，schema0008_features/35接口及当前限额不变。下一批有界资产/复核纵切，随后用途分离的数据集/LR/RF、语义和候选链路。见 [最新决策](decisions/2026-10-14-公开数据兼容与预训练语义路线.md) 与 [衔接指南](development/公开数据与语义模型衔接指南.md)。
 
 ## 1 API 通用约定
 
@@ -380,3 +380,11 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 无新API/迁移/字段，schema0008_features。FileChange按eligible IDs和ordinal分组并限制10001条证明越界；fenced输入冻结全体原子落库，写失败/过期全体回滚，恢复不重复。
 
 见 [当前指导](development/原生特征读取与冻结验收.md) 与 [阶段报告](reports/2026-10-12-第十八阶段原生特征读取与冻结报告.md)。
+
+## 2026-10-14 新用途与公开资产设计边界（未实现）
+
+现有35个API编号、schema0008_features和OpenAPI不变。A17～19后续必须显式声明repository_native / published_benchmark等用途、asset/source/adapter版本、质量审计引用及compatible feature/input版本，旧调用兼容性与稳定拒绝条件一起设计；本页4.2是原生用途旧计划示例，不适用于直接上传外部CSV或语义输入。
+
+拟增public_asset/manifest、review与可选type/location证据、派生数据、语义工件引用；不是已迁移表名承诺。公共导入/重载/导出端点待独立API设计与编号，不伪装成A07仓库创建字段；M1/RBAC/幂等/任务/审计/冻结/来源失效/安全降级复用现有合同。模型运行与候选发布校验用途、language/domain、input schema/checkpoint/tokenizer及质量能力；非兼容工件明确拒绝。语义不直接扩展旧14维响应或改旧FeatureRun false。
+
+详见 [决策](decisions/2026-10-14-公开数据兼容与预训练语义路线.md)、[指导](development/公开数据与语义模型衔接指南.md)；实施前再改OpenAPI/迁移/规格/回归，当前文档不能被视为新增服务能力。
