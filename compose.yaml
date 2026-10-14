@@ -22,6 +22,14 @@ x-app-env: &app-env
   DG_REPOSITORY_TIMEOUT_SECONDS: ${DG_REPOSITORY_TIMEOUT_SECONDS:-900}
   DG_REPOSITORY_PARSE_TIMEOUT_SECONDS: ${DG_REPOSITORY_PARSE_TIMEOUT_SECONDS:-1800}
 services:
+  dataset-init:
+    profiles: ["full", "worker"]
+    image: defectguard-app:stage2
+    user: "0:0"
+    command: ["python", "-m", "packages.mining.dataset_initialize"]
+    environment: *app-env
+    volumes: ["${DG_DATASET_DATA_DIR:-./runtime/datasets}:/app/runtime/datasets"]
+    logging: *logging
   repository-init:
     profiles: ["full", "worker"]
     image: defectguard-app:stage2
@@ -67,10 +75,14 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.app
     environment: *app-env
-    volumes: ["${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"]
+    volumes:
+      - "${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"
+      - "${DG_PUBLIC_ASSET_DIR:-./runtime/public-assets}:/app/runtime/public-assets:ro"
+      - "${DG_DATASET_DATA_DIR:-./runtime/datasets}:/app/runtime/datasets:ro"
     command: ["python", "-m", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
     ports: ["127.0.0.1:18000:8000"]
     depends_on:
+      dataset-init: {condition: service_completed_successfully}
       repository-init: {condition: service_completed_successfully}
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -88,9 +100,13 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.app
     environment: *app-env
-    volumes: ["${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"]
+    volumes:
+      - "${DG_REPOSITORY_DATA_DIR:-./runtime/repositories}:/app/runtime/repositories"
+      - "${DG_PUBLIC_ASSET_DIR:-./runtime/public-assets}:/app/runtime/public-assets:ro"
+      - "${DG_DATASET_DATA_DIR:-./runtime/datasets}:/app/runtime/datasets"
     command: ["python", "-m", "celery", "-A", "apps.worker.main:app", "worker", "--loglevel=WARNING", "--concurrency=1", "--hostname=defectguard@%h"]
     depends_on:
+      dataset-init: {condition: service_completed_successfully}
       repository-init: {condition: service_completed_successfully}
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}

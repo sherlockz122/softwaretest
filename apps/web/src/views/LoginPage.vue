@@ -15,7 +15,7 @@ async function submit() {
     await client.login(username.value, password.value);
     const next =
       typeof route.query.next === "string" &&
-      /^\/(?:tasks|repositories)(?:\/|\?|$)/.test(route.query.next)
+      /^\/(?:tasks|repositories|datasets)(?:\/|\?|$)/.test(route.query.next)
         ? route.query.next
         : "/tasks";
     await router.replace(next);

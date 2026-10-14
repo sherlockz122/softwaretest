@@ -1,6 +1,12 @@
 # DefectGuard API 与数据库规格
 
-2026-10-14 第二十阶段当前边界：首条ApacheJIT CSV离线不可变资产/12数值派生/重载与85条来源绑定复核起点已实现，2条AMQ浅库缺对象记录未决；不改原标签、历史时间或旧false资格。无新API/schema/依赖/模型，完整验收另见本批报告。下一批用途分离dataset应用纵向，LR/RF工程随后、预训练语义/融合P1再后；公开通用应用导入、非Java/类型/定位仍待验证。见 [当前指导](development/公开资产保存与来源复核验收.md)。
+## 第二十一阶段当前合同
+
+A17～19已实现首条public研究版本：POST /datasets接name、asset_id/source_hash、purpose=published_binary_12_v1、split_strategy=time_ordered或repository_holdout及默认0.70/0.15/0.15比例，返回202 dataset_id/task_id/status，Idempotency-Key必需。GET列表含有界资产预览（非完整认证）；GET详情仅ready返回成员/summary/工件摘要，可用offset/limit≤100分页或format=csv&partition=train/validation/test受控下载。Viewer读取、Member创建、Owner/Admin管理任务；不允许路径/多余字段或历史/候选资格越级。
+
+schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、源/计划及最终output；dataset_member以dataset_id/ordinal为主键、canonical_repository/commit_id唯一，保存分区/标签/事件及原行引用。numeric_json是MEDIUMTEXT无损CanonicalJSON，0009旧JSON定义保留、0010增量转换不回填失败数据。旧迁移/表/FeatureRun不改；全路径降级预检非空和dataset任务/引用，禁stamp/手工重建。详见 [指南](development/用途分离数据集与验收.md)。
+
+2026-10-14 第二十一阶段当前边界：用途分离研究数据集的0010持久化、可靠任务/RBAC/A17～19/页面和12数值CSV导出已实现；真实106674行已通过新版本成员与导出校验，首个JSON数值漂移失败版本保留。研究结构资格不改旧资产/FeatureRun/标签，历史/候选/语义/类型仍false；模型未训练，完整验收见阶段报告。下一批LR/RF任务与评估工件，预训练语义/融合P1随后；来源质量线继续。见 [当前指导](development/用途分离数据集与验收.md)。
 
 ## 1 API 通用约定
 
@@ -391,4 +397,4 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 
 ## 第二十阶段实际边界
 
-本批只新增本机资产/复核CLI及磁盘清单，35 API/schema0008_features/OpenAPI保持。A17～19及公开导入/目录/复核用户身份/应用权限、模型注册/发布均未实现；本机operator不是应用用户。后续迁移/用途/恢复合同按 [实际指导](development/公开资产保存与来源复核验收.md) 和总规划细化，不通过本机目录默认给予Viewer写权。
+本批只新增本机资产/复核CLI及磁盘清单，35 API/schema0008_features/OpenAPI保持。A17～19及公开导入/目录/复核用户身份/应用权限、模型注册/发布均未实现；本机operator不是应用用户。后续迁移/用途/恢复合同按 [实际指导](development/用途分离数据集与验收.md) 和总规划细化，不通过本机目录默认给予Viewer写权。

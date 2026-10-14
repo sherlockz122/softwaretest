@@ -15,6 +15,33 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+test("CSV download uses in-memory authorization and retains JSON errors", async () => {
+  const fetch = vi.fn(async (url, options) => {
+    if (url.endsWith("/login")) return reply(account());
+    expect(options.headers.Authorization).toBe("Bearer test-access");
+    return url.includes("bad")
+      ? reply({ code: "DATA_NOT_READY" }, 409)
+      : new Response("label,la\n1,2\n", {
+          headers: { "Content-Type": "text/csv" },
+        });
+  });
+  const client = createClient(fetch);
+  await client.login("test", "fixture");
+  const blob = await client.request("/datasets/fixture?format=csv", {
+    responseType: "blob",
+  });
+  const text = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+  expect(text).toBe("label,la\n1,2\n");
+  await expect(
+    client.request("/datasets/bad?format=csv", { responseType: "blob" }),
+  ).rejects.toHaveProperty("code", "DATA_NOT_READY");
+});
+
 test("concurrent 401 requests share one refresh and retry with the rotated token", async () => {
   const gate = deferred();
   const fetch = vi.fn(async (url, options) => {

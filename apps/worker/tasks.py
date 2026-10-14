@@ -3,6 +3,7 @@ import time
 from uuid import UUID
 
 from apps.worker.main import app, settings
+from packages.mining.dataset_service import DatasetService
 from packages.mining.feature_service import FeatureService
 from packages.mining.fix import FixService
 from packages.mining.szz import SZZService
@@ -29,7 +30,9 @@ def execute(task_id):
             return
         token, duration = claim
         if isinstance(duration, dict):
-            if "feature_version" in duration:
+            if "dataset_version" in duration:
+                DatasetService(settings, connections).run(task_id, token, duration)
+            elif "feature_version" in duration:
                 ParseExecutor(settings, FeatureService(settings, connections)).run(
                     task_id, token, duration
                 )

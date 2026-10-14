@@ -6,9 +6,13 @@ import TaskPage from "./views/TaskPage.vue";
 import HealthPage from "./views/HealthPage.vue";
 import RepositoriesPage from "./views/RepositoriesPage.vue";
 import RepositoryPage from "./views/RepositoryPage.vue";
+import DatasetsPage from "./views/DatasetsPage.vue";
+import DatasetPage from "./views/DatasetPage.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/datasets", component: DatasetsPage, meta: { auth: true } },
+    { path: "/datasets/:id", component: DatasetPage, meta: { auth: true } },
     { path: "/", redirect: "/tasks" },
     { path: "/login", component: LoginPage },
     { path: "/tasks", component: TasksPage, meta: { auth: true } },

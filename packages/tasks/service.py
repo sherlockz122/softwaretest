@@ -11,7 +11,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from packages.auth.security import AuthError, CurrentUser, authorize_task_owner, require_role
-from packages.persistence.models import AsyncTask, OperationLog, Repository, TaskOutbox, User
+from packages.persistence.models import (
+    AsyncTask,
+    DatasetVersion,
+    OperationLog,
+    Repository,
+    TaskOutbox,
+    User,
+)
 
 STATES = {"queued", "running", "cancel_requested", "succeeded", "failed", "cancelled"}
 
@@ -76,6 +83,7 @@ def public(task, timestamp):
         and (task.lease_until is None or task.lease_until <= timestamp)
         else "healthy",
         "retry_of": task.retry_of,
+        **({"dataset_id": task.root_task_id} if task.type == "dataset.build" else {}),
         "result": task.result_json,
         "error": {
             "code": task.error_code,
@@ -152,6 +160,15 @@ class TaskService:
                 repository.sync_status = "queued"
             else:
                 repository.parse_status = "queued"
+        if parent and kind == "dataset.build":
+            dataset = db.get(DatasetVersion, parent.root_task_id, with_for_update=True)
+            if (
+                not dataset
+                or dataset.latest_task_id != parent.id
+                or dataset.output_json is not None
+            ):
+                raise TaskError(409, "DATA_STATE_CONFLICT")
+            dataset.latest_task_id = task.id
         return task
 
     @staticmethod
@@ -217,6 +234,7 @@ class TaskService:
         if kind not in {
             None,
             "diagnostic",
+            "dataset.build",
             "repository.clone",
             "repository.parse",
             "repository.sync",
@@ -333,6 +351,7 @@ class TaskService:
                 return None
             if task.type not in {
                 "diagnostic",
+                "dataset.build",
                 "repository.clone",
                 "repository.parse",
                 "repository.sync",
@@ -349,6 +368,15 @@ class TaskService:
             task.lease_until = timestamp + timedelta(seconds=self.settings.task_lease_seconds)
             task.version += 1
             audit(db, task, "task.start")
+            if task.type == "dataset.build":
+                dataset = db.get(DatasetVersion, task.root_task_id, with_for_update=True)
+                if (
+                    not dataset
+                    or dataset.latest_task_id != task.id
+                    or dataset.output_json is not None
+                ):
+                    self.terminal(db, task, "failed", "DATA_STATE_CONFLICT")
+                    return None
             if task.type in {
                 "repository.clone",
                 "repository.parse",

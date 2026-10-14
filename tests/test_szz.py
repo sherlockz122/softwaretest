@@ -328,7 +328,8 @@ def test_frozen_migration_empty_roundtrip_and_populated_path_guard(szz_env):
         migrate(szz_env[1].engine, "downgrade", "base")
     with szz_env[1].engine.connect() as db:
         assert (
-            db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0008_features"
+            db.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            == "0010_dataset_numbers"
         )
     assert szz_env[2].results(root)["total"] == 14
     with scratch_database() as (_, engine):

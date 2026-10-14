@@ -10,11 +10,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from apps.api.auth import router
+from apps.api.datasets import router as datasets_router
 from apps.api.repositories import router as repositories_router
 from apps.api.repositories import szz_router
 from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
+from packages.mining.public_assets import AssetError
+from packages.mining.research_dataset import ResearchError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
 from packages.repositories.safety import RepositoryError
@@ -103,6 +106,16 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def task_error(request: Request, exc: TaskError):
         return error(request, exc.status, exc.code, "任务请求未通过，请检查输入、权限或当前状态")
 
+    @app.exception_handler(ResearchError)
+    async def research_error(request: Request, exc: ResearchError):
+        return error(request, 422, exc.code, "数据集请求未通过，请检查来源、用途或切分条件")
+
+    @app.exception_handler(AssetError)
+    async def asset_error(request: Request, exc: AssetError):
+        return error(
+            request, 409, "DATA_SOURCE_OR_STORAGE_INVALID", "数据源或工件不可用，请核对来源后重试"
+        )
+
     @app.exception_handler(RepositoryError)
     async def repository_error(request: Request, exc: RepositoryError):
         return error(
@@ -125,6 +138,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(repositories_router)
     app.include_router(szz_router)
+    app.include_router(datasets_router)
     if settings.environment != "production":
         app.include_router(diagnostic_router)
 

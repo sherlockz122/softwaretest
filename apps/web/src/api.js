@@ -1,6 +1,19 @@
 import { reactive } from "vue";
 
 const messages = {
+  DATA_SOURCE_DRIFT: "数据源版本发生变化，请刷新来源后重新创建。",
+  DATA_PURPOSE_UNSUPPORTED: "当前数据尚不支持该用途，请使用公开二分类研究。",
+  DATA_SPLIT_UNUSABLE: "数据不足以形成完整分区，请调整策略或选择其它数据。",
+  DATA_SPLIT_SINGLE_CLASS: "某分区只有一类标签，请核对数据和预声明分区策略。",
+  DATA_DUPLICATE_CONFLICT: "同一提交存在冲突记录，请先核验来源。",
+  DATA_NORMALIZATION_DRIFT: "派生数据与原始来源不一致，请重新核验数据。",
+  DATA_SOURCE_OR_STORAGE_INVALID:
+    "数据源或工件暂不可用，请核对来源或存储后重试。",
+  DATA_ARTIFACT_DRIFT: "导出工件校验失败，已停止下载。",
+  DATA_LICENSE_UNVERIFIED: "数据许可尚未核实，不能用于当前研究导出。",
+  DATA_NOT_READY: "数据集尚未完成，暂不能导出。",
+  DATA_NOT_FOUND: "数据集不存在，请返回列表。",
+  DATA_BUILD_DEADLINE: "构建达到当前时限，请检查任务和规模后重试。",
   SZZ_STATE_CONFLICT: "请完成当前 Fix 识别，并等待仓库活动任务结束。",
   SZZ_SOURCE_CONFLICT: "Fix 轮次与接受快照不一致，请选择当前可用轮次。",
   SZZ_VERSION_CONFLICT: "追溯策略、Git 或接受快照发生变化，请检查本轮记录。",
@@ -66,8 +79,10 @@ export function createClient(fetcher = (...args) => fetch(...args)) {
     state.user = null;
     state.reason = reason;
   }
-  async function raw(path, { signal, ...options } = {}) {
-    const timeout = AbortSignal.timeout(10000);
+  async function raw(path, { signal, responseType = "json", ...options } = {}) {
+    const timeout = AbortSignal.timeout(
+      responseType === "blob" ? 60000 : 10000,
+    );
     try {
       const response = await fetcher("/api/v1" + path, {
         credentials: "same-origin",
@@ -76,9 +91,11 @@ export function createClient(fetcher = (...args) => fetch(...args)) {
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
       const data =
-        response.status === 204
-          ? null
-          : await response.json().catch(() => null);
+        response.ok && responseType === "blob"
+          ? await response.blob()
+          : response.status === 204
+            ? null
+            : await response.json().catch(() => null);
       if (!response.ok)
         throw new ApiError(
           response.status,
