@@ -79,6 +79,7 @@ def probe(directory, case_id, bare, acquisition, output, *, tick=None):
         )
         config = {
             "protocol.allow": "never",
+            "safe.directory": str(bare),
             "core.hooksPath": work,
             "core.fsmonitor": "false",
             "core.longpaths": "true",

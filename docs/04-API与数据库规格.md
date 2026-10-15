@@ -1,5 +1,7 @@
 # DefectGuard API 与数据库规格
 
+2026-10-15 第二十三阶段当前：真实Git语义输入与独立CPU冻结CodeBERT先导已实施，785条同人口12次拟合/安全回读与数值复现完成，融合未达到预声明增益门槛；测试4正例、严重base截断和权重许可元数据缺口明确保留。完整验收按[本批报告](reports/2026-10-15-第二十三阶段冻结语义先导报告.md)登记。第二十二阶段LR/RF应用已验收；本轮没有语义API/Worker产品闭环、候选发布或全P1完成。后续准入见[先导指南](development/冻结语义先导与验收.md)。
+
 ## 第二十一阶段当前合同
 
 A17～19已实现首条public研究版本：POST /datasets接name、asset_id/source_hash、purpose=published_binary_12_v1、split_strategy=time_ordered或repository_holdout及默认0.70/0.15/0.15比例，返回202 dataset_id/task_id/status，Idempotency-Key必需。GET列表含有界资产预览（非完整认证）；GET详情仅ready返回成员/summary/工件摘要，可用offset/limit≤100分页或format=csv&partition=train/validation/test受控下载。Viewer读取、Member创建、Owner/Admin管理任务；不允许路径/多余字段或历史/候选资格越级。

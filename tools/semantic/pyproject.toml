@@ -1,0 +1,24 @@
+[project]
+name = "defectguard-semantic-research"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "torch==2.14.1",
+  "transformers==5.19.0",
+  "safetensors==0.8.0",
+  "scikit-learn==1.7.2",
+  "skops==0.13.0",
+  "psutil==7.1.0",
+  "pytest>=8,<10",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
