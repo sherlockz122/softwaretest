@@ -8,7 +8,7 @@ A17～19已实现首条public研究版本：POST /datasets接name、asset_id/sou
 
 schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、源/计划及最终output；dataset_member以dataset_id/ordinal为主键、canonical_repository/commit_id唯一，保存分区/标签/事件及原行引用。numeric_json是MEDIUMTEXT无损CanonicalJSON，0009旧JSON定义保留、0010增量转换不回填失败数据。旧迁移/表/FeatureRun不改；全路径降级预检非空和dataset任务/引用，禁stamp/手工重建。详见 [指南](development/用途分离数据集与验收.md)。
 
-2026-10-15 第二十二阶段当前：研究LR/RF的0011模型表、可靠训练/监督进程、A20/A21/A23、研究工件注册与页面已实施，A22因研究用途不兼容明确拒绝产品发布。固定106674数据双seed及重复概率复现、真实Worker故障恢复和正常数据备份/隔离恢复已有证据；完整回归/新卷/最终SHA CI另按本批报告登记。生产/历史/候选资格不晋升；预训练语义/融合P1随后。见 [当前模型指南](development/LR与RF研究训练及验收.md)。
+第二十二阶段交付记录（保留历史入口）：研究LR/RF的0011模型表、可靠训练/监督进程、A20/A21/A23、研究工件注册与页面已实施，A22因研究用途不兼容明确拒绝产品发布。固定106674数据双seed及重复概率复现、真实Worker故障恢复和正常数据备份/隔离恢复已有证据；完整回归/新卷/最终SHA CI另按本批报告登记。生产/历史/候选资格不晋升；预训练语义/融合P1随后。见 [当前模型指南](development/LR与RF研究训练及验收.md)。
 
 ## 1 API 通用约定
 
