@@ -59,7 +59,7 @@ SZZ 标注、Kamei 特征计算和模型训练由后续 change 实现；
 
 - User Stories：US-01～US-04
 - 基线：DG-BL-2026-09-26
-- 受影响文档：[系统架构与详细设计](../../../docs/02-系统架构与详细设计.md)、
+- 受影响文档：[产品设计文档](../../../docs/02-产品设计文档.md)、
   [API 与数据库规格](../../../docs/04-API与数据库规格.md)、
   [需求设计测试追踪矩阵](../../../docs/07-需求设计测试追踪矩阵.md)
 - 测试项：UNIT-URL、UNIT-PARSE、UNIT-FIX、INT-COLLECT、SEC-URL、UI-REPO
