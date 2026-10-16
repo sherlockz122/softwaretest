@@ -15,11 +15,79 @@ from sqlalchemy.dialects.mysql import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_HEAD = "0008_features"
+from packages.persistence.canonical_json import CanonicalJSON
+
+SCHEMA_HEAD = "0011_models"
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class DatasetVersion(Base):
+    __tablename__ = "dataset_version"
+    __table_args__ = (
+        CheckConstraint(
+            "processed >= 0 AND (total IS NULL OR total >= processed)", name="ck_dataset_counts"
+        ),
+        Index("ix_dataset_created", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(
+        CHAR(36, charset="ascii", collation="ascii_bin"),
+        ForeignKey("async_task.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    latest_task_id: Mapped[str] = mapped_column(
+        CHAR(36, charset="ascii", collation="ascii_bin"),
+        ForeignKey("async_task.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(VARCHAR(80), nullable=False)
+    purpose: Mapped[str] = mapped_column(VARCHAR(40), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        CHAR(64, charset="ascii", collation="ascii_bin"), nullable=False
+    )
+    source_hash: Mapped[str] = mapped_column(
+        CHAR(64, charset="ascii", collation="ascii_bin"), nullable=False
+    )
+    policy_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    plan_hash: Mapped[str | None] = mapped_column(CHAR(64, charset="ascii", collation="ascii_bin"))
+    plan_json: Mapped[dict | None] = mapped_column(JSON)
+    output_json: Mapped[dict | None] = mapped_column(JSON)
+    total: Mapped[int | None] = mapped_column(BIGINT)
+    processed: Mapped[int] = mapped_column(BIGINT, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), nullable=False, server_default=func.utc_timestamp(6)
+    )
+
+
+class DatasetMember(Base):
+    __tablename__ = "dataset_member"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id", "canonical_repository", "commit_id", name="uq_dataset_identity"
+        ),
+        CheckConstraint("ordinal >= 0 AND label IN (0,1)", name="ck_dataset_member_values"),
+        CheckConstraint(
+            "`partition` IN ('train','validation','test')", name="ck_dataset_partition"
+        ),
+        Index("ix_dataset_partition", "dataset_id", "partition", "ordinal"),
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        CHAR(36, charset="ascii", collation="ascii_bin"),
+        ForeignKey("dataset_version.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    ordinal: Mapped[int] = mapped_column(INTEGER, primary_key=True)
+    canonical_repository: Mapped[str] = mapped_column(VARCHAR(160), nullable=False)
+    commit_id: Mapped[str] = mapped_column(
+        CHAR(40, charset="ascii", collation="ascii_bin"), nullable=False
+    )
+    event_epoch: Mapped[int] = mapped_column(BIGINT, nullable=False)
+    label: Mapped[int] = mapped_column(INTEGER, nullable=False)
+    partition: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
+    numeric_json: Mapped[dict] = mapped_column(CanonicalJSON(), nullable=False)
+    source_json: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 def uuid_column():
@@ -612,3 +680,46 @@ class SZZLink(Stamp, Base):
     )
     ordinal: Mapped[int] = mapped_column(INTEGER())
     evidence: Mapped[dict] = mapped_column(JSON())
+
+
+class ModelRun(Base):
+    __tablename__ = "model_run"
+    __table_args__ = (
+        Index("ix_model_created", "created_at", "id"),
+        CheckConstraint("seed >= 0", name="ck_model_seed"),
+    )
+    id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    latest_task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("dataset_version.id", ondelete="RESTRICT")
+    )
+    plugin: Mapped[str] = mapped_column(VARCHAR(16))
+    params_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    seed: Mapped[int] = mapped_column(INTEGER())
+    code_sha: Mapped[str] = mapped_column(hash_column())
+    snapshot_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    metrics_json: Mapped[dict | None] = mapped_column(CanonicalJSON())
+    output_json: Mapped[dict | None] = mapped_column(CanonicalJSON())
+    created_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), server_default=func.utc_timestamp(6)
+    )
+
+
+class ModelArtifact(Base):
+    __tablename__ = "model_artifact"
+    __table_args__ = (
+        UniqueConstraint("model_run_id", "kind", name="uq_model_artifact_kind"),
+        CheckConstraint("size >= 0", name="ck_model_artifact_size"),
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    model_run_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("model_run.id", ondelete="RESTRICT")
+    )
+    kind: Mapped[str] = mapped_column(VARCHAR(32))
+    uri: Mapped[str] = mapped_column(VARCHAR(256))
+    sha256: Mapped[str] = mapped_column(hash_column())
+    size: Mapped[int] = mapped_column(BIGINT())

@@ -31,6 +31,10 @@ if ($Browser) {
     $null = New-Item -ItemType Directory -Path $EvidenceDirectory -Force
 }
 Add-Content -LiteralPath $config -Value ('DG_REPOSITORY_DATA_DIR=' + (Join-Path $work 'repositories').Replace('\','/'))
+Add-Content -LiteralPath $config -Value ('DG_PUBLIC_ASSET_DIR=' + (Join-Path $work 'public-assets').Replace('\','/'))
+Add-Content -LiteralPath $config -Value ('DG_DATASET_DATA_DIR=' + (Join-Path $work 'datasets').Replace('\','/'))
+Add-Content -LiteralPath $config -Value ('DG_MODEL_DATA_DIR=' + (Join-Path $work 'models').Replace('\','/'))
+& (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -FilePath $projectPython -ExpectedGrowthGiB 0.05 -ArgumentList @('-m','tests.seed_dataset_fixture','--store',(Join-Path $work 'public-assets'))
 $override = Join-Path $work 'compose.override.yaml'
 @"
 services:

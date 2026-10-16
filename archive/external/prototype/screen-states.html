@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>DefectGuard（缺陷哨兵）· 界面状态与异常清单</title>
+<style>
+/* ==========================================================================
+   DefectGuard 界面状态与异常清单 · 单文件自包含（配套 low-fidelity-wireframes.html）
+   灰阶色板： #ffffff / #f7f7f7 / #e0e0e0 / #9e9e9e / #424242
+   统一 1px 边框；无外部资源；无脚本；以表格为主，不做面板框堆叠
+   内容来源：low-fidelity-wireframes.html 各屏标注块 / 条件态块 / 线框要点 / 条件报错与空态
+   ========================================================================== */
+
+/* ---------- 1. 基础 ---------- */
+*{box-sizing:border-box}
+body{margin:0;padding:44px 0 0 0;background:#e0e0e0;color:#424242;
+     font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC",sans-serif;
+     font-size:13px;line-height:1.55}
+.page{width:1280px;margin:0 auto;background:#ffffff;border-left:1px solid #9e9e9e;border-right:1px solid #9e9e9e;
+      padding:18px 16px 56px}
+h1{font-size:21px;margin:6px 0 4px;letter-spacing:.5px}
+.doc-meta{color:#9e9e9e;font-size:12px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #e0e0e0}
+.mono{font-family:Consolas,"Courier New",monospace}
+.gray{color:#9e9e9e}
+.nowrap{white-space:nowrap}
+
+/* ---------- 2. 顶部固定导航条 ---------- */
+.topnav{position:fixed;top:0;left:0;right:0;z-index:60;background:#424242;border-bottom:2px solid #424242}
+.topnav-inner{width:1280px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:stretch;padding:0 16px}
+.nav-brand{background:#9e9e9e;color:#ffffff;padding:8px 12px;font-size:12px;font-weight:bold;white-space:nowrap}
+.topnav a{color:#f7f7f7;text-decoration:none;padding:8px 9px;font-size:11px;border-right:1px solid #9e9e9e;white-space:nowrap}
+.topnav a:hover{background:#9e9e9e;color:#ffffff}
+
+/* ---------- 3. 页内目录 ---------- */
+.toc{border:1px solid #9e9e9e;background:#f7f7f7;padding:9px 12px;margin-bottom:18px;font-size:12px}
+.toc-cap{font-weight:bold;margin-bottom:4px}
+.toc a{color:#424242;text-decoration:none;display:inline-block;margin-right:14px;line-height:1.95}
+.toc a:hover{text-decoration:underline}
+
+/* ---------- 4. 章节与屏容器（无深色矩形框堆叠） ---------- */
+.sec-h{font-size:15px;margin:26px 0 10px;padding-left:9px;border-left:4px solid #424242}
+.scr{border-top:1px solid #e0e0e0;padding-top:2px;margin-bottom:30px;scroll-margin-top:48px}
+.scr-h{background:#424242;color:#ffffff;padding:7px 12px;font-size:14px;font-weight:bold;letter-spacing:.5px;margin:14px 0 4px}
+.scr-h .sh-tag{float:right;font-weight:normal;font-size:11px;color:#e0e0e0}
+.sub-h{font-size:13px;font-weight:bold;margin:14px 0 6px;padding-bottom:3px;border-bottom:1px solid #e0e0e0}
+
+/* ---------- 5. 表格 ---------- */
+table.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th,.tbl td{border:1px solid #9e9e9e;padding:6px 7px;font-size:12px;text-align:left;vertical-align:top;line-height:1.5}
+.tbl th{background:#e0e0e0;font-weight:bold;vertical-align:middle}
+.tbl tr.alt td{background:#f7f7f7}
+.tbl td.no{text-align:center;font-weight:bold;white-space:nowrap}
+.tbl td.code{font-family:Consolas,"Courier New",monospace;white-space:nowrap}
+.tbl-mini th,.tbl-mini td{font-size:11.5px;padding:5px 6px}
+
+/* ---------- 6. 口径说明（无边框浅底 + 左竖线） ---------- */
+.qnote{border:0;border-left:3px solid #e0e0e0;background:#f7f7f7;padding:9px 12px;font-size:11.5px;line-height:1.8;margin-top:6px}
+.qnote b{font-size:11.5px}
+.qnote p{margin:0 0 4px}
+.qnote p:last-child{margin-bottom:0}
+.addon{border:0;border-left:3px solid #9e9e9e;background:#ffffff;padding:7px 12px;font-size:11.5px;line-height:1.8;margin-top:8px}
+.addon b{font-size:11.5px}
+.addon p{margin:0 0 4px}
+.addon p:last-child{margin-bottom:0}
+.legend-line{border:0;border-left:3px solid #9e9e9e;padding:3px 0 3px 9px;margin:10px 0 0;font-size:11.5px;color:#424242}
+
+/* ---------- 7. 打印 ---------- */
+@media print{
+  body{background:#ffffff;padding:0}
+  .topnav{display:none}
+  .page{width:auto;border:0;padding:0}
+  #overview{page-break-after:always;break-after:page}
+  .scr{page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+  *{print-color-adjust:exact;-webkit-print-color-adjust:exact;color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== 顶部固定导航条（10 屏锚点，无脚本） ==================== -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <span class="nav-brand">DefectGuard 状态与异常清单</span>
+    <a href="#overview">分工 / 全局错误码</a>
+    <a href="#s1">01 登录</a>
+    <a href="#s2">02 仓库</a>
+    <a href="#s3">03 数据与特征</a>
+    <a href="#s4">04 数据集</a>
+    <a href="#s5">05 训练</a>
+    <a href="#s6">06 对比</a>
+    <a href="#s7">07 风险 ★</a>
+    <a href="#s8">08 扫描详情</a>
+    <a href="#s9">09 看板</a>
+    <a href="#s10">10 任务中心</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<h1>DefectGuard（缺陷哨兵）· 界面状态与异常清单</h1>
+<div class="doc-meta">
+  与《low-fidelity-wireframes.html》配套 ｜ 共 10 屏 ｜ 线框图只画正常态，本文档承载全部条件触发态、异常与口径说明
+</div>
+
+<nav class="toc">
+  <div class="toc-cap">目录</div>
+  <a href="#overview">一、文档分工说明 ｜ 二、全局错误码表</a>
+  <a href="#s1">屏 01 登录/注册</a>
+  <a href="#s2">屏 02 仓库管理</a>
+  <a href="#s3">屏 03 数据与特征</a>
+  <a href="#s4">屏 04 数据集</a>
+  <a href="#s5">屏 05 模型训练</a>
+  <a href="#s6">屏 06 模型对比</a>
+  <a href="#s7">屏 07 风险列表</a>
+  <a href="#s8">屏 08 扫描任务详情</a>
+  <a href="#s9">屏 09 趋势看板</a>
+  <a href="#s10">屏 10 任务中心/系统</a>
+</nav>
+
+<!-- ====================================================================
+     一、文档分工说明 ｜ 二、全局错误码表
+     ==================================================================== -->
+<section class="scr" id="overview">
+
+  <div class="sec-h">一、文档分工说明</div>
+  <p style="margin:0 0 8px">
+    低保真原型被拆成两份配套文件，原因是单文件同时承载「界面长什么样」与「什么条件下会出现什么状态」，
+    会让矩形框过多、读者分不清正常态与条件触发态。分工原则是：
+    <b>线框图只画正常态</b>，凡是描述「在某种情况下会发生什么」的内容（报错、告警、空态、降级、失败态、其他步骤形态）全部归本文档；
+    而<b>静态的字段约束与输入提示</b>（无论什么条件都显示给用户的说明）仍留在线框图中。
+  </p>
+  <table class="tbl tbl-mini">
+    <colgroup><col style="width:22%"><col style="width:40%"><col style="width:38%"></colgroup>
+    <thead><tr><th>文件</th><th>放什么</th><th>读图顺序</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">low-fidelity-wireframes.html</td>
+        <td>10 屏<b>正常态</b>线框：面板 / 表格 / 图表 / 统计卡 / 控件形态；每屏 4 行标注（角色 / 本屏主任务 / 关键控件 / 主要跳转）；静态字段约束与输入提示</td>
+        <td>先读它，建立信息架构与页面骨架的认知</td>
+      </tr>
+      <tr class="alt">
+        <td class="mono">screen-states.html（本文档）</td>
+        <td>全部<b>条件触发态、异常、错误码、空态、降级与口径说明</b>；每屏三张内容：前提与归属 / 状态与异常 / 口径说明</td>
+        <td>再读本文档，逐屏核对每一条状态在什么条件下出现、界面变成什么样</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="legend-line">
+    读图约定（线框图中）：<b>实线框 + 白底</b> → 正常态，这一屏正常呈现的界面；<b>无边框浅底 + 左竖线</b> → 说明文字（角色 / 主任务 / 关键控件 / 主要跳转），不是界面的一部分。
+    本文档中：<b>每屏「状态与异常」表的编号 ①②③… 与该屏源标注块「异常态」的编号严格对应</b>；编号后带「补」的行来自该屏的条件报错、告警、空态、条件态块或面板脚注，源标注块中没有对应编号。
+  </div>
+
+  <div class="sec-h">二、全局错误码表</div>
+  <p style="margin:0 0 8px">
+    下表整体搬自线框图「屏 01」中 panel-hd 为「状态与错误映射速查」的面板——它是全局参考表，不属于登录页的正常界面。
+    行内提示文案取自《03-产品需求文档》US-22 与全局错误码表。
+  </p>
+  <table class="tbl">
+    <colgroup><col style="width:24%"><col style="width:12%"><col style="width:12%"><col style="width:52%"></colgroup>
+    <thead><tr><th>场景</th><th>HTTP</th><th>错误码</th><th>界面表现</th></tr></thead>
+    <tbody>
+      <tr><td>用户名或密码错误</td><td class="mono">401</td><td class="code">—</td><td>行内提示「用户名或密码错误」</td></tr>
+      <tr class="alt"><td>用户名或邮箱重复</td><td class="mono">409</td><td class="code">1004</td><td>注册 Tab 字段标红 + 「用户名或邮箱已存在」</td></tr>
+      <tr><td>登录失败超 5 次/分钟</td><td class="mono">429</td><td class="code">1003</td><td>行内提示「请求过于频繁，请稍后重试」</td></tr>
+      <tr class="alt"><td>账号已禁用</td><td class="mono">403</td><td class="code">1002</td><td>行内提示「账号已禁用，请联系管理员」</td></tr>
+      <tr><td>token 过期或已登出</td><td class="mono">401</td><td class="code">1001</td><td>跳回本屏；登录成功后回跳原页面</td></tr>
+    </tbody>
+  </table>
+  <div class="legend-line">
+    其余错误码不在本表内，按屏分散登记于屏 02～屏 10 的「状态与异常」表：2001（SSRF 拦截）、2002（仓库不存在）、2003（URL 重复）、2004（幂等拦截）、3002（数据未就绪）、3003（参数错误）、4001（超参不合法）、4002（模型/训练实例不存在）。
+  </div>
+
+</section>
+
+<!-- ====================================================================
+     屏 01 · 登录/注册（/login）
+     ==================================================================== -->
+<section class="scr" id="s1">
+  <div class="scr-h">屏 01 · 登录/注册（/login）<span class="sh-tag">模块 M1 ｜ US-22 ｜ Sprint 2 ｜ 源线框 id=s1</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>未持有有效登录态（从未登录、token 过期或已登出）而访问任意受保护页面时被拦截并跳转至本屏（错误码 1001 / HTTP 401）</td>
+        <td>US-22 用户与权限管理（P1，3 点，Sprint 2）</td>
+        <td class="mono">A01 注册 / A02 登录 / A03 当前用户信息</td>
+        <td class="mono">user、operation_log</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>注册提交时用户名或邮箱与既有记录重复（user 表唯一约束命中）</td>
+        <td>注册 Tab 对应字段标红并提示「用户名或邮箱已存在」；字段级标红时<b>已填内容保留</b>（源线框注册卡行内提示原文：「用户名或邮箱重复时字段级标红，已填内容保留」）</td>
+        <td class="code">1004<br>HTTP 409</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>同一 IP 1 分钟内失败登录超过 5 次</td>
+        <td>登录卡按钮下方行内提示「请求过于频繁，请稍后重试」；持续触发则封禁窗口顺延</td>
+        <td class="code">1003<br>HTTP 429</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>未登录访问受保护页面被拦截</td>
+        <td>跳转本屏；登录成功后回跳原目标页（默认 /repos）。另：登出后原 token 写入 Redis 黑名单，再用返回 1001 并回到本屏</td>
+        <td class="code">1001<br>HTTP 401</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>账号被禁用（<span class="mono">user.status=0</span>）</td>
+        <td>登录被拒绝，行内提示「账号已禁用，请联系管理员」（行内提示区位于按钮下方，不弹窗、不跳页）</td>
+        <td class="code">1002<br>HTTP 403</td>
+      </tr>
+      <tr>
+        <td class="no">⑤<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>登录提交的凭证不匹配</td>
+        <td>登录卡按钮下方行内提示「用户名或密码错误」，不弹窗、不跳页（来自源线框登录卡条件报错行与全局错误码表；源标注块「异常态」未单列）</td>
+        <td class="code">—<br>HTTP 401</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>会话与安全口径：</b>JWT access_token 有效期 <b>2 小时</b>（A02 返回，前端存入 Pinia）；登出后该 token 写入 <b>Redis 黑名单</b>，再用返回 <b>1001</b>；密码 bcrypt 散列存储；RBAC 仅 admin 可删仓库/删模型/管理用户。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 02 · 仓库管理（/repos）
+     ==================================================================== -->
+<section class="scr" id="s2">
+  <div class="scr-h">屏 02 · 仓库管理（/repos）<span class="sh-tag">模块 M2 ｜ US-01/02/03 ｜ Sprint 1（US-03 为 Sprint 2）｜ 源线框 id=s2</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录（JWT）；列表来自 A04，可按 <span class="mono">clone_status</span> 过滤</td>
+        <td>US-01 添加仓库、US-02 数据准备可视化、US-03 增量同步</td>
+        <td class="mono">A04 / A05 / A06 / A08</td>
+        <td class="mono">repository</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>新增仓库时提交的 URL 非 https、为内网 IP 或 localhost（SSRF 校验不通过）</td>
+        <td><b>不创建 repository 记录、不发起任何网络请求</b>，列表不新增行；失败行展示样式为状态列 <span class="mono">clone_failed</span> + 原因文案「SSRF 拦截：非 https 或内网地址」+ 「重试」按钮</td>
+        <td class="code">2001</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>同一 URL 已存在（<span class="mono">repository.url</span> 唯一约束命中）</td>
+        <td>提示已存在并<b>回显既有 repo_id</b>；不新增记录</td>
+        <td class="code">2003</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>仓库正在克隆，或同参数同步任务已在运行</td>
+        <td>被幂等键 <span class="mono">(repo_id, kind, params_hash)</span> 拦截，不产生重复任务、列表不新增行</td>
+        <td class="code">2004</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>克隆超时或认证失败</td>
+        <td>按指数退避自动重试 3 次仍失败则行状态置 <span class="mono">clone_failed</span> 并回显 <span class="mono">fail_reason</span>（示例：「Authentication failed（私有仓库无凭证）」），操作列出现「重试」按钮，允许手动重试</td>
+        <td class="code">—<br>（行状态 clone_failed）</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>列表为空（尚无任何仓库记录）</td>
+        <td>列表区显示空态文案「尚无仓库，请先添加一个 Git 仓库」+ 新增入口（源文件该屏未画出空态元素，空态仅在标注块「异常态 ⑤」中约定）</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">⑥<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>列表中出现了非 https / 内网地址的行（源线框示例行「internal/demo ※1」）</td>
+        <td>该行以 <span class="mono">clone_failed</span> 呈现。源文件 panel-note ※1 已就此与文档冲突作出说明：按 US-01 AC2，非 https / 内网 IP / localhost 在 A05 即返回 2001 且<b>不创建记录</b>，因此正常流程下不会出现该行；保留它仅用于演示 clone_failed 行的展示样式，规则以 US-01 AC2 为准</td>
+        <td class="code">2001<br>（按 AC2）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>异步任务口径：</b>克隆走 Celery <b>io 池</b>；A05 同步段只做「URL 校验 + 落库 + 入队」，随即返回 <span class="mono">repo_id</span> 与 <span class="mono">task_id</span>；前端以 <b>2s 轮询</b>刷新状态与进度，进入终态后停止轮询；失败按<b>指数退避重试 3 次</b>。</p>
+    <p>状态机口径（源线框「状态机与轮询」面板）：<span class="mono">cloning</span> = 克隆 + 提交元数据/diff 解析入库；<span class="mono">ready</span> = commit_count 与 last_synced_at 更新；<span class="mono">clone_failed</span> = 3 次指数退避重试后置失败，回显 fail_reason，可手动重试；刷新或重开页面后由后端持久化状态恢复进度，不依赖页面会话。</p>
+  </div>
+  <div class="addon">
+    <p><b>判断说明（保留 vs 搬走）：</b>新增仓库对话框中的「仅允许 https 公网地址；内网 IP / localhost 将被 SSRF 校验拦截（2001）」是<b>静态约束</b>——无论什么条件都显示给用户，因此保留在线框图中（已由条件报错样式改为普通提示样式），不与上表 ① 重复。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 03 · 数据与特征（/repos/:id/data）
+     ==================================================================== -->
+<section class="scr" id="s3">
+  <div class="scr-h">屏 03 · 数据与特征（/repos/:id/data）<span class="sh-tag">模块 M2/M3/M4 ｜ US-02/04/05/06/07 ｜ Sprint 1（US-07 为 Sprint 2）｜ 源线框 id=s3</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>从屏 02 仓库列表进入（A06 仓库详情）；仓库已 ready，或处于 cloning 时先看解析进度</td>
+        <td>US-02 数据准备可视化、US-04 缺陷修复提交识别、US-05 SZZ 标注、<b>US-06 Kamei 14 维特征提取（P0）</b>、US-07 特征质量统计（P1，Sprint 2）<br><b>补充归属说明</b>：《02-产品设计文档》M8 的 10 条路由中没有独立的预测页，故 <b>US-16 单提交预测（P1，Sprint 2）的入口由本屏提交表格行内承载</b>（A24）；<b>US-10 语义特征（P2，Sprint 3）</b>的开关位于本屏特征区</td>
+        <td class="mono">A06 / A09 / A10 / A11 / A12 / A13 / A14 / A15 / A24</td>
+        <td class="mono">git_commit、szz_annotation、commit_feature</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>未完成 SZZ 就筛选 <span class="mono">label=buggy</span></td>
+        <td>提交表格为空并提示「请先执行 SZZ 标注」——<b>非报错</b>，页面其余区块（统计卡、图表）照常呈现</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>合并提交默认跳过 diff 解析（示例：跳过 2,141 条，缺失率 4.3%），<b>缺失率超 5%</b> 时</td>
+        <td>触发黄色告警并建议「切换 first-parent 策略重算」</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>blame 回溯到仓库根提交</td>
+        <td>该条标注为 buggy 并打 <span class="mono">is_boundary=1</span>；统计页<b>单独计数</b>（SZZ 标注统计卡中出现「边界标注 is_boundary 12」一栏）</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>SZZ 运行中重复触发「触发 SZZ 标注」</td>
+        <td>幂等拦截（<span class="mono">task_key</span> 复用原 task_id），不新建任务、按钮不产生新记录</td>
+        <td class="code">2004</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>仓库未 ready 即触发特征提取</td>
+        <td>返回 2004 并提示先完成克隆解析，不产生特征记录</td>
+        <td class="code">2004</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>算法口径：</b>SZZ 采用 <b>RA-SZZ</b>（先剔除注释行与空行，再对剩余行逐行 git blame 回溯）；标注任务以 repo_id 为单位幂等，<b>重跑先清后算</b>；特征提取按提交区间<b>多进程分片</b>并行，已计算提交按 <span class="mono">(sha, feature_version)</span> 幂等跳过。</p>
+    <p>特征分布口径（源线框图表区）：X 轴 <span class="mono">la</span>（新增行数，对数刻度占位）｜ Y 轴提交频数；超出 P99 的提交可下钻至 A09 提交详情核查。示例分位数：<b>la 中位数 18 ｜ P90 210 ｜ P99 1,053 ｜ 最大 15,732</b>；entropy 无缺失。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 04 · 数据集（/datasets）
+     ==================================================================== -->
+<section class="scr" id="s4">
+  <div class="scr-h">屏 04 · 数据集（/datasets）<span class="sh-tag">模块 M5 ｜ US-08/09 ｜ Sprint 1 ｜ 源线框 id=s4</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录；所选仓库已完成 RA-SZZ 标注与 Kamei 14 维特征提取（否则创建被 3002 拦截）</td>
+        <td>US-08 数据集时间序列划分、US-09 类别不平衡分析</td>
+        <td class="mono">A16 / A17</td>
+        <td class="mono">dataset / dataset_item</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>SZZ 或特征提取未完成就创建数据集</td>
+        <td>提示缺失的前置步骤，创建被拦截</td>
+        <td class="code">3002 数据未就绪</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td><span class="mono">label</span> 全为 -1（未 SZZ）</td>
+        <td>创建被拦截（与 ① 同一错误码），列表不产生新数据集记录</td>
+        <td class="code">3002</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td><b>不平衡比超过阈值（默认 5:1）时出现</b>（源线框条件态块 <span class="mono">data-cond</span> 原文）。<br>进一步：极端不平衡（如缺陷引入率 1.2%，clean:buggy ≈ 82:1）时告警升级</td>
+        <td>
+          出现不平衡提示条：<b>「不平衡提示：不平衡比 10.6:1，建议启用不平衡处理策略」（clean 45,921 : buggy 4,312；缺陷引入率 8.6%）</b>。<br>
+          极端不平衡时告警<b>升级</b>为「正样本过少，建议扩充时间窗或合并仓库」；<b>buggy 少于 30 条时建议不宜训练并禁用 SMOTE 选项</b>。
+        </td>
+        <td class="code">—<br>（条件态 ③）</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>仓库时间跨度不足以按 8:1:1 三折切分</td>
+        <td>创建被拒绝并提示最小提交数要求</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>重复创建同参数数据集</td>
+        <td>生成新 <span class="mono">dataset_id</span>（版本化），<b>不覆盖旧数据集</b>；不作为错误提示，界面正常展示新旧两个版本卡片</td>
+        <td class="code">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>防泄漏与不可变：</b><b>禁止随机打乱划分</b>，一律按 commit_time 升序切分；数据集创建时物化 <span class="mono">dataset_item</span> 快照（含创建时固化的 label），<b>不可变</b>，重建即新版本；须满足 <span class="mono">max(train.commit_time) &lt; min(valid.commit_time) &lt; min(test.commit_time)</span>。</p>
+    <p>三折统计口径（源线框堆叠条形图）：train 40,186（缺陷率 8.4%）｜ valid 5,023（9.1%）｜ test 5,024（9.6%）；共 50,233 条 · split_date 2021-03-14。不平衡策略随 A19 发起训练时记入 <span class="mono">model_run.params</span>：类权重 scale_pos_weight（默认）/ SMOTE 过采样（仅作用于训练折）/ 阈值移动 Youden's J（在 valid 折选阈值并记入 run 元数据）。</p>
+  </div>
+  <div class="addon">
+    <p><b>判断说明（保留 vs 搬走）：</b>划分策略单选项下的「禁止随机打乱划分：随机切分会导致时间泄漏、指标虚高」是<b>静态约束</b>——无论什么条件都显示给用户，因此保留在线框图中（已由条件报错样式改为普通提示样式），不搬入本文档。</p>
+    <p>另：「极端不平衡（缺陷引入率 1.2%，clean:buggy ≈ 82:1）时告警升级为「正样本过少，建议扩充时间窗或合并仓库」；buggy 少于 30 条时建议不宜训练并禁用 SMOTE 选项」是<b>条件态</b>，已搬入上表 ③。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 05 · 模型训练（/models）
+     ==================================================================== -->
+<section class="scr" id="s5">
+  <div class="scr-h">屏 05 · 模型训练（/models）<span class="sh-tag">模块 M6 ｜ US-11/12/13 ｜ Sprint 1（US-12 为 Sprint 2）｜ 源线框 id=s5</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录；存在已完成 SZZ + 特征 + 数据集划分的仓库（dataset_id=12）；否则发起训练被 3002 拦截</td>
+        <td>US-11 发起模型训练（P0）、US-12 训练监控（P1，Sprint 2）、US-13 Effort-unaware 指标（P0，Sprint 1）</td>
+        <td class="mono">A18 / A19 / A20 / A21 / A22</td>
+        <td class="mono">model_info / model_run</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td><b>提交的 <span class="mono">max_depth</span> &lt; 1 时出现</b>（源线框条件态块 <span class="mono">data-cond</span> 原文）。超参不合法，如 <span class="mono">max_depth=0</span></td>
+        <td>
+          <span class="mono">max_depth</span> 输入框以错误样式（加粗深底）显示值 <b>0</b>，右侧提示「要求 ≥ 1」；下方行内报错「⚠ 超参不合法：max_depth 要求 ≥ 1（错误码 4001）」。<br>
+          <b>字段标红提示，不产生任何 run 记录</b>；修正后可再次提交。US-11 异常场景中的不合法用例为 xgb 的 <span class="mono">max_depth=0</span>（其 hyperparam_schema 要求 ≥ 1）。
+        </td>
+        <td class="code">4001<br>（条件态 ①）</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>数据集关联仓库未完成 SZZ / 特征提取</td>
+        <td>message 明确指出缺失的前置步骤；不产生 run 记录</td>
+        <td class="code">3002</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>深度模型纯 CPU 超时（SoftTimeLimit 60 分钟）</td>
+        <td>运行列表该行 <span class="mono">status=failed</span>、<span class="mono">fail_reason=SoftTimeLimitExceeded</span>；可改用经典模型或减小 epoch 后重试</td>
+        <td class="code">—<br>status=failed</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>Precision 分母为 0（valid 折无预测正例）</td>
+        <td>该项指标置 <span class="mono">null</span> 并标注「该折无预测正例，precision 不可定义」；其余五项正常返回，<b>run 仍为 succeeded</b>（不因单项不可定义而置失败）</td>
+        <td class="code">—<br>status=succeeded</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>连接被 kill（超过心跳阈值：5 分钟无日志）</td>
+        <td>运行列表该行标记 <span class="mono">failed</span>（<span class="mono">worker lost</span>），指标摘要列显示「fail_reason: worker lost（超心跳阈值 5 分钟无日志）」；任务中心置顶提示</td>
+        <td class="code">—<br>status=failed</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>训练状态机与可复现：</b>训练全程异步（Celery <b>cpu 池</b>），五态状态机 <span class="mono">pending / running / succeeded / failed / cancelled</span>；前端 <b>2s 轮询</b>状态与日志尾部，进入终态后停止轮询；固定随机种子 <span class="mono">random_state=42</span> 记入 run.params，保证指标可复现。</p>
+    <p>校验与删除口径（源线框面板脚注）：服务端按 JSON Schema 二次校验超参；校验通过才落库 <span class="mono">model_run(status=pending)</span> 并投递 Celery cpu 池；字段级报错时不产生任何 run 记录。终态（succeeded / failed / cancelled）方可通过 A22 删除并连带清理模型工件；failed → 手动重试回到 pending，按指数退避最多自动重试 3 次。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 06 · 模型对比（/models/compare）
+     ==================================================================== -->
+<section class="scr" id="s6">
+  <div class="scr-h">屏 06 · 模型对比（/models/compare）<span class="sh-tag">模块 M6/M8 ｜ US-14/15 ｜ Sprint 2 ｜ 源线框 id=s6</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>从屏 05 运行列表勾选多个 run 进入；所选 run 中至少 2 个为 <span class="mono">succeeded</span> 方可对比</td>
+        <td>US-14 Effort-aware 指标、US-15 多模型对比</td>
+        <td class="mono">A20 / A21 / A23</td>
+        <td class="mono">model_run（metrics / ea_metrics）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>请求含不存在的 run id（如 999）</td>
+        <td>前端提示后<b>自动剔除无效 id 重新请求</b>，页面不空白</td>
+        <td class="code">4002 模型/训练实例不存在</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>含非 succeeded 的 run（如 103 pending）</td>
+        <td>该行<b>跳过</b>并在 <span class="mono">data.warnings</span> 标注原因，其余 run 正常对比；「④ 状态 / 耗时对比条」中该行显示「pending（跳过，warnings 标注）」</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>剔除后仅剩 1 个有效 run</td>
+        <td>雷达图与对比表<b>降级为单模型指标卡</b>，<b>不报错也不空白</b></td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>某项指标为 null（如 valid 折无预测正例导致 precision 不可定义）</td>
+        <td>单元格显示「—」并附 tooltip 说明，不影响其余模型对比（对比明细表中多行为「—」即此形态）</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">⑤<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>已选定最优模型（run 105 · lgbm）后</td>
+        <td>页面底部出现确认提示条「✓ 已选定 run 105（lgbm）为最优模型 → 设为预测页默认模型」，并说明后续发起 A24 单提交预测 / A25 批量扫描时 <span class="mono">model_run_id</span> 预填 105，该选择可随时在屏 07 顶部「模型」下拉中切换；提示条带「确认并应用到预测页」按钮（来自源线框该屏确认提示条；源标注块「异常态」未单列）</td>
+        <td class="code">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>本屏源文件未设 <span class="mono">.wf-note</span> 线框要点块，该屏没有独立的口径说明段落。</b>下文为源文件该屏面板脚注中可直接引用的口径，一并归入本文档：</p>
+  </div>
+  <div class="addon">
+    <p><b>Effort-aware 三项口径：</b>Recall@20%Effort / PofB20 / Popt20，以 LA 为审查工作量。</p>
+    <p><b>数据口径：</b>test 折累计新增代码 214,300 行；按风险降序审查前 20% 工作量（42,860 行）命中 280/480 个 buggy 提交。deepjit 的 Popt20 最高（0.7588）但训练耗时约 45 分钟，远超 lgbm 的约 3 分钟；对比明细表中该行高亮为综合选定结果。</p>
+    <p><b>对比口径：</b>仅 succeeded 参与对比；对比明细表中「—」表示该 run 未产出该项指标；最优单元格加粗高亮。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 07 · 风险列表（/predictions）★核心页
+     ==================================================================== -->
+<section class="scr" id="s7">
+  <div class="scr-h">屏 07 · 风险列表（/predictions）★核心页<span class="sh-tag">模块 M7 ｜ US-17/18/19 ｜ Sprint 1（US-17/18 为 Sprint 2）｜ 源线框 id=s7</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录；目标仓库已完成一次成功的批量扫描（A25 产出 task#1033 结果集）；无扫描结果时展示空态引导</td>
+        <td>US-17 风险分级、US-18 SHAP 缺陷归因、US-19 批量风险扫描（P0，Sprint 1）</td>
+        <td class="mono">A24 / A25 / A27 / A28</td>
+        <td class="mono">prediction_result（prob_buggy / risk_level / la / top_factors）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>切换二级排序键（<span class="mono">prob_buggy × LA</span>）后</td>
+        <td><span class="mono">7d21b0f</span>（prob_buggy 0.68、LA 1,870）置顶，列表提示「该提交新增 1,870 行且风险高，建议优先安排双人细审」</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>概率落在阈值边界（0.6 归 high、0.3 归 medium）且出现浮点抖动（0.6000001）</td>
+        <td>判级前先四舍五入至 4 位小数再判级，避免同一提交在不同入口得到不同等级；界面等级点不变</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>模型工件缺失导致解释失败</td>
+        <td><b>概率与风险等级仍正常返回</b>（列表不缺失该行）；打开归因抽屉时抽屉显示「暂无解释」占位，<b>归因失败不阻塞列表</b></td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td><b>目标仓库尚无任何批量扫描结果时</b>（源线框条件态块 <span class="mono">data-cond</span> 原文：「替代上方扫描结果表出现」）</td>
+        <td>
+          空态内容：标题「暂无风险扫描结果」，说明「该仓库已完成 SZZ 标注，但尚无任何批量扫描结果。<b>此时上方的扫描结果表不出现</b>，本页只呈现本空态。」，以及按钮「先发起一次批量扫描（A25）」。
+        </td>
+        <td class="code">—<br>（条件态 ④）</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>概率恰为 0.60 / 0.30 时</td>
+        <td>按「含下界」规则判级（0.60 → high，0.30 → medium）；等级图例同步标注该边界规则</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">⑥<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>低风险行无显著正贡献因子时</td>
+        <td>Top 因子列显示「—」（来自源线框「说明 ｜ 等级图例与建议对照」块脚注 ③）</td>
+        <td class="code">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>排序与解释口径：</b>默认按 <span class="mono">prob_buggy</span> <b>降序</b>；支持 <span class="mono">prob_buggy × LA</span>（预期缺陷密度）二级排序键使「高风险大改动」置顶；归因由插件 <span class="mono">explain()</span> 统一封装——树模型用 TreeExplainer、线性模型用 LinearExplainer、深度模型用 DeepSHAP / GradientSHAP。</p>
+    <p><b>判级口径（源线框等级图例块）：</b>① 判级前先四舍五入至 4 位小数；边界值含下界（0.60 → 高、0.30 → 中）。② <span class="mono">prob_buggy × LA</span> 作为「高风险大改动」二级排序键。③ 低风险行的 Top 因子显示「—」（无显著正贡献因子）。</p>
+    <p><b>排序与下钻口径（源线框「说明 ｜ 排序切换与下钻」块）：</b>默认排序 <span class="mono">prob_buggy</span> 降序；二级排序为预期缺陷密度 <span class="mono">prob_buggy × LA</span>；概率 / LA / 提交时间列均可切换升降序；下钻入口——本页由屏 08 扫描任务完成后跳入，屏 09 看板的周/等级/Top 榜下钻亦落到本页并保留当前 model_run 过滤条件。</p>
+    <p><b>抽屉口径（源线框归因抽屉脚注）：</b>归因不跳转、不丢失列表筛选与分页状态；解释不可用时本抽屉显示「暂无解释」占位。</p>
+    <p><b>文档冲突提示（源线框 panel-note）：</b><span class="mono">b4c8811</span> 一行，线框按 US-17 AC1 / 02 文档风险分级规则（prob_buggy ≥ 0.6 → high）标为「高」；PRD 示例表中该行记为「中」，冲突处以分级规则为准。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 08 · 扫描任务详情（/predictions/:taskId）
+     ==================================================================== -->
+<section class="scr" id="s8">
+  <div class="scr-h">屏 08 · 扫描任务详情（/predictions/:taskId）<span class="sh-tag">模块 M7 ｜ US-19 ｜ Sprint 1 ｜ 源线框 id=s8</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>从屏 07 顶部「扫描」下拉、屏 10 任务中心「查看详情」或发起扫描后的跳转进入；taskId 必须存在，否则 3003 参数错误</td>
+        <td>US-19 批量风险扫描（P0）</td>
+        <td class="mono">A25 / A26 / A27</td>
+        <td class="mono">prediction_task / prediction_result</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>单条特征计算抛错</td>
+        <td>该条标记 <span class="mono">error</span> 并计入失败计数，<b>任务继续执行</b>，最终 <span class="mono">succeeded</span> 且响应含 <span class="mono">success_count</span> / <span class="mono">fail_count</span>（源线框示例：成功 497 / 失败 3）；「失败明细」可折叠区展开后按 sha / 错误类型 / 处理三列列出失败条目</td>
+        <td class="code">—<br>status=succeeded</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>相同 <span class="mono">(repo_id, kind, params_hash)</span> 的扫描任务运行中再次发起</td>
+        <td>按幂等键<b>复用同一 task_id</b>，不产生重复任务；页面停留在原任务详情</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>中途取消（点「取消任务」）</td>
+        <td><span class="mono">status=cancelled</span>，<b>已完成部分结果保留可查</b>；结果统计与分页表照常展示</td>
+        <td class="code">—<br>status=cancelled</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>任务停留在 running 超过心跳阈值（5 分钟无日志）</td>
+        <td>标记疑似僵死，并在任务中心（屏 10）置顶提示</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">⑤<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>taskId 不存在（直接访问 /predictions/:taskId）</td>
+        <td>返回参数错误，无法进入任务详情——该条件写在本屏标注块「进入条件」中，源标注块「异常态」未单列</td>
+        <td class="code">3003<br>参数错误</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">⑥<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>单条解释不可用（源线框失败明细第 3 行）</td>
+        <td>概率与等级仍写入，<span class="mono">top_factors</span> 置空，「暂无解释」占位；该条不视为失败</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">⑦<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>失败条目的三类成因（源线框失败明细表三行）</td>
+        <td>merge 提交 → diff 解析异常：已计入 fail_count，任务继续执行，可点「重试失败项」单独重跑；特征缺失 → 该条标记 error，<b>不写 prediction_result 脏数据</b>；解释不可用 → 见上行 ⑥</td>
+        <td class="code">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>批量容错：</b>单条失败<b>不终止整体任务</b>；超大范围（约 5 万提交）分批推理、进度持续推进、可中途取消且<b>已完成部分结果保留可查</b>；进度条由前端 2s 轮询 A26，进入终态后停止轮询并提示。</p>
+    <p><b>任务操作口径（源线框「任务操作」面板）：</b>① 取消后 status=cancelled，已完成部分结果保留可查；②「重试失败项」只重跑 error 条目，复用同一 task_id；③ 导出内容为当前结果集（含 sha / 概率 / 等级 / LA / Top 因子）。</p>
+    <p><b>失败明细折叠口径：</b>折叠状态下仅显示「3 条预测失败」与展开三角；失败明细可按状态筛选查看。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 09 · 趋势看板（/dashboard）
+     ==================================================================== -->
+<section class="scr" id="s9">
+  <div class="scr-h">屏 09 · 趋势看板（/dashboard）★<span class="sh-tag">模块 M8 ｜ US-20/21 ｜ Sprint 2（US-21 为 Sprint 3）｜ 源线框 id=s9</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录；仓库已完成 SZZ 标注且存在至少一次成功的批量扫描（否则风险类 KPI 显示「—」+ 空态引导）；未显式选择仓库时默认选中列表第一个 ready 仓库</td>
+        <td>US-20 缺陷引入趋势看板、US-21 仓库风险概览（P2，Sprint 3）</td>
+        <td class="mono">A29 / A30（下钻涉及 A10 / A27）</td>
+        <td class="mono">prediction_result / git_commit</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>仓库已完成 SZZ 但尚无任何扫描结果</td>
+        <td>显示空态引导：标题「尚无扫描结果」+ 说明「该仓库已完成 SZZ 标注，但尚无任何扫描结果。」+ 按钮「先发起一次批量扫描」；<b>不报错也不空白图表</b></td>
+        <td class="code">—<br>（条件态 ①）</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td>时间跨度达 10 年（520+ 周）超过单序列上限</td>
+        <td>自动降采样为按月聚合并在响应标注 <span class="mono">granularity=month</span>；出现提示块「跨度较长，已切换为月视图」（说明「时间跨度 520+ 周超过单序列上限，A30 已按 granularity=month 聚合返回」）与按钮「切回周视图（降级为按月）」</td>
+        <td class="code">—<br>（条件态 ②）</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td><span class="mono">repo_id</span> 无效</td>
+        <td>页面显示「仓库不存在」占位</td>
+        <td class="code">2002 仓库不存在<br>HTTP 404</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>仓库刚 ready 从未扫描</td>
+        <td>
+          风险类 KPI 卡显示「—」占位 + 「去发起扫描」引导：高风险占比 = <b>—</b>、Top 风险开发者 = <b>—</b>；<br>
+          而有数字段（缺陷引入率 8.6%、提交总数 50,233 等）正常展示，<b>不整页报错</b>。
+        </td>
+        <td class="code">—<br>（条件态 ④）</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>未携带 repo_id 直接调用 A29</td>
+        <td>提示「必须选择仓库」，看板不渲染数据</td>
+        <td class="code">3003 参数错误<br>HTTP 400</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">⑥<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>条件态 ①②④ 出现时</td>
+        <td>源线框条件态块 <span class="mono">data-cond</span> 原文：「条件态 ①②④｜无扫描结果 / 时间跨度过长 / 仓库刚 ready 时，<b>替代上方图表区出现</b>」——即三者在同一替代区块内并列呈现，出现时上方图表区不再展示</td>
+        <td class="code">—<br>（条件态 ①②④）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>下钻与联动：</b>看板全部图表支持<b>点击下钻</b>——趋势图某周 → 该时间窗过滤后的风险列表并保留当前 <span class="mono">model_run</span> 过滤条件；饼图扇区 → 对应等级结果；Top 榜 → 提交详情。仓库与周期切换器<b>全局联动</b>所有 KPI 卡与图表，切换仅重发 A29/A30，无整页刷新。</p>
+    <p><b>统计口径（源线框面板脚注）：</b>最近一次成功扫描（task#1033，最近 500 条提交，成功 497 条）；高风险 7.4%（37 条）、中 24.3%（121 条）、低 68.2%（339 条）。趋势示例：2026-08-24 ~ 09-14 四周，实际引入 5/4/6/3，run 105 扫描命中 3/2/4/2。</p>
+  </div>
+</section>
+
+<!-- ====================================================================
+     屏 10 · 任务中心 / 系统（/system）
+     ==================================================================== -->
+<section class="scr" id="s10">
+  <div class="scr-h">屏 10 · 任务中心/系统（/system）<span class="sh-tag">模块 M9/M1 ｜ US-22/23 ｜ Sprint 2 ｜ 源线框 id=s10</span></div>
+
+  <div class="sub-h">① 前提与归属</div>
+  <table class="tbl">
+    <colgroup><col style="width:26%"><col style="width:24%"><col style="width:26%"><col style="width:24%"></colgroup>
+    <thead><tr><th>进入条件</th><th>关联用户故事</th><th>接口</th><th>数据表</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>已登录；任务表来自 A31（统一任务表 <span class="mono">async_task</span>），健康状态来自 A32（匿名可访问）</td>
+        <td>US-23 任务中心与健康检查、US-22 用户与权限管理</td>
+        <td class="mono">A31 / A32（跳转涉及 A26 / A27）</td>
+        <td class="mono">async_task、user、operation_log</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">② 状态与异常</div>
+  <table class="tbl">
+    <colgroup><col style="width:6%"><col style="width:23%"><col style="width:53%"><col style="width:18%"></colgroup>
+    <thead><tr><th>编号</th><th>何时出现（条件）</th><th>界面变化</th><th>错误码</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="no">①</td>
+        <td>某 SZZ 任务 <span class="mono">failed</span></td>
+        <td>点击「重试」重新入队、状态回 <span class="mono">pending</span>，<b>不再计入自动重试次数</b>（仅手动重试）；失败行操作列显示「重试」+ 说明「已自动重试 3 次仍未成功，仅手动重试」</td>
+        <td class="code">—<br>failed → pending</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">②</td>
+        <td><b>kill 全部 Celery Worker 后刷新</b>（源线框条件态 ②）</td>
+        <td>
+          组件健康灯出现失败态行：<span class="mono">Celery Worker（失败态示意 · 条件态 ②）</span>，灯为空心 + 加粗，右侧标注 <span class="mono">down</span>；<br>
+          同时出现告警条「⚠ Worker down：相关任务暂停调度，顶部告警条出现（条件态 ②）」。任一组件失联时对应灯变红（灰阶下以空心 + 加粗表示）并出现顶部告警条。
+        </td>
+        <td class="code">—<br>（条件态 ②）</td>
+      </tr>
+      <tr>
+        <td class="no">③</td>
+        <td>普通用户调用管理员接口（如删除仓库 A07）</td>
+        <td>资源不变更，接口返回 1002（HTTP 403），且该越权尝试写入 <span class="mono">operation_log</span> 审计表；界面不出现被删对象</td>
+        <td class="code">1002<br>HTTP 403</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">④</td>
+        <td>任务停留 running 超过心跳阈值（5 分钟无日志）</td>
+        <td>标记疑似僵死并<b>置顶提示</b>；本屏告警条示例：「⚠ 检测到 1 个疑似僵死任务（running 超过心跳阈值 5 分钟），已置顶（#1026 特征 / apache/lucene；已自动重试 3 次仍未成功，仅可手动重试）」</td>
+        <td class="code">—</td>
+      </tr>
+      <tr>
+        <td class="no">⑤</td>
+        <td>健康检查端点匿名可访问（A32）</td>
+        <td>无需登录即可请求并正常返回组件健康状态，不重定向至登录屏——属对外运维口径，不是异常</td>
+        <td class="code">—</td>
+      </tr>
+      <tr class="alt">
+        <td class="no">⑥<br><span class="gray" style="font-weight:normal">补</span></td>
+        <td>账号被禁用（<span class="mono">user.status=0</span>）</td>
+        <td>该账号下次登录被拒绝并提示「账号已禁用，请联系管理员」（与屏 01 ④ 同一规则，来源本屏「成员与角色」面板脚注）；成员表中可对 user 执行「禁用」操作</td>
+        <td class="code">1002<br>HTTP 403</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sub-h">③ 口径说明</div>
+  <div class="qnote">
+    <p><b>工程化口径：</b>六类长任务统一登记于 <span class="mono">async_task</span> 表：克隆与同步走 Celery <b>io 池</b>，SZZ / 特征 / 训练 / 扫描走 <b>cpu 池</b>；任务状态存 MySQL，API 与 Worker <b>无状态可水平扩展</b>（会话全靠 JWT + Redis 黑名单）；幂等键 <span class="mono">(repo_id, kind, params_hash)</span> 防重复提交。</p>
+    <p><b>任务类型取值：</b>克隆 / 同步 / SZZ / 特征 / 训练 / 扫描（对应 <span class="mono">async_task.kind</span>：clone/sync/szz/feature/train/scan）。健康检查端点 A32 匿名可访问。</p>
+    <p><b>RBAC 口径：</b>admin 可删仓库 / 删模型 / 管理用户；user 可使用全部业务功能。被禁用账号（status=0）登录时提示「账号已禁用，请联系管理员」；越权调用返回 1002 并写入 operation_log。</p>
+  </div>
+  <div class="addon">
+    <p><b>判断说明（保留 vs 搬走）：</b>组件健康灯中 <b>MySQL / Redis / Celery Worker 三行 <span class="mono">up</span> 灯</b>属正常态，保留在线框图中；<b><span class="mono">down</span> 行 + Worker down 告警条</b>属条件态，已搬入上表 ②，并从线框图中删除。</p>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

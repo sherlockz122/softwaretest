@@ -1,6 +1,14 @@
 # DefectGuard API 与数据库规格
 
-2026-10-12 第十八阶段当前边界（优先于历史描述）：v2原生核验增加监督blob缓存（8MiB载荷/512条）和最多100提交的FileChange字段投影，保持完整原生比较与一次原子冻结，digest移到锁外；v1/旧完成轮次不改，v2规则绑定新源码。schema0008_features/35接口/1000提交/10000文件/32MiB/数值30秒限额保留；来源标签资格、A17～19与模型仍待后续。本批完整验收结果见阶段报告。见 [当前指导](development/原生特征读取与冻结验收.md)。
+2026-10-15 第二十四阶段当前：限定语义准入工程已验收，交付660条train/validation可追溯上下文与冻结向量、64个未标注未来身份、双人来源复核空白材料及机器准入报告。新分类器拟合/旧test评分为0，hunk覆盖、校准、许可/人工与独立评估等8项门槛未通过，语义产品P1/候选发布仍未完成。研究LR/RF应用和第二十三阶段负结果保持。工作流、真实完成程度及协助条件见[本批报告](reports/2026-10-15-第二十四阶段语义准入准备报告.md)和[准入指导](development/语义准入与独立复核准备.md)；不保证所有历史或潜在问题一定可解决。
+
+## 第二十一阶段当前合同
+
+A17～19已实现首条public研究版本：POST /datasets接name、asset_id/source_hash、purpose=published_binary_12_v1、split_strategy=time_ordered或repository_holdout及默认0.70/0.15/0.15比例，返回202 dataset_id/task_id/status，Idempotency-Key必需。GET列表含有界资产预览（非完整认证）；GET详情仅ready返回成员/summary/工件摘要，可用offset/limit≤100分页或format=csv&partition=train/validation/test受控下载。Viewer读取、Member创建、Owner/Admin管理任务；不允许路径/多余字段或历史/候选资格越级。
+
+schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、源/计划及最终output；dataset_member以dataset_id/ordinal为主键、canonical_repository/commit_id唯一，保存分区/标签/事件及原行引用。numeric_json是MEDIUMTEXT无损CanonicalJSON，0009旧JSON定义保留、0010增量转换不回填失败数据。旧迁移/表/FeatureRun不改；全路径降级预检非空和dataset任务/引用，禁stamp/手工重建。详见 [指南](development/用途分离数据集与验收.md)。
+
+第二十二阶段交付记录（保留历史入口）：研究LR/RF的0011模型表、可靠训练/监督进程、A20/A21/A23、研究工件注册与页面已实施，A22因研究用途不兼容明确拒绝产品发布。固定106674数据双seed及重复概率复现、真实Worker故障恢复和正常数据备份/隔离恢复已有证据；完整回归/新卷/最终SHA CI另按本批报告登记。生产/历史/候选资格不晋升；预训练语义/融合P1随后。见 [当前模型指南](development/LR与RF研究训练及验收.md)。
 
 ## 1 API 通用约定
 
@@ -47,7 +55,7 @@
 | A20 | `POST /model-runs` | 发起训练 | Member |
 | A21 | `GET /model-runs/{id}` | 训练状态、配置和指标 | Viewer |
 | A22 | `POST /model-runs/{id}/publish` | 发布模型 | Admin |
-| A23 | `GET /models` | 已发布模型和插件注册表 | Viewer |
+| A23 | `GET /models` | 研究运行/已注册工件和插件；产品列表须另验资格 | Viewer |
 | A24 | `POST /predictions/candidate` | 候选 ref 或 diff 预测 | Member |
 | A25 | `POST /prediction-tasks` | 创建批量预测 | Member |
 | A26 | `GET /prediction-tasks/{id}/results` | 查询风险队列 | Viewer |
@@ -380,3 +388,20 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 无新API/迁移/字段，schema0008_features。FileChange按eligible IDs和ordinal分组并限制10001条证明越界；fenced输入冻结全体原子落库，写失败/过期全体回滚，恢复不重复。
 
 见 [当前指导](development/原生特征读取与冻结验收.md) 与 [阶段报告](reports/2026-10-12-第十八阶段原生特征读取与冻结报告.md)。
+
+## 2026-10-14 新用途与公开资产设计边界（未实现）
+
+现有35个API编号、schema0008_features和OpenAPI不变。A17～19后续必须显式声明repository_native / published_benchmark等用途、asset/source/adapter版本、质量审计引用及compatible feature/input版本，旧调用兼容性与稳定拒绝条件一起设计；本页4.2是原生用途旧计划示例，不适用于直接上传外部CSV或语义输入。
+
+拟增public_asset/manifest、review与可选type/location证据、派生数据、语义工件引用；不是已迁移表名承诺。公共导入/重载/导出端点待独立API设计与编号，不伪装成A07仓库创建字段；M1/RBAC/幂等/任务/审计/冻结/来源失效/安全降级复用现有合同。模型运行与候选发布校验用途、language/domain、input schema/checkpoint/tokenizer及质量能力；非兼容工件明确拒绝。语义不直接扩展旧14维响应或改旧FeatureRun false。
+
+详见 [决策](decisions/2026-10-14-公开数据兼容与预训练语义路线.md)、[指导](development/公开数据与语义模型衔接指南.md)；实施前再改OpenAPI/迁移/规格/回归，当前文档不能被视为新增服务能力。
+
+## 第二十阶段实际边界
+
+本批只新增本机资产/复核CLI及磁盘清单，35 API/schema0008_features/OpenAPI保持。A17～19及公开导入/目录/复核用户身份/应用权限、模型注册/发布均未实现；本机operator不是应用用户。后续迁移/用途/恢复合同按 [实际指导](development/用途分离数据集与验收.md) 和总规划细化，不通过本机目录默认给予Viewer写权。
+
+
+## 第二十二阶段模型研究增量
+
+当前schema0011_models。model_run保存dataset_id/plugin/params_json/seed/code_sha/snapshot_json/metrics_json/output_json/latest_task_id，模型JSON无损文本；model_artifact保存固定kind/uri/hash/size。code_sha为规范源文件和锁文件SHA256，Git交付另绑定。A20仅dataset_id/plugin/params/seed，A21支持固定名称artifact下载；A23分页研究运行并明确production_models=[]，A22 Admin仍拒绝不兼容研究用途。0011在整条降级请求任何DDL前检查所有将受影响旧表、引用和任务，0001～0010不改。

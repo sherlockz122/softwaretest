@@ -29,6 +29,16 @@ onUnmounted(() => clearInterval(poll));
 </script>
 <template>
   <section>
+    <RouterLink
+      v-if="task.data.value?.model_run_id"
+      :to="`/model-runs/${task.data.value.model_run_id}`"
+      >查看模型运行</RouterLink
+    >
+    <RouterLink
+      v-if="task.data.value?.dataset_id"
+      :to="`/datasets/${task.data.value.dataset_id}`"
+      >查看来源数据集</RouterLink
+    >
     <RouterLink to="/tasks">← 返回任务中心</RouterLink>
     <div class="section-heading">
       <h1>任务详情</h1>

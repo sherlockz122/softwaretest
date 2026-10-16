@@ -13,7 +13,7 @@ concurrency:
 jobs:
   foundation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       UV_CACHE_DIR: ${{ github.workspace }}/runtime/cache/uv
       npm_config_cache: ${{ github.workspace }}/runtime/cache/npm
@@ -34,14 +34,25 @@ jobs:
         run: |
           mkdir -p runtime/acceptance/ci
           python -m pip install uv==0.12.19
-          uv sync --frozen
+          uv sync --frozen --group modeling
           uv lock --check
+          uv sync --project tools/semantic --frozen --python 3.11
+          uv lock --project tools/semantic --check
           npm ci --prefix apps/web
           npm install --prefix runtime/tools @fission-ai/openspec@1.13.2 --no-audit --no-fund
           node apps/web/node_modules/@playwright/test/cli.js install --with-deps --only-shell chromium
       - name: Fresh CI configuration
         shell: pwsh
         run: ./scripts/New-LocalConfig.ps1 -BootstrapUsername ci-admin
+      - name: Isolated frozen encoder CPU regression
+        run: |
+          if tools/semantic/.venv/bin/python -m pytest tests/semantic_encoder_cases.py tests/semantic_admission_cpu_cases.py -q --junitxml=runtime/acceptance/ci/semantic-encoder.xml > runtime/acceptance/ci/semantic-encoder.log 2>&1; then
+            result=0
+          else
+            result=$?
+          fi
+          .venv/bin/python -m scripts.ci_result_summary runtime/acceptance/ci/semantic-encoder.xml
+          exit "$result"
       - name: Static, specification and contract checks
         run: |
           .venv/bin/ruff check .
@@ -55,6 +66,8 @@ jobs:
           npm audit --prefix apps/web --audit-level=high
       - name: Build and prepare real services
         run: |
+          # Host-side inert fixtures need a host-owned root before Docker bind creation.
+          mkdir -p runtime/public-assets
           docker compose --profile full build api web
           docker compose up -d --wait --wait-timeout 180 mysql redis
           docker compose --profile maintenance run --rm migrate

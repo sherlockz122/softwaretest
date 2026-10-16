@@ -1,0 +1,117 @@
+PS C:\Users\Shadow> Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors
+
+Name                           NumberOfCores NumberOfLogicalProcessors
+----                           ------------- -------------------------
+Intel(R) Core(TM) Ultra 7 155H            16                        22
+
+
+PS C:\Users\Shadow> [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)
+31.5
+PS C:\Users\Shadow> Get-PhysicalDisk | Select-Object FriendlyName,MediaType,Size
+
+FriendlyName                       MediaType          Size
+------------                       ---------          ----
+NVMe WD PC SN560 SDDPNQE-1T00-1202 SSD       1024209543168
+
+
+PS C:\Users\Shadow> python --version
+Python 3.12.10
+
+-------------------------
+PS D:\develop\软件测试实训\jit-defect-prediction> git clone --bare https://github.com/apache/commons-cli.git repos\commons-cli.git
+Cloning into bare repository 'repos\commons-cli.git'...                         
+remote: Enumerating objects: 20264, done.
+remote: Counting objects: 100% (1617/1617), done.
+remote: Compressing objects: 100% (351/351), done.
+remote: Total 20264 (delta 1438), reused 1278 (delta 1266), pack-reused 18647 (from 4)
+Receiving objects: 100% (20264/20264), 4.52 MiB | 1.19 MiB/s, done.             
+Resolving deltas: 100% (9971/9971), done. 
+-------------------------
+
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git rev-list --count HEAD
+2257   
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git log --format=%ad --date=short | sort | Select-Object -First 1   # 最早提交
+2002-06-10
+PS D:\develop\软件测试实训\jit-defect-prediction\probe> git -C repos\commons-cli.git log --format=%ad --date=format:%Y | Group-Object | Select-Object Name,Count  # 按年分布
+
+Name Count
+---- -----
+2026   135
+2025   282
+2024   438
+2023   157
+2022   126
+2021   132
+2020    59
+2019    23
+2018     3
+2017    67
+2016    18
+2015    49
+2014     4
+2013    83
+2012    10
+2011    27
+2010    43
+2009    87
+2008   136
+2007   104
+2006    48
+2005    64
+2004    67
+2003    10
+2002    85
+
+
+PS D:\develop\软件测试实训\jit-defect-prediction> python probe\probe_perf.py
+[i] 仓库：D:\develop\软件测试实训\jit-defect-prediction\probe\repos\activemq.git
+[i] 打点：[200, 500, 1000, 2000]   预算：30 分钟
+
+[0] sha->时间 映射：16378 条，0.25s
+[1] 文件历史索引：25207 个文件 / 150742 条 文件-提交 记录，1.42s
+
+====================================================================
+阶段耗时
+====================================================================
+  [0] 建 sha->时间 映射            0.25 s   （一次性）
+  [1] 建文件历史索引               1.42 s   （一次性）
+  [2] 遍历 2000 条提交 + 特征       266.86 s
+  [3] blame 采样 60 次              3.55 s   -> 59.2 ms/次
+
+====================================================================
+规模-耗时曲线（看「每条提交」那列是否稳定 —— 稳定即线性）
+====================================================================
+       提交数          累计耗时          每条提交
+       200       31.75 s       158.7 ms
+       500       63.35 s       126.7 ms
+      1000      128.75 s       128.7 ms
+      2000      266.83 s       133.4 ms
+
+====================================================================
+线性外推（按 2000 条实测速率 133.4 ms/条；含 diff 计算，不含 blame）
+====================================================================
+    5,000 条  ->      11.1 分钟
+   10,000 条  ->      22.2 分钟
+   25,000 条  ->      55.6 分钟  <-- 超出预算
+   50,000 条  ->     111.2 分钟  <-- 超出预算
+
+====================================================================
+输入上限反推（单任务预算 30 分钟）
+====================================================================
+  遍历+特征提取 的提交数上限  ≈ 13,491 条
+  （预算改了，上限按比例变：60 分钟 -> 26,982 条）
+
+====================================================================
+SZZ 成本（按 blame 单次耗时外推）
+====================================================================
+  blame 单次                      59.2 ms
+  每个 fix 平均删除行数            10.5 行  （commons-cli 实测）
+  -> 每个 fix 的 SZZ 成本          0.62 s
+     100 个 fix  ->       1.0 分钟
+     400 个 fix  ->       4.1 分钟
+   2,000 个 fix  ->      20.7 分钟
+  10,000 个 fix  ->     103.7 分钟
+
+  注：真实 SZZ 还要叠加【遍历提交】的成本，见上面的规模-耗时曲线。
+
+[OK] D:\develop\软件测试实训\jit-defect-prediction\probe\out\perf_activemq.csv
