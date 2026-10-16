@@ -1,9 +1,9 @@
-## 1 Bounded optimization
-- [x] 1.1 Indexed lineage, legacy isolation and source-rule drift guard
-- [x] 1.2 Exact randomized/adversarial/real-Git equivalence and cancellation tests
-- [x] 1.3 Reproducible 200/1000 commit sparse/dense resource probe
-- [x] 1.4 Full backend/Worker/fresh browser/static/specification acceptance
-- [x] 1.5 Current planning/guidance/issue disposition/report and safe evidence
+# Tasks
 
-Push only wang after local acceptance; exact-SHA CI and protected branch heads are
-verified afterward. Complete source certification remains subsequent work.
+## 1. 有界优化
+
+- [x] 1.1 索引血缘、旧版实现隔离，以及来源规则漂移防护
+- [x] 1.2 精确的随机化、对抗性和真实 Git 等价性测试，以及取消测试
+- [x] 1.3 可复现的 200 与 1000 提交、稀疏与稠密资源探测
+- [x] 1.4 全量后端、Worker、全新浏览器、静态检查和规格验收
+- [x] 1.5 更新规划与指导文档、遗留问题处置、阶段报告与安全证据

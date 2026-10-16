@@ -1,12 +1,71 @@
-# Context
-v2 message features and historical replay are independent kernels. The online service must bind real accepted Git and avoid later Fix reviews leaking into features.
+# Design: add-online-causal-features
 
-# Decisions
-1. Existing API defaults v1, UI defaults explicit v2 with legacy selection. v2 forbids fix_run_id, both purposes use frozen message indicator and hashes; merge encoding uncertainty stays null.
-2. Verify accepted HEAD/private storage/reachability/parser/identity and every consumed DB projection against native Git. full population gaps and drift reject before publication.
-3. Freeze minimal numeric/message/proof inputs; source hash binds version, bridge source, accepted snapshot and input. Reuse existing atomic batches, tokens, retries, cancellation, idempotency and quality release.
-4. Quality separates feature population from label coverage. Label certification/product readiness remain false; old dataset adapter explicitly rejects v2.
-5. Keep 1000 commits/10000 files/32MiB frozen inputs/30s numeric computation limits and D storage supervision. Dataset contracts, complete negative provenance and scaling optimizations remain subsequent batches.
+## Context
 
-# Validation
-Real Git/MySQL drift, Fix isolation, cancellation/lease/capacity recovery, rule/gap/RBAC/idempotency/version checks; actual partial durable Worker SIGKILL on v1 400 and v2 120 commits; independent browser mobile and lost response coverage. Final counts and failure disposition are recorded in the stage report.
+v2 的消息用途特征和历史回放是两个独立的内核，各自都已经完成。
+在线服务要做的事是：把真实已接受的 Git 绑定上去，并保证后来的 Fix 复核不会渗进特征里。
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- 在线链路支持 v1 与 v2 并存，旧接口和旧轮次完全不受影响。
+- v2 的输入必须能和已接受的原生 Git 记录对得上。
+- 特征覆盖度与标签知识分开表达，互不冒充。
+
+**Non-Goals:**
+
+- 不做完整的负例来源认证。
+- 不做数据集新用途、新表结构、A17～A19。
+- 不做模型训练。
+- 不做规模优化。
+
+## Decisions
+
+### 决策 1：版本选择与 Fix 语义隔离
+
+- 现有接口默认走 v1；前端默认显式选 v2，同时保留旧版选项。
+- v2 不允许指定 Fix 轮次。
+- 两种用途都使用冻结的消息指示符和哈希。
+- merge 提交的编码不确定时保持为 null，不做猜测。
+
+### 决策 2：原生 Git 认证
+
+- 校验已接受的 HEAD、私有存储、可达性、解析器版本和身份标识。
+- 逐个核对每一个被消费的数据库投影和原生 Git 是否一致。
+- 全量覆盖出现缺口或漂移时，在发布之前就拒绝。
+
+### 决策 3：冻结输入与可恢复执行
+
+- 冻结最小化的数值、消息和证明输入。
+- 来源哈希绑定四样东西：版本、桥接来源、已接受快照和输入本身。
+- 复用既有的原子批次、令牌、重试、取消、幂等和质量发布机制，不重新实现。
+
+### 决策 4：质量报告的口径
+
+- 把特征覆盖度和标签覆盖度分开报告。
+- 标签覆盖度完成标记和产品可训练标记保持为 false。
+- 旧的数据集适配器显式拒绝 v2，而不是默默赋予训练资格。
+
+### 决策 5：资源上限
+
+保留既有上限：1000 提交、10000 文件、32 MiB 冻结输入、30 秒数值计算，以及 D 盘的存储监督。
+
+数据集契约、完整的负例来源认证和规模优化属于后续批次。
+
+## Risks / Trade-offs
+
+| 风险 / 权衡 | 说明 |
+|---|---|
+| v2 在线可用但标签不可用 | 页面能给出特征，却标着不可训练，容易被误读成「系统坏了」。需要在页面上写明缺的是标签认证。 |
+| 双版本并存 | 维护成本翻倍，而且 v1 的生产合同必须一直兼容，不能借机弃用。 |
+| 认证严格到「有漂移就拒绝」 | 解析库或上游数据稍有调整就会导致整轮失败。用可用性换可信度，是刻意的取舍。 |
+| merge 编码不确定时保持 null | 少量数据点永久未知，不接受猜测。 |
+
+## Validation
+
+- 真实 Git 与 MySQL 的漂移检测，以及 Fix 隔离验证。
+- 取消、租约、容量恢复。
+- 规则、缺口、权限、幂等和版本检查。
+- 真实的部分持久化 Worker 被强杀：v1 跑 400 提交，v2 跑 120 提交。
+- 独立浏览器：移动端与响应丢失场景。

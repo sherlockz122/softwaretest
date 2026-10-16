@@ -1,38 +1,42 @@
 ## ADDED Requirements
 
-### Requirement: Causal message-purpose feature version
-The system SHALL use an independent fourteen-feature version with commit-message-only FIX purpose signals and SHALL remove later Fix review data before both numeric computation and hashing, retaining the existing production contract.
+### Requirement: 因果的消息用途特征版本
+系统 SHALL 使用一个独立的十四维特征版本，其中 FIX 这一维的信号只来自提交消息，
+并在数值计算和哈希之前移除后来的 Fix 复核数据，同时保留既有的生产合同。
 
-#### Scenario: Future confirmation changes
-- **WHEN** a later Fix review changes but the fixed Git input and message remain unchanged
-- **THEN** the independent causal feature values and content hash remain unchanged
+#### Scenario: 未来确认发生变化
+- **WHEN** 后来的 Fix 复核发生了变化，但固定的 Git 输入和提交消息没有变
+- **THEN** 这个独立特征的值和内容哈希都保持不变
 
-#### Scenario: Missing or unrecognized purpose
-- **WHEN** the message is undecodable or a real repair message does not match the heuristic
-- **THEN** FIX is respectively null or 0 with explicit heuristic semantics, never an external defect outcome
+#### Scenario: 用途缺失或无法识别
+- **WHEN** 提交消息无法解码，或者一条真实的修复消息没有命中启发式规则
+- **THEN** FIX 分别是留空或 0，并带上明确的启发式语义，绝不采用外部缺陷结论
 
-#### Scenario: Merge parser masks message encoding
-- **WHEN** a merge record cannot independently prove message decoding because its status is merge_skipped
-- **THEN** FIX remains null with message_unverified, including readable-looking or keyword-containing text, while the existing parser contract remains unchanged
+#### Scenario: Merge 解析掩盖消息编码
+- **WHEN** 一条 merge 记录因为被标记为跳过合并，无法独立证明消息能否解码
+- **THEN** FIX 保持为空并标注「消息未经验证」，即使文本看起来可读、或者里面带有缺陷关键词也一样；既有解析器合同保持不变
 
-### Requirement: Explicit horizon replay knowledge
-The system SHALL declare event clock, actual acquisition, horizon, assumed knowledge delay, label provenance and independently certified source coverage, retaining Unknown when the contract cannot prove a usable outcome.
+### Requirement: 显式的视野回放可知性
+系统 SHALL 声明事件时钟、实际采集情况、视野、假设的知识延迟、标签来源，
+以及独立认证的来源覆盖；当合同无法证明一个可用结局时，保留 Unknown。
 
-#### Scenario: Incomplete negatives
-- **WHEN** no positive link exists but complete compatible coverage of the horizon is unavailable
-- **THEN** the label remains Unknown and cannot be inferred from a published clean flag
+#### Scenario: 不完整的负例
+- **WHEN** 不存在正例链接，并且无法获得对视野的完整兼容覆盖
+- **THEN** 标签保持 Unknown，不能从已经发布的 clean 标记反推
 
-#### Scenario: Fixed endpoint and later repairs
-- **WHEN** an observed repair occurs after the predeclared horizon
-- **THEN** it does not create a positive within that horizon and any eligible negative is explicitly only a horizon endpoint
+#### Scenario: 固定端点与更晚的修复
+- **WHEN** 观测到的修复发生在预先声明的视野之后
+- **THEN** 它不会在这个视野内产生正例；任何合格的负例都明确只是视野端点
 
-### Requirement: Immutable split and bounded acceptance
-The system SHALL freeze original same-event groups and time split boundaries before purging late labels, use only eligible training rows for fitting and weights, bind source and policy hashes, and supervise resource limits without redirecting work to another drive.
+### Requirement: 不可变切分与有界验收
+系统 SHALL 在清理晚到标签之前冻结原始的同事件分组和时间切分边界，
+只使用合格的训练行做拟合与权重，绑定来源和政策哈希，
+并在不把工作转移到其它盘的前提下监督资源限制。
 
-#### Scenario: Late training label
-- **WHEN** reconstructed label knowledge is at or after the first validation event
-- **THEN** the row is purged from training, original membership is retained and no boundary moves to restore class balance
+#### Scenario: 晚到的训练标签
+- **WHEN** 重构出来的标签可知时间等于或晚于验证集的首个事件
+- **THEN** 这一行从训练中剔除，原始归属保留，不移动任何边界去恢复类别平衡
 
-#### Scenario: Bounded real Git probe
-- **WHEN** a controlled partial historical Git window is inspected
-- **THEN** unsupported historical features remain missing, incomplete labels remain Unknown, the repository is read only and product training readiness is not claimed
+#### Scenario: 有界的真实 Git 探针
+- **WHEN** 检查一个受控的部分历史 Git 窗口
+- **THEN** 不支持的历史特征保持缺失，不完整的标签保持 Unknown，仓库只读，也不声明产品训练就绪

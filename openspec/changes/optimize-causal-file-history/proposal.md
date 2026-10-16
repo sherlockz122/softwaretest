@@ -1,17 +1,35 @@
-# Bounded v2 file-history indexing
+# Change: optimize-causal-file-history
 
-Repeated scans of unrelated ancestor files obstruct larger source certification.
-Index file events for v2 calculation while preserving the legacy numeric values,
-missing reasons and base source digest exactly. Keep v1 implementation untouched.
-Include the optimization source in the v2 rule hash; existing runs remain immutable
-and stale unfinished runs reject rule drift rather than mixing implementations.
+## Why
 
-This batch does not raise limits or implement label certification, A17–19 or training.
-Ancestry/author decay remain quadratic in the worst case. Native Git reads and DB
-transaction duration require separate measurement before larger collection.
+v2 计算时会反复扫描互不相关的祖先文件，这个开销挡在了「更大规模的来源认证」前面。
 
-First probe exposed dense-path regression. Final selection reuses a sorted prefix
-only for a proved full linear chain and keeps the legacy vector scan for frequent
-paths (maximum path event count above population/4). This frozen-input strategy
-is validated against the same legacy oracle; it is a performance choice, not a
-semantic or coverage change. General DAG/author/file worst-case costs remain.
+需要给 v2 的文件历史建立索引，同时守住一条底线：
+旧版的数值、缺失原因和基础来源摘要，一个都不能变。
+
+## What Changes
+
+- 为 v2 计算建立按路径的文件事件索引，同时精确保留旧版的数值、缺失原因和基础来源摘要。
+- v1 的实现完全不动。
+- 把这次优化的源码纳入 v2 的规则哈希；已有轮次保持不可变，
+  未完成的陈旧轮次遇到规则漂移时拒绝，而不是把两种实现混在一起。
+- 明确不做：不提高任何上限，不实现标签认证、A17～A19 或模型训练。
+- 如实记录性能现状：祖先和作者的衰减在最坏情况下仍然是二次的；
+  在扩大采集规模之前，原生 Git 读取和数据库事务的耗时需要单独测量。
+
+## Capabilities
+
+### New Capabilities
+
+- `causal-feature-performance`：为 v2 文件历史计算引入有界索引，
+  要求结果与旧版逐位等价，并把实现出处显式绑进规则哈希。
+
+### Modified Capabilities
+
+没有。这次只改实现，不改变任何已有能力的行为。
+
+## Impact
+
+- 涉及 v2 特征计算路径和规则哈希；不改动 v1 源码，也不重写已存储的轮次质量与向量。
+- 上限保持不变：1000 提交、10000 文件、32 MiB 冻结输入、30 秒计算。
+- 关联追踪：User Story US-06；测试方面对应 `test_historical_replay` 的性能与资源用例。

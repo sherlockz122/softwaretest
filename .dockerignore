@@ -9,6 +9,7 @@ softwarePrediction
 .codex
 .agents
 AGENTS.md
+CLAUDE.md
 **/node_modules
 **/dist
 **/__pycache__

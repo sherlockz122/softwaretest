@@ -1,15 +1,17 @@
-## 1 Implementation
-- [x] 1.1 Freeze algorithm, filter, time, coverage and label boundary
-- [x] 1.2 0007 frozen migration and safe downgrade
-- [x] 1.3 Bounded native Git line blame and golden fixtures
-- [x] 1.4 Frozen inputs, atomic result batches and fenced recovery
-- [x] 1.5 A13/A14, history and repository UI
+# Tasks
 
-## 2 Acceptance
-- [x] 2.1 Real Git/MySQL, concurrency, cutoff, freeze and failure regression
-- [x] 2.2 Actual Worker interruption and successor recovery
-- [x] 2.3 Frontend and independent new-volume browser acceptance
-- [x] 2.4 Full regression, contracts, strict specs and storage checks
-- [x] 2.5 Stage report and local redacted evidence
+## 1. 实现
 
-本change个人wang实施，保持活动；任务实现/验收不等同团队批准、模型精度验收或clean成熟标签已交付。发布门槛：本机验收后仅推送wang，再核对该最终SHA的实际GitHub CI及其它分支头，结果留本机release-summary/manifest及聊天；本清单不预先宣称远程CI完成。后续数据集必须同时限制event_time与label_available_at，不能将未知当0。
+- [x] 1.1 冻结算法、过滤、时间和标签边界：确定 `baseline-szz-v1` 的唯一父提交规则、过滤口径、观察截止时间与标签可用时间的语义，以及 Unknown 和 candidate_buggy 的判定条件
+- [x] 1.2 新增数据库迁移：建 SZZ 轮次、追溯项和来源链接三张表，以及仓库的 SZZ 状态，并验证降级可以安全回退
+- [x] 1.3 受监督的原生 Git 行级 blame：限定在 `git blame --root --line-porcelain`，配套 golden 用例
+- [x] 1.4 冻结输入、原子结果批次，以及带租约栅栏的恢复
+- [x] 1.5 A13 与 A14 接口、历史查看和仓库页面
+
+## 2. 验收
+
+- [x] 2.1 真实 Git 与 MySQL、并发、截止时间、冻结和故障回归
+- [x] 2.2 真实 Worker 中断与后继恢复
+- [x] 2.3 前端与独立新卷的浏览器验收
+- [x] 2.4 全量回归、契约检查、严格规格校验和存储检查
+- [x] 2.5 阶段报告与本机脱敏证据

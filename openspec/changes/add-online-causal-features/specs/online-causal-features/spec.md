@@ -1,30 +1,33 @@
 ## ADDED Requirements
 
-### Requirement: Explicit compatible online versions
-The system SHALL support v1 and v2 feature runs, preserve the default v1 API, and explicitly select v2 by default in the page without mixing frozen results or Fix semantics.
+### Requirement: 显式且兼容的在线版本
+系统 SHALL 支持 v1 与 v2 的特征轮次，保留 v1 作为接口默认值，并在页面上默认显式选择 v2，
+且 SHALL 不混淆冻结结果与 Fix 语义。
 
-#### Scenario: Later Fix review
-- **WHEN** historical and candidate v2 runs are calculated before or after a later human Fix review
-- **THEN** their message-purpose feature inputs remain identical, no fix_run_id is accepted and zero indicates only a heuristic non-match
+#### Scenario: 后发生的 Fix 复核
+- **WHEN** 历史用途和候选用途的 v2 轮次，分别在一次后续的人工 Fix 复核之前和之后计算
+- **THEN** 它们的消息用途特征输入保持完全一致，不接受指定 Fix 轮次，且取值 0 只表示启发式未命中
 
-### Requirement: Accepted native Git binding
-The system SHALL certify all consumed parsed DB projections against the accepted private native Git snapshot before freezing v2 inputs and SHALL distinguish feature population coverage from independently certified label knowledge.
+### Requirement: 已接受的原生 Git 绑定
+系统 SHALL 在冻结 v2 输入之前，把所有被消费的解析数据库投影与已接受的私有原生 Git 快照完成认证，
+并 SHALL 区分特征覆盖度与独立认证的标签知识。
 
-#### Scenario: Parsed record drift or full gap
-- **WHEN** a consumed DB message, count, clock or identity differs from native Git, or a full snapshot lacks current parsed records
-- **THEN** the run fails with a stable source conflict and no final quality is published
+#### Scenario: 解析记录漂移或全量缺口
+- **WHEN** 被消费的数据库消息、计数、时钟或身份与原生 Git 不一致，或者全量快照缺少当前解析记录
+- **THEN** 该轮以稳定的来源冲突失败，并且不发布最终质量报告
 
-#### Scenario: Label evidence unavailable
-- **WHEN** native feature inputs are certified even for a full feature population
-- **THEN** label_coverage_complete and product_training_ready remain false and the page states the missing label certification
+#### Scenario: 标签证据不可用
+- **WHEN** 原生特征输入在全量特征覆盖下已经通过认证
+- **THEN** 标签覆盖度完成标记和产品可训练标记都保持为未达成，页面说明缺的是标签认证
 
-### Requirement: Frozen reliable recovery
-The system SHALL freeze minimal numeric and message proof inputs, bind code/version/snapshot hashes, supervise capacity, preserve existing fencing and publish quality only atomically after all batches.
+### Requirement: 冻结且可靠的恢复
+系统 SHALL 冻结最小化的数值与消息证明输入，绑定代码、版本与快照哈希，监督容量，
+保留既有栅栏，并且只在所有批次完成后原子发布质量。
 
-#### Scenario: Actual Worker interruption
-- **WHEN** a Worker is killed after a durable partial batch and a later lease resumes after Fix review changes
-- **THEN** the old token cannot publish and the new Worker completes using the same frozen input/source hash without later Fix leakage
+#### Scenario: 真实 Worker 中断
+- **WHEN** Worker 在一个已经持久化的部分批次之后被杀，后继租约在 Fix 复核发生变化之后恢复
+- **THEN** 旧令牌无法发布，新 Worker 用同一份冻结输入和来源哈希完成，结果里不含后来 Fix 的渗漏
 
-#### Scenario: Version incompatible dataset
-- **WHEN** the legacy v1 production dataset adapter is asked to consume a v2 feature run
-- **THEN** it rejects the source rather than silently granting training eligibility
+#### Scenario: 版本不兼容的数据集
+- **WHEN** 旧版 v1 生产数据集适配器被要求消费一个 v2 特征轮次
+- **THEN** 它拒绝该来源，而不是默默赋予训练资格
