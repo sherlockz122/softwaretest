@@ -1,19 +1,75 @@
-# Design
+# Design: optimize-native-feature-reads
 
-Only online v2 verification installs an attempt-local immutable blob cache around
-the existing NativeReader.record calls. Keys are object SHA, with null blobs and
-submodule modes bypassed; bytes/oversize sentinels are retained under both byte and
-entry limits. Every hit invokes supervision and checks deadline. Context cleanup
-restores the original reader and clears retained bytes on success and exceptions.
-No commit metadata, patch command, mode verification or DB comparison is skipped.
+## Context
 
-v2 reads parsed files in groups of at most 100 eligible commit IDs, preserves file
-ordinal order, counts files once and rejects more than 10000 before verification.
-The new helper source participates in the v2 rule hash; finished old runs remain
-immutable, unfinished old rules reject drift. Legacy parser/v1 hashes stay intact.
+在线 v2 校验需要把解析出来的数据库记录和本地 Git 仓库逐条比对，
+这个过程会对同一份文件内容反复读取，产生大量重复开销。
 
-Real Git fixtures compare entire records, native digests and frozen inputs against
-uncached NativeReader. Isolated MySQL probes record query shape and actual fenced
-transactions; a second connection proves task/repository locks can be acquired
-during native reads. Fault tests preserve atomic freeze rollback and retry. Timings
-are observations, not fixed acceptance thresholds or full-scale capacity claims.
+这次的定位是先测量、再有界优化，不做拍脑袋的性能改造。
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- 拿到真实的成本数字：Git 命令次数、查询次数、栅栏事务耗时。
+- 在不削弱任何校验的前提下，减少重复的不可变 blob 读取。
+- 让 v2 的投影加载有明确边界，并保持原有的顺序语义。
+
+**Non-Goals:**
+
+- 不新增接口、表结构或依赖。
+- 不做来源认证、数据集、模型训练。
+- 不提高任何现有资源上限。
+- 不把冻结拆成外部可见的部分事务。
+
+## Decisions
+
+### 决策 1：文件内容缓存只装在在线 v2 校验这一条路径上
+
+已经在本地仓库里的文件内容是不会变的，所以同一次校验里读过一遍的，没必要再读第二遍。
+
+- 只有在线 v2 校验会在自己这一次运行里做缓存，不做跨任务的全局缓存。
+- 缓存以文件内容自身的哈希作为键。
+- 读到空内容（比如子模块）时不进缓存。
+- 内容过大时记一个标记，同样受总量上限和条目数上限约束。
+- 每次命中缓存仍然要走一遍资源检查——命中不等于免检。
+- 一次校验结束（无论正常结束还是抛异常）都要把用过的内存清干净。
+
+这里不跳过任何校验：提交元数据、patch 命令、模式验证、数据库比对，一个都不少。
+
+### 决策 2：v2 的文件变更改成一批一批读
+
+- 一次最多读 100 个提交对应的文件。
+- 读出来的顺序仍然按文件序号排，和以前一样。
+- 同一个文件只计一次；如果总数超过 10000，在开始校验之前就直接拒绝。
+
+### 决策 3：规则哈希与旧轮次
+
+- 这次新增的代码也算进 v2 的规则哈希，换了实现就会被识别出来。
+- 已经跑完的旧轮次不再改动；还没跑完的旧任务如果对不上当前实现，就直接拒绝。
+- v1 的哈希和解析器的哈希都保持原样。
+
+### 决策 4：先测量，再决定要不要改成批量插入
+
+先把冻结耗时测出来，再判断批量插入值不值得做。
+不把冻结拆成外部可见的中间状态，也不把读 Git 和算数值这两步挪到任务锁或仓库锁里面去做。
+
+## Risks / Trade-offs
+
+| 风险 / 权衡 | 说明 |
+|---|---|
+| 缓存让「命中」绕过监督 | 已经明确要求每次命中都要走监督并查 deadline，否则取消和超时会失效。 |
+| 计时数据被当成容量结论 | 计时只是观察值，不是固定验收阈值，也不构成全量规模的容量声明。这一点容易被误读，需要在报告里写明。 |
+| 分组加载改变顺序语义 | 必须保持文件序号顺序和原来的按提交顺序，否则等价性测试会立刻暴露差异。 |
+| 不做批量插入 | 冻结耗时若真的成为瓶颈，本批不解决，只留测量数据给后续判断。 |
+| 缓存上限 8 MiB 与 512 条 | 超大仓库的收益有限；超限就退回原路径，不会出错但也不会变快。 |
+
+## Validation
+
+- 用真实 Git 夹具，把完整记录、原生摘要和冻结输入，与未加缓存的读取路径逐项比对。
+- 用隔离的 MySQL 探针记录查询形态和真实栅栏事务；
+  并用第二个连接证明在原生读取期间任务行和仓库行仍然可以被加锁。
+- 故障测试：验证原子冻结的回滚与重试行为。
+- 全量后端故障测试、前端与隔离浏览器验收。
+
+计时结果是观察值，不作为固定验收阈值。

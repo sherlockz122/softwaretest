@@ -1,24 +1,24 @@
 ## ADDED Requirements
 
-### Requirement: Indexed calculation SHALL preserve causal semantics
-The v2 kernel SHALL use only frozen native-bound inputs and SHALL preserve all
-legacy numeric values, missing reasons and base source digest under its limits.
+### Requirement: 索引计算 SHALL 保持因果语义
+v2 内核 SHALL 只使用冻结的、已经绑定原生 Git 的输入，
+并在它的限制范围内保持全部旧版数值、缺失原因和基础来源摘要不变。
 
-#### Scenario: Branch and lifecycle equivalence
-- **WHEN** inputs contain fork/merge, rename/copy, deletion/re-addition, timestamp ties or inversion
-- **THEN** indexed output exactly equals legacy historical numeric calculation before the v2 message FIX replacement
+#### Scenario: 分支与生命周期等价
+- **WHEN** 输入包含分叉与合并、重命名与复制、删除后重新加入、时间戳相同或倒序
+- **THEN** 索引输出与旧版的历史数值计算完全一致（在 v2 替换提交消息用途特征之前）
 
-#### Scenario: Unsupported and bounded input
-- **WHEN** history is a recent window or contains unsupported content, or the caller cancels
-- **THEN** legacy missing reasons remain and cancellation propagates without publication
+#### Scenario: 不支持或有界的输入
+- **WHEN** 历史只是一个近端窗口、包含不支持的内容，或者调用方取消
+- **THEN** 保留旧版的缺失原因，并且取消会向上传播，不产生发布
 
-### Requirement: Implementation provenance SHALL remain explicit
-The v2 rule hash SHALL bind index code. The v1 source and stored runs SHALL remain immutable.
+### Requirement: 实现出处 SHALL 保持显式可追溯
+v2 的规则哈希 SHALL 绑定索引代码。v1 源码和已存储的轮次 SHALL 保持不可变。
 
-#### Scenario: Resume after rule drift
-- **WHEN** an unfinished task's frozen v2 rule differs from current implementation
-- **THEN** existing source-conflict handling rejects it without rewriting old quality or mixing new vectors
+#### Scenario: 规则漂移后恢复
+- **WHEN** 一个未完成任务的冻结 v2 规则和当前实现不一致
+- **THEN** 既有的来源冲突处理会拒绝它，既不重写旧的质量报告，也不混入新向量
 
-#### Scenario: Performance evidence
-- **WHEN** a 200/1000 commit sparse and dense probe is run
-- **THEN** exact output equivalence and measured timing/work are retained, with quadratic ancestry/author and native Git/lock limitations disclosed
+#### Scenario: 性能证据
+- **WHEN** 运行 200 与 1000 提交的稀疏和稠密探测
+- **THEN** 保留精确的输出等价性与实测耗时、工作量，并披露祖先与作者的二次复杂度，以及原生 Git 和加锁方面的限制

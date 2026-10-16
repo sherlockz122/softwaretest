@@ -1,8 +1,9 @@
-## 1 Online v2 integration
-- [x] 1.1 Explicit version API/UI and legacy compatibility
-- [x] 1.2 Native accepted Git binding and minimal immutable input
-- [x] 1.3 Fenced atomic tasks, frozen recovery and separate source quality
-- [x] 1.4 Final real Worker/full backend/browser/static/contract acceptance
-- [x] 1.5 Updated planning/report and safe local evidence; push and exact-SHA CI are separately verified after this commit in local evidence/chat
+# Tasks
 
-Complete negative provenance, new dataset purpose/schema/A17–19 and model training are subsequent work. Personal wang acceptance does not represent team approval.
+## 1. 在线 v2 接入
+
+- [x] 1.1 显式的版本接口与页面，保持旧版兼容
+- [x] 1.2 原生已接受 Git 的绑定与最小不可变输入
+- [x] 1.3 带栅栏的原子任务、冻结恢复与独立的来源质量报告
+- [x] 1.4 最终真实 Worker、全量后端、浏览器、静态检查与契约验收
+- [x] 1.5 更新规划与报告，保留安全的机器证据

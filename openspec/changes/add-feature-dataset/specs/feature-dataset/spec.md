@@ -1,95 +1,102 @@
 ## ADDED Requirements
 
-### Requirement: Mature observations and immutable time dataset kernel
-系统 SHALL 按预声明观察窗口及已发布的完整观察轮次审核标签，保留十四维原始值与缺失；SHALL 不把今天获得的证据回填到历史截止，也不将候选或有限覆盖转为clean。
+### Requirement: 成熟观察与不可变时间数据集内核
+系统 SHALL 按预先声明的观察窗口和已发布的完整观察轮次审核标签，保留十四维的原始值与缺失；
+SHALL 不把今天才获得的证据回填到历史截止点，也不把候选或有限覆盖转成 clean。
 
-#### Scenario: Confirmed positive and complete negative
-- **WHEN** 同一接受DAG的完整轮次包含已人工确认、完整追溯的合法祖先证据，或完整观察覆盖提交年龄W且无未决证据
-- **THEN** 产生版本化buggy/clean与实际label_available_at；未复核候选、冲突、解析略过、覆盖/年龄不足保留unknown原因
+#### Scenario: 已确认正例与完整负例
+- **WHEN** 同一份已接受提交历史的完整轮次里包含已人工确认、完整追溯的合法祖先证据，或者完整观察覆盖了提交年龄 W 且没有未决证据
+- **THEN** 产生版本化的 buggy 或 clean 以及实际的标签可用时间；未复核的候选、冲突、解析略过、覆盖或年龄不足都保留 unknown 及原因
 
-#### Scenario: Observation freshness and historical availability
-- **WHEN** SZZ启动晚于实际clone/sync观察时点，或证据/轮次发布晚于历史切分截止
-- **THEN** 覆盖只截至实际接受快照的观察时点，历史分区purge晚到标签；不以SZZ运行时间补足未观察的窗口
+#### Scenario: 观察新鲜度与历史可用性
+- **WHEN** SZZ 启动晚于实际克隆或同步的观察时点，或者证据与轮次的发布晚于历史切分截止
+- **THEN** 覆盖只截至实际已接受快照的观察时点，历史分区剔除晚到的标签，不用 SZZ 的运行时间去补足未观察的窗口
 
-#### Scenario: Deterministic two-time partition
-- **WHEN** 按事件时间构建train/validation/test
-- **THEN** 同时刻提交保持同分区、SHA稳定排序；train标签必须早于validation首事件、validation标签早于test首事件，test标签不晚于快照；内容及政策/源摘要形成稳定哈希
+#### Scenario: 确定性的双时间切分
+- **WHEN** 按事件时间构建训练集、验证集和测试集
+- **THEN** 同时刻的提交保持在同一分区，SHA 排序稳定；训练标签必须早于验证集首事件，验证标签早于测试集首事件，测试标签不晚于快照；内容与政策、来源摘要形成稳定哈希
 
-#### Scenario: Insufficient data and train-only contract
-- **WHEN** purge后任一分区缺少两类、train某维全缺失，或时间组不足
-- **THEN** 审计列明数量/原因并拒绝构建训练就绪数据集；不移边界寻找好成绩、不伪造样本、不拟合全体数据，类权重只用train
+#### Scenario: 数据不足与只在训练集上拟合
+- **WHEN** 剔除之后任一分区缺少两类、训练集某一维全缺失，或者时间组不足
+- **THEN** 审计列明数量和原因并拒绝构建训练就绪的数据集；不移动边界去找好成绩，不伪造样本，不拟合全体数据，类权重只用训练集
 
-#### Scenario: Read-only actual feasibility
-- **WHEN** 本机审计已有特征/SZZ/Fix轮次
-- **THEN** 绑定接受HEAD、完整历史、版本/摘要及当前复核，读取冻结输入而非A11并集，不修改源数据、不补写旧观测；尚不发布A17～19或模型
+#### Scenario: 只读的真实可行性审计
+- **WHEN** 在本机审计已有的特征、SZZ、Fix 轮次
+- **THEN** 绑定已接受 HEAD、完整历史、版本与摘要以及当前复核，读取冻结输入而不是已入库提交的并集，不修改源数据，也不补写旧观测；同时不发布 A17～A19 或模型
 
-### Requirement: Versioned causal feature kernel
-系统 SHALL 从版本化冻结解析记录计算十四个原始特征，绑定接受 HEAD、覆盖、身份及输入/规则摘要，不读取未来证据或将缺失填零。
+### Requirement: 版本化的因果特征内核
+系统 SHALL 从版本化的冻结解析记录计算十四个原始特征，绑定已接受 HEAD、覆盖、身份以及输入与规则摘要，
+且 SHALL 不读取未来证据、不把缺失填零。
 
-#### Scenario: Hand calculated Git history
-- **WHEN** 两文件多作者真实 Git 历史通过现有解析器输入
-- **THEN** 十四维与手算一致，重算内容摘要一致且输入无变化
+#### Scenario: 手算 Git 历史
+- **WHEN** 两文件多作者的真实 Git 历史通过现有解析器输入
+- **THEN** 十四维与手算一致，重算的内容摘要一致，输入没有变化
 
-#### Scenario: Recent history or unsupported file
-- **WHEN** 输入仅最近窗口，或文件为 binary/encoding/超限，或 AGE 首次/零 churn
-- **THEN** 相关特征为 null 并有稳定原因，完整可用历史中的真实零保持零
+#### Scenario: 近期历史或不支持的文件
+- **WHEN** 输入只有最近窗口，或者文件是二进制、编码异常、超限，或者计算开发年限时遇到首次修改和零改动量
+- **THEN** 相关特征留空并给出稳定的原因；完整可用历史里的真实零保持为零
 
-#### Scenario: Invalid snapshot
-- **WHEN** full 缺父、重复 SHA、非 HEAD 可达提交、循环或不支持版本进入计算
-- **THEN** 拒绝输入并无任何部分写入
+#### Scenario: 非法快照
+- **WHEN** 全量模式缺少父提交、出现重复 SHA、存在非 HEAD 可达的提交、存在循环，或者进入不支持的版本
+- **THEN** 拒绝输入，且不产生任何部分写入
 
-### Requirement: Explicit lineage and information availability
-系统 SHALL 只使用严格祖先及事件/SHA 前序，沿单父重命名追溯文件，隔离删除再新增，并限制 FIX 证据可用时间。
+### Requirement: 显式血缘与信息可用性
+系统 SHALL 只使用严格祖先以及事件与 SHA 前序，沿单父重命名追溯文件，
+隔离「删除后重新新增」，并限制 FIX 证据的可用时间。
 
-#### Scenario: Rename and re-add
-- **WHEN** 文件改名后修改，或删除后以相同路径新增
-- **THEN** 改名继承历史，再新增终止旧历史，NUC 去重上次修改 SHA
+#### Scenario: 重命名与重新新增
+- **WHEN** 文件改名之后被修改，或者删除之后以相同路径重新新增
+- **THEN** 改名继承历史，重新新增终止旧历史，NUC 对上次修改的 SHA 去重
 
-#### Scenario: Equal time and late Fix
-- **WHEN** 祖先时间与当前相同但 SHA 不在前序，或 kamei14-dg-v1 的 FIX available_at 晚于当前 event_time
-- **THEN** 历史相关特征标明时间倒置，FIX 为 null；非祖先分支不影响历史
+#### Scenario: 同时刻与晚到 Fix
+- **WHEN** 祖先时间与当前相同但 SHA 不在前序，或者 `kamei14-dg-v1` 的 FIX 可用时间晚于当前事件时间
+- **THEN** 相关历史特征标明时间倒置，FIX 留空；非祖先分支不影响历史
 
-#### Scenario: Candidate purpose
-- **WHEN** 显式使用 kamei14-dg-v1 的 candidate 模式
-- **THEN** FIX 使用声明的零默认并保留原因，模式进入摘要
+#### Scenario: 候选用途
+- **WHEN** 显式使用 `kamei14-dg-v1` 的候选模式
+- **THEN** FIX 使用已声明的零默认值并保留原因，模式进入摘要
 
-### Requirement: Missing-aware quality report
-系统 SHALL 提供原始分位数、范围和缺失原因，不拟合填充、不构造监督标签。
+### Requirement: 感知缺失的质量报告
+系统 SHALL 提供原始分位数、取值范围与缺失原因，不拟合填充，也不构造监督标签。
 
-#### Scenario: Mixed or empty vectors
-- **WHEN** 全部或部分值缺失，或输入为空
-- **THEN** 统计只使用有限有效值，空分位数为 null，缺失数量/原因可追溯
+#### Scenario: 混合或空向量
+- **WHEN** 全部或部分值缺失，或者输入为空
+- **THEN** 统计只使用有限的有效值，没有有效值时分位数留空不用零顶替，缺失数量和原因都可追溯
 
-#### Scenario: Invalid report population
-- **WHEN** 重复提交或混合输入摘要进入同一质量报告
-- **THEN** 拒绝生成混合轮次报告
+#### Scenario: 非法的报告群体
+- **WHEN** 出现重复提交，或者混合输入摘要进入同一份质量报告
+- **THEN** 拒绝生成混合轮次的报告
 
-### Requirement: Frozen accepted feature run
-系统 SHALL 复用可靠任务、租约和 execution_token，从固定私有接受 HEAD 筛选解析提交，冻结与声明版本匹配的信号和输入摘要，按原子批次发布向量并保留恢复点。kamei14-dg-v1 冻结 Fix 复核；kamei14-dg-message-v2 使用独立在线合同的消息用途信号，不接受 Fix 轮次。
+### Requirement: 冻结的已接受特征轮次
+系统 SHALL 复用可靠任务、租约和执行令牌，从固定的私有已接受 HEAD 筛选解析提交，
+冻结与声明版本匹配的信号和输入摘要，按原子批次发布向量并保留恢复点。
 
-#### Scenario: Unaccepted database union
-- **WHEN** A11 并集含未接受同步记录或 full 历史有解析缺口
-- **THEN** 未接受提交排除；完整历史缺口拒绝，有限窗口保持明确缺失
+`kamei14-dg-v1` 冻结 Fix 复核；`kamei14-dg-message-v2` 使用独立在线合同的消息用途信号，不接受 Fix 轮次。
 
-#### Scenario: Concurrent creation and later review
-- **WHEN** 相同幂等请求并发到达，或接受后 Fix 复核发生变化
-- **THEN** 同政策只创建一轮，不同政策冲突；旧轮次继续使用冻结复核和证据时间
+#### Scenario: 未被接受的数据库并集
+- **WHEN** 已入库提交的并集里含有未被接受的同步记录，或者完整历史存在解析缺口
+- **THEN** 未接受的提交被排除；完整历史的缺口直接拒绝，有限窗口保留明确的缺失
 
-#### Scenario: Interrupted worker and stale token
-- **WHEN** Worker 在已提交批次后中断，或计算中取消或空间不足
-- **THEN** 未提交批次回滚，旧令牌禁止写入，重试沿用原轮次和冻结输入并且不重复结果
+#### Scenario: 并发创建与后续复核
+- **WHEN** 相同的幂等请求并发到达，或者接受之后 Fix 复核发生变化
+- **THEN** 同一政策只创建一轮，不同政策则冲突；旧轮次继续使用冻结的复核与证据时间
 
-### Requirement: Authenticated quality workflow
-系统 SHALL 提供 A15/A16 与分页轮次历史，Member/Admin 可发起，Viewer 只读，并允许按特征缺失或有效值降序下钻。
+#### Scenario: Worker 中断与陈旧令牌
+- **WHEN** Worker 在已提交批次之后中断，或者在计算中取消、空间不足
+- **THEN** 未提交的批次回滚，旧令牌禁止写入，重试沿用原轮次和冻结输入且不产生重复结果
 
-#### Scenario: Partial population
+### Requirement: 带认证的质量工作流
+系统 SHALL 提供 A15 与 A16 接口以及分页的轮次历史；Member 和 Admin 可以发起，Viewer 只读，
+并允许按特征缺失或有效值降序下钻。
+
+#### Scenario: 部分群体
 - **WHEN** 轮次尚未完成
-- **THEN** 页面显示待处理及已提交批次，总体质量报告保持未发布
+- **THEN** 页面显示待处理和已提交的批次，总体质量报告保持未发布
 
-#### Scenario: Uncertain acknowledgement and changed repository
-- **WHEN** 发起响应丢失，或旧仓库查询晚到
-- **THEN** 重放相同幂等键并跟踪已接受任务，旧数据不覆盖新仓库界面
+#### Scenario: 确认丢失与仓库变更
+- **WHEN** 发起请求的响应丢失，或者旧仓库的查询迟到
+- **THEN** 重放相同的幂等键并跟踪已接受的任务，旧数据不覆盖新仓库的界面
 
-#### Scenario: Safe migration
-- **WHEN** 从旧 SZZ schema 升级或对有数据的迁移路径降级
-- **THEN** 升级保留旧业务数据，任何受影响数据在第一次 DDL 前阻止降级
+#### Scenario: 安全迁移
+- **WHEN** 从旧的 SZZ 表结构升级，或者对已有数据的迁移路径执行降级
+- **THEN** 升级保留旧业务数据；只要还有受影响的数据，降级会在执行第一条建表语句之前就被阻止

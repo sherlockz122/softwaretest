@@ -1,24 +1,80 @@
-# Index and compatibility
+# Design: optimize-causal-file-history
 
-Build a per-path event index from frozen inputs in committer/SHA order. Each target
-intersects events with its strict DAG ancestors. Reverse traversal preserves the
-legacy commit/file ordering; rename follows old paths only before the matching
-commit. Addition/copy ends a lifetime and deletion stops traversal. Unrelated
-branches, future events and unsupported ancestors retain legacy exclusion/null rules.
+## Context
 
-Use legacy current-content calculation and recompute the six history fields with
-indexed lineage. Keep stable fsum order and exact source canonicalization. Source
-hash for v2 includes the new module; no stored quality/vector is rewritten. Preserve
-1000 commits, 10000 files, 32 MiB frozen input and 30-second calculation bounds.
+v2 的特征计算需要知道每个文件的历史事件。
+原来的实现每次都去扫描祖先提交里的文件，即使大部分文件跟当前目标无关——
+这就是「不相干祖先文件被反复扫描」这个开销的来源。
 
-Acceptance compares whole FeatureVector tuples against the independent unchanged
-legacy oracle across deterministic randomized DAG/lifecycle/time cases and real
-Git fixtures. Count supervised work as well as recording actual timings; avoid a
-flaky absolute-speed assertion. Real Worker recovery and fresh browser regressions
-continue. Cancel/capacity exceptions must escape without partial publication.
+这次优化的定位是纯性能改动：结果必须和旧实现逐位一致。
 
-First probe exposed dense-path regression. Final selection reuses a sorted prefix
-only for a proved full linear chain and keeps the legacy vector scan for frequent
-paths (maximum path event count above population/4). This frozen-input strategy
-is validated against the same legacy oracle; it is a performance choice, not a
-semantic or coverage change. General DAG/author/file worst-case costs remain.
+## Goals / Non-Goals
+
+**Goals:**
+
+- 用索引消除重复扫描，明显降低 v2 计算的重复工作。
+- 计算结果和旧实现完全等价，包括数值、缺失原因和来源摘要。
+- 实现出处可追溯——换实现不能悄悄改变结果，也不能污染已有轮次。
+
+**Non-Goals:**
+
+- 不提高任何资源上限。
+- 不实现标签认证、数据集 A17～A19、模型训练。
+- 不解决祖先和作者在最坏情况下的二次复杂度。
+- 不改变语义，也不改变覆盖范围。
+
+## Decisions
+
+### 决策 1：索引怎么建
+
+- 从冻结输入出发，按提交顺序和 SHA 建立按路径的事件索引。
+- 每个目标把事件和它的严格 DAG 祖先求交集。
+- 反向遍历，以保持旧版的提交与文件顺序。
+- 遇到重命名时，只在匹配提交之前跟随旧路径。
+- 新增和复制视为一个生命周期的结束；删除则停止遍历。
+- 不相关的分支、未来的事件、不支持的祖先，沿用旧的排除和 null 规则，不自行发挥。
+
+### 决策 2：数值必须逐位等价
+
+- 当前内容仍然用旧版的计算方式。
+- 只把六个历史字段（NDEV、AGE、NUC、EXP、REXP、SEXP）改用索引后的血缘重算。
+- 保持稳定的 fsum 求和顺序和精确的来源规范化——顺序一变，浮点结果就会跟着变。
+
+### 决策 3：规则哈希与既有轮次
+
+- v2 的来源哈希包含新模块。
+- 不重写任何已存储的质量报告或向量。
+- v1 源码和已存储的轮次保持不可变。
+
+### 决策 4：第一次探测发现稠密路径退化后的选型
+
+第一次探测暴露了稠密路径下的性能退化，最终方案做了分类处理：
+
+| 情况 | 采用策略 |
+|---|---|
+| 已经证明是完整的线性链 | 复用排序前缀（快路径） |
+| 高频路径（单路径事件数超过总体的四分之一） | 退回旧版的向量扫描 |
+
+这条策略同样只作用于冻结输入，并对同一个旧版 oracle 验证。
+它是性能取舍，不是语义或覆盖范围的变化。
+
+一般的 DAG、作者和文件最坏情况下的开销仍然存在。
+
+## Risks / Trade-offs
+
+| 风险 / 权衡 | 说明 |
+|---|---|
+| 索引结果和旧实现出现细微差异 | 浮点顺序、重命名边界、生命周期判定任何一处出错都会让数值漂移。用整个 FeatureVector 元组比对独立 oracle 来兜底。 |
+| 稠密路径仍然走旧路径 | 高频路径没有变快，优化收益要在「事件分布均匀」的仓库上才明显。 |
+| 祖先与作者的复杂度仍是二次 | 大规模仓库依旧不适用，只能靠现有的上限兜住。 |
+| 用「监督工作量」替代绝对速度断言 | 绝对耗时断言在持续集成上不稳定。改成统计受监督的工作量并记录真实耗时，代价是性能回归不会被硬性拦住，只能靠人工看数字。 |
+| 规则哈希纳入新模块 | 未完成的老任务会因规则漂移被拒绝。这是有意的：宁可重跑，不混合两种实现。 |
+
+## Validation
+
+- 用独立且未改动的旧版 oracle，在确定性随机化的 DAG、生命周期和时间用例上比对整个 FeatureVector 元组。
+- 用真实 Git fixture 验证。
+- 统计受监督的工作量，同时记录真实耗时，避免使用容易抖动的绝对速度断言。
+- 真实 Worker 恢复和全新浏览器回归继续通过。
+- 取消和容量异常必须向上抛出，且不产生部分发布。
+- 可复现的 200 与 1000 提交、稀疏与稠密资源探测。

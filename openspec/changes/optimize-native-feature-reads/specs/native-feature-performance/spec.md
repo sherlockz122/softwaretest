@@ -1,39 +1,35 @@
 ## ADDED Requirements
 
-### Requirement: Bounded supervised immutable blob reuse
-Online v2 feature verification SHALL reuse immutable blob results only within an
-attempt, bounded by 8 MiB payload and 512 entries, while preserving native record
-comparison, mode proof, all current limits and the unchanged v1 parser.
+### Requirement: 有界且受监督的文件内容复用
+在线 v2 特征校验 SHALL 只在单次尝试内复用已读过的文件内容，
+受 8 MiB 载荷和 512 条目双重限制，并 SHALL 保持原生记录比对、模式证明、
+全部现有上限，以及未改动的 v1 解析器。
 
-#### Scenario: Recurring blobs match uncached verification
-- **WHEN** real Git edits/reverts share blobs across different commits
-- **THEN** complete records, native digests and frozen inputs match the uncached
-  reader exactly and measured command counts show actual reuse
+#### Scenario: 重复出现的文件内容与未缓存校验一致
+- **WHEN** 真实 Git 中的编辑和还原让不同提交共享同一批文件内容
+- **THEN** 完整记录、原生摘要和冻结输入与未缓存的读取路径完全一致，且实测的命令次数体现出真实复用
 
-#### Scenario: Cache hit cancellation and cleanup
-- **WHEN** cancellation, lease loss, deadline or capacity failure occurs on a hit
-- **THEN** supervision interrupts before returning cached data and the context
-  restores the original reader without retaining the attempt's blobs
+#### Scenario: 缓存命中的取消与清理
+- **WHEN** 在一次命中上发生取消、租约丢失、超时或容量不足
+- **THEN** 资源检查在返回缓存数据之前就中断，用完恢复原始读取路径，不保留本次读到的内容
 
-#### Scenario: Modes and oversized blobs
-- **WHEN** null/submodule modes, oversized blobs or cache eviction are encountered
-- **THEN** original content semantics are preserved and both cache limits hold
+#### Scenario: 模式与超大文件
+- **WHEN** 遇到空内容、子模块、超大文件，或者缓存淘汰
+- **THEN** 保持原有的内容语义，两项缓存上限都成立
 
-### Requirement: Bounded parsed projections and fenced atomic freezing
-Online v2 feature planning SHALL load parsed-file projections in groups of at most
-100 eligible commits, preserve ordinal order, release locks before Git/CPU work,
-and publish the complete frozen input population in one fenced transaction.
+### Requirement: 有界投影加载与带栅栏的原子冻结
+在线 v2 特征规划 SHALL 以至多 100 个合格提交为一组加载解析文件投影，
+保持序号顺序，在 Git 和 CPU 工作之前释放锁，
+并在一个带栅栏的事务里发布完整的冻结输入集合。
 
-#### Scenario: Query and lock evidence
-- **WHEN** an isolated real MySQL/Git feature run is measured
-- **THEN** query counts and fenced transaction durations are recorded and another
-  connection can immediately lock task/repository rows during native reading
+#### Scenario: 查询与加锁证据
+- **WHEN** 对一个隔离的真实 MySQL 与 Git 特征轮次进行测量
+- **THEN** 记录查询次数和栅栏事务耗时，并且另一个连接能在原生读取期间立即锁住任务行和仓库行
 
-#### Scenario: Freeze interrupted before commit
-- **WHEN** a write fails or a lease expires while freezing inputs
-- **THEN** all inputs and input/source digests roll back together and retry can
-  freeze a complete population without duplicates or publishing partial quality
+#### Scenario: 提交前冻结被中断
+- **WHEN** 在冻结输入期间写入失败或者租约过期
+- **THEN** 全部输入连同输入摘要与来源摘要一起回滚，重试能冻结出完整集合，不产生重复，也不发布部分质量
 
-#### Scenario: Existing sources and rules remain fenced
-- **WHEN** stored Git projections, frozen inputs or implementation rules drift
-- **THEN** verification rejects publication and finished older runs are not rewritten
+#### Scenario: 既有来源与规则仍受栅栏保护
+- **WHEN** 已存储的 Git 投影、冻结输入或实现规则发生漂移
+- **THEN** 校验拒绝发布，已完成的旧轮次不被重写

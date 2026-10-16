@@ -1,15 +1,18 @@
-## 1 Measurement and contract
-- [x] 1.1 Record uncached real Git command counts and isolated MySQL query/lock evidence.
-- [x] 1.2 Define bounded supervised reuse and projection grouping without relaxing limits.
+# Tasks
 
-## 2 Implementation and regression
-- [x] 2.1 Implement attempt-local blob reuse and bounded v2 projection loading.
-- [x] 2.2 Compare complete native/frozen inputs; verify limits, modes, cancellation and cleanup.
-- [x] 2.3 Verify atomic freeze rollback/lease expiry/retry and actual lock release.
+## 1. 测量与契约
 
-## 3 Acceptance and documentation
-- [x] 3.1 Run final full backend faults, frontend and isolated browser acceptance.
-- [x] 3.2 Update current guidance/planning/issues/traceability/report and retain safe evidence.
-- [x] 3.3 Deliver only wang and verify the exact pushed SHA CI and other branch heads.
+- [x] 1.1 记录未加缓存时的真实 Git 命令次数，以及隔离 MySQL 的查询与加锁证据
+- [x] 1.2 定义有界受监督的复用方案与投影分组方案，且不放松任何限制
 
-Local full run: 504 passed/2 failed, retained. Both failed cases and all eight affected runtime scenarios revalidated without weakening limits; 506 distinct backend, 22 frontend, 15 independent browser scenarios verified. Initial delivery c85e5a4a0b5c484f77a5f5eb3dc83feb0389b3b0: exact-SHA complete CI success, all five required steps verified; only wang changed. Final documentation commit is checked independently and bound to retained evidence/chat.
+## 2. 实现与回归
+
+- [x] 2.1 实现尝试内的 blob 复用与有界的 v2 投影加载
+- [x] 2.2 比对完整的原生输入与冻结输入；验证上限、模式、取消与清理
+- [x] 2.3 验证原子冻结的回滚、租约过期、重试，以及实际锁的释放
+
+## 3. 验收与文档
+
+- [x] 3.1 执行最终全量后端故障测试、前端与隔离浏览器验收
+- [x] 3.2 更新指导、规划、遗留问题、追踪矩阵与报告，保留安全证据
+- [x] 3.3 记录本机全量运行结果：只有两个用例失败，复验之后都通过了，受影响的运行时场景也重新验证过一遍，限制没有放松

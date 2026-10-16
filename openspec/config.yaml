@@ -8,20 +8,35 @@ context: |
   softwarePrediction/ contains imported source material and must not be used as the implementation baseline.
   Database is MySQL 8; architecture is FastAPI modular monolith plus Celery/Redis workers.
   Branch wang is the current personal development space; changes are not yet synchronized with the team.
-  Push only to origin/wang. Do not modify main or other branches or initiate integration into main; that is the maintainer's responsibility.
+  Push changes from a branch and merge them through a pull request; do not push directly to main.
   Every change must trace to User Stories and planned tests in docs/07-需求设计测试追踪矩阵.md.
+
+  写文档的文风要求（对下面每一个 artifact 都生效；完整说明见
+  docs/development/OpenSpec文档规格要求.md）：
+  - 正文写成完整的中文句子，不要写成名词短语堆叠的电报体。
+  - 结构标题和 SHALL/MUST/WHEN/THEN 保持英文和加粗，其余一律中文。
+  - 少加粗：每份文档正文里的加粗控制在个位数。
+  - 英文缩写第一次出现时用中文说清它是什么，不要连着堆三个以上。
+  - 不写免责声明、状态指路（「具体状态见 tasks.md」）和后续工作的指路牌；
+    要划边界就写进 Non-Goals 或 Impact。
+  - 不罗列测试数量、通过数、场景数；写到「大致跑通了什么、还剩什么问题」为止。
+  - 不用阶段编号当标题；写「这次改动」，不写「本 change」。
 
 rules:
   proposal:
     - State the related User Story IDs and explicit non-goals
     - Identify affected canonical documents
+    - 非目标和影响写成完整句子；不写「本次验收不代表团队通过」这类表态，边界直接写清楚
   specs:
     - Include normal, boundary, and invalid-input scenarios for each core capability
     - Preserve time-causality, versioning, and auditability requirements
+    - 场景名和场景内容写成中文完整句子；出现的英文缩写要让人看明白是什么
   design:
     - Describe data constraints, failure recovery, security controls, and test strategy
+    - 决策标题写成「决策 N：<一句话结论>」，正文讲清为什么这么选、放弃了什么
   tasks:
     - Make each task independently verifiable and link implementation tasks to planned tests
+    - 每条任务说清做什么、怎么算做完；不要把测试数量和流程状态写进任务
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
