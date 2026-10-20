@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from packages.mining.features import CommitInput, FileDelta, Snapshot, compute  # noqa: E402
+from packages.mining.indexed_features import compute_indexed  # noqa: E402
 
 REC = "@@"
 
@@ -80,6 +81,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo")
     parser.add_argument("--counts", type=int, nargs="+", default=[200, 500, 1000])
+    parser.add_argument(
+        "--impl", choices=("legacy", "indexed", "both"), default="legacy",
+        help="legacy=features.compute；indexed=indexed_features.compute_indexed（v2）；both=都跑并对比",
+    )
     args = parser.parse_args()
     repo = Path(args.repo).expanduser().resolve()
     if not repo.exists():
@@ -136,22 +141,25 @@ def main():
     head = records[-1].sha
 
     results = []
+    implementations = {"legacy": compute, "indexed": compute_indexed}
+    chosen = list(implementations) if args.impl == "both" else [args.impl]
     for count in args.counts:
         subset = tuple(records[:count])
         snapshot = Snapshot("probe-real", subset[-1].sha, subset, history_coverage="full")
-        tracemalloc.start()
-        started = time.perf_counter()
-        compute(snapshot)
-        elapsed = time.perf_counter() - started
-        peak = tracemalloc.get_traced_memory()[1]
-        tracemalloc.stop()
-        results.append((count, elapsed, peak))
-        print(f"PASS real {count} commits, {elapsed:.3f}s, {peak / 1024**2:.3f} MiB Python peak")
+        for name in chosen:
+            tracemalloc.start()
+            started = time.perf_counter()
+            implementations[name](snapshot)
+            elapsed = time.perf_counter() - started
+            peak = tracemalloc.get_traced_memory()[1]
+            tracemalloc.stop()
+            results.append((count, name, elapsed, peak))
+            print(f"PASS real {count} commits [{name}], {elapsed:.3f}s, {peak / 1024**2:.3f} MiB Python peak")
 
     print("\n=== 汇总 ===")
-    print(f"{'提交数':>8} {'耗时(s)':>10} {'每提交(ms)':>12} {'内存(MiB)':>11}")
-    for count, elapsed, peak in results:
-        print(f"{count:>8} {elapsed:>10.3f} {elapsed / count * 1000:>12.2f} {peak / 1024**2:>11.3f}")
+    print(f"{'提交数':>8} {'实现':>9} {'耗时(s)':>10} {'每提交(ms)':>12} {'内存(MiB)':>11}")
+    for count, name, elapsed, peak in results:
+        print(f"{count:>8} {name:>9} {elapsed:>10.3f} {elapsed / count * 1000:>12.2f} {peak / 1024**2:>11.3f}")
 
 
 if __name__ == "__main__":
