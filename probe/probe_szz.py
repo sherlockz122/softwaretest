@@ -429,6 +429,10 @@ print(f"  引入提交（去重后）  {bic_total}  "
 if TOTAL_COMMITS:
     print(f"  默认分支提交数      {TOTAL_COMMITS}")
     print(f"  缺陷引入率          {bic_total / TOTAL_COMMITS:.1%}")
+    if SINCE:
+        print("  ! 口径警告：分母是全历史提交数，未按 SINCE 过滤；分子只含窗口内的 BIC，")
+        print("    所以设了时间窗口时该比率系统性偏低，不能与同窗口口径直接比较。")
+        print("    同窗口口径请用 probe/probe_window_sensitivity.py 计算。")
 print(f"  已扫 fix 提交        {fixes}")
 if hit_cap:
     print(f"  ! 因达到 MAXFIX={MAXFIX} 上限提前结束，该比例偏低，仅供中途参考")
