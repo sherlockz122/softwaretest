@@ -66,6 +66,12 @@ BOT_RE = re.compile(r"\[bot\]|dependabot|renovate|github-actions|greenkeeper", r
 SINCE = datetime(2013, 1, 1, tzinfo=timezone.utc)
 TO = None
 
+# 可选第 2 个参数覆盖起始年份：传年份（如 2000），或传 all 表示全历史。
+# 默认保持 2013-01-01，不改变既有 activemq 结论的可复现性。
+if len(sys.argv) > 2:
+    _since_arg = sys.argv[2].strip().lower()
+    SINCE = None if _since_arg == "all" else datetime(int(_since_arg), 1, 1, tzinfo=timezone.utc)
+
 print(f"[i] 仓库：{REPO}")
 print(f"[i] 输出：{OUT_DIR / 'gaps.csv'}")
 print(f"[i] 上限：{MAXFIX} 个 fix 提交\n")
