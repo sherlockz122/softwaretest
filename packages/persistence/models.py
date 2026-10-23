@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from packages.persistence.canonical_json import CanonicalJSON
 
-SCHEMA_HEAD = "0011_models"
+SCHEMA_HEAD = "0012_prediction"
 
 
 class Base(DeclarativeBase):
@@ -707,6 +707,84 @@ class ModelRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DATETIME(fsp=6), server_default=func.utc_timestamp(6)
     )
+
+
+class PredictionTask(Stamp, Base):
+    __tablename__ = "prediction_task"
+    __table_args__ = (
+        CheckConstraint(
+            "candidate_kind IN ('single_ref','single_diff','batch')",
+            name="ck_prediction_kind",
+        ),
+        CheckConstraint("total IS NULL OR total >= 0", name="ck_prediction_total"),
+        CheckConstraint("batch_limit IS NULL OR batch_limit > 0", name="ck_prediction_batch_limit"),
+        CheckConstraint(
+            "window_days IS NULL OR (window_days > 0 AND window_days <= 90)",
+            name="ck_prediction_window",
+        ),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT"), primary_key=True
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT")
+    )
+    model_run_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("model_run.id", ondelete="RESTRICT")
+    )
+    base_sha: Mapped[str] = mapped_column(hash_column())
+    base_ref: Mapped[str] = mapped_column(VARCHAR(255))
+    candidate_kind: Mapped[str] = mapped_column(VARCHAR(16))
+    candidate_ref: Mapped[str | None] = mapped_column(VARCHAR(255))
+    candidate_sha: Mapped[str | None] = mapped_column(hash_column())
+    candidate_json: Mapped[dict | None] = mapped_column(CanonicalJSON())
+    feature_version: Mapped[str] = mapped_column(VARCHAR(64))
+    feature_run_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("async_task.id", ondelete="RESTRICT")
+    )
+    window_days: Mapped[int | None] = mapped_column(INTEGER())
+    batch_limit: Mapped[int | None] = mapped_column(INTEGER())
+    base_time: Mapped[datetime | None] = mapped_column(DATETIME(fsp=6))
+    plan_hash: Mapped[str | None] = mapped_column(hash_column())
+    total: Mapped[int | None] = mapped_column(INTEGER())
+    input_digest: Mapped[str] = mapped_column(hash_column())
+
+
+class PredictionResult(Stamp, Base):
+    __tablename__ = "prediction_result"
+    __table_args__ = (
+        UniqueConstraint("task_id", "candidate_sha", name="uq_prediction_candidate"),
+        CheckConstraint("risk_level IN ('high','medium','low')", name="ck_prediction_level"),
+        CheckConstraint(
+            "probability >= 0 AND probability <= 1", name="ck_prediction_probability"
+        ),
+        CheckConstraint("effort >= 0", name="ck_prediction_effort"),
+        CheckConstraint(
+            "risk_density >= 0 AND risk_density <= 1", name="ck_prediction_density"
+        ),
+        CheckConstraint("candidate_ordinal >= 0", name="ck_prediction_ordinal"),
+        CheckConstraint("oversized IN (0,1)", name="ck_prediction_oversized"),
+        Index("ix_prediction_queue", "task_id", "probability"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True, default=lambda: str(uuid4()))
+    task_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("prediction_task.id", ondelete="RESTRICT")
+    )
+    candidate_ordinal: Mapped[int] = mapped_column(INTEGER())
+    candidate_sha: Mapped[str] = mapped_column(hash_column())
+    event_time: Mapped[datetime] = mapped_column(DATETIME(fsp=6))
+    probability: Mapped[float] = mapped_column(DECIMAL(7, 6))
+    threshold: Mapped[float] = mapped_column(DECIMAL(7, 6))
+    risk_level: Mapped[str] = mapped_column(VARCHAR(8))
+    effort: Mapped[int] = mapped_column(INTEGER())
+    risk_density: Mapped[float] = mapped_column(DECIMAL(7, 6))
+    oversized: Mapped[bool] = mapped_column(BOOLEAN())
+    numeric_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    reasons_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    explanation_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    input_json: Mapped[dict] = mapped_column(CanonicalJSON())
 
 
 class ModelArtifact(Base):

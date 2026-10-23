@@ -9,6 +9,7 @@ from packages.mining.fix import FixService
 from packages.mining.szz import SZZService
 from packages.modeling.service import ModelService
 from packages.platform.connections import Connections
+from packages.prediction.service import PredictionExecutor, PredictionService
 from packages.repositories.clone import CloneExecutor
 from packages.repositories.parser import ParseExecutor
 from packages.repositories.parsing import ParsingService
@@ -55,6 +56,10 @@ def execute(task_id):
                 ParseExecutor(settings, ParsingService(settings, connections)).run(
                     task_id, token, duration
                 )
+            elif "prediction_version" in duration:
+                PredictionExecutor(
+                    settings, PredictionService(settings, connections)
+                ).run(task_id, token, duration)
             else:
                 CloneExecutor(settings, RepositoryService(settings, connections)).run(
                     task_id, token, duration

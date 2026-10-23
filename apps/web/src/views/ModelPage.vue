@@ -11,6 +11,8 @@ const data = useLatest((id, signal) =>
 );
 const error = ref(null);
 const downloading = ref(false);
+const publishing = ref(false);
+const canPublish = computed(() => client.state.user?.role === "Admin");
 watch(
   () => route.params.id,
   (id) => data.load(id),
@@ -46,6 +48,22 @@ const fields = {
   brier: "Brier",
 };
 const number = (value) => (value == null ? "未定义" : Number(value).toFixed(4));
+async function publish() {
+  if (publishing.value) return;
+  publishing.value = true;
+  error.value = null;
+  try {
+    await client.request(
+      `/model-runs/${encodeURIComponent(route.params.id)}/publish`,
+      { method: "POST" },
+    );
+    await data.load(route.params.id);
+  } catch (failure) {
+    error.value = failure;
+  } finally {
+    publishing.value = false;
+  }
+}
 async function download(kind) {
   downloading.value = true;
   error.value = null;
@@ -101,6 +119,14 @@ async function download(kind) {
       </p>
       <h2 v-if="data.data.value.registered">研究工件已注册</h2>
       <p v-else>尚无可用研究模型。失败与取消任务可在任务页查看原因和重试。</p>
+      <div v-if="canPublish && data.data.value.registered" class="actions">
+        <button :disabled="publishing" @click="publish">
+          {{ publishing ? "正在发布…" : "发布为候选产品" }}
+        </button>
+      </div>
+      <p v-if="canPublish">
+        发布仅限Admin，用于把研究模型标记为候选产品；发布失败会在上方给出原因。
+      </p>
       <template v-if="report">
         <p class="task-id">
           训练规则：{{ report.provenance.version }} · 源码摘要：{{

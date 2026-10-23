@@ -86,6 +86,11 @@ def public(task, timestamp):
         "retry_of": task.retry_of,
         **({"dataset_id": task.root_task_id} if task.type == "dataset.build" else {}),
         **({"model_run_id": task.root_task_id} if task.type == "model.train" else {}),
+        **(
+            {"prediction_task_id": task.root_task_id}
+            if task.type in {"prediction.candidate", "prediction.batch"}
+            else {}
+        ),
         "result": task.result_json,
         "error": {
             "code": task.error_code,
@@ -108,7 +113,9 @@ class TaskService:
             raise AuthError(401, "AUTH_REQUIRED")
         return require_role(CurrentUser(row.id, row.username, row.role), "Member")
 
-    def new_task(self, db, actor_id, key, payload, scope, request_id, parent=None, kind=None):
+    def new_task(
+        self, db, actor_id, key, payload, scope, request_id, parent=None, kind=None, enqueue=True
+    ):
         task_id = str(uuid4())
         kind = kind or (parent.type if parent else "diagnostic")
         canonical = json.dumps(
@@ -134,7 +141,9 @@ class TaskService:
         )
         db.add(task)
         db.flush()
-        db.add(TaskOutbox(task_id=task.id, next_attempt_at=database_now(db)))
+        # 同步完成的预测不进入投递队列：结果已在同一事务内落库，无需再派发执行。
+        if enqueue:
+            db.add(TaskOutbox(task_id=task.id, next_attempt_at=database_now(db)))
         audit(db, task, "task.retry" if parent else "task.create")
         if parent and kind in {
             "repository.clone",
@@ -249,6 +258,8 @@ class TaskService:
             "repository.fix",
             "repository.szz",
             "repository.feature",
+            "prediction.candidate",
+            "prediction.batch",
         } or status not in STATES | {None}:
             raise TaskError(422, "TASK_INVALID_INPUT")
         with Session(self.engine) as db, db.begin():
@@ -367,6 +378,8 @@ class TaskService:
                 "repository.fix",
                 "repository.szz",
                 "repository.feature",
+                "prediction.candidate",
+                "prediction.batch",
             }:
                 self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
                 audit(db, task, "task.failed")

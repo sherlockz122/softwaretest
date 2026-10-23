@@ -110,7 +110,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 
 没有足够成熟标签、版本不兼容或时间边界无效时返回稳定错误码，不创建部分数据集。
 
-### 4.3 候选预测
+### 4.3 候选预测（A24）
 
 `POST /api/v1/predictions/candidate`
 
@@ -123,27 +123,106 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 }
 ```
 
-也可使用受限的 `diff` 代替 `candidate_ref`，两者必须且只能提供一个。
+候选改动可以改用 `candidate_diff` 直接提交 unified diff 文本，`candidate_ref` 与 `candidate_diff` 必须且只能提供一个。差异文本上限 2 MB、200 个文件、20,000 行改动，超限返回 422 `PRED_INPUT_LIMIT`。请求头 `Idempotency-Key` 必填；同键重放返回原响应，同键不同载荷返回 409 `TASK_IDEMPOTENCY_CONFLICT`。
 
-成功响应：
+同步在 1 秒内完成时返回 202 和结果：
 
 ```json
 {
   "prediction_id": "uuid",
   "model_run_id": "uuid",
   "probability": 0.82,
-  "calibration": "isotonic-v1",
+  "calibration": "validation-chronological-sigmoid-logit-v1",
   "risk_level": "high",
   "effort": 126,
-  "risk_density": 0.0065,
+  "risk_density": 0.006508,
+  "threshold": 0.5,
+  "feature_version": "kamei14-dg-v1",
   "top_factors": [
-    {"feature": "la", "value": 92, "contribution": 0.18, "direction": "increase"}
+    {"feature": "la", "value": 92.0, "contribution": 0.18, "direction": "increase"}
   ],
-  "limitations": ["因素贡献不代表缺陷的因果根因"]
+  "limitations": ["模型结果用于安排审查顺序，不是自动合并或拒绝结论。"]
 }
 ```
 
-当计算超过同步时限时返回 `202 + task_id`，由任务接口查询结果。
+超过同步时限时返回 202 任务引用 `{"task_id": "uuid", "status": "queued", "prediction_task_id": "uuid"}`，结果通过 A26 查询。候选引用只解析本地 ref，不发网络请求；模型必须已注册且工件完整，仓库必须已完成历史特征提取，否则分别返回 404 `PRED_MODEL_NOT_FOUND`、`PRED_MODEL_INELIGIBLE` 或 `PRED_HISTORY_UNAVAILABLE`。概率不低于阈值为 high，不低于阈值一半为 medium，其余为 low；effort 为候选 LA+LD 之和，risk_density 为概率除以 effort（effort 至少按 1 计），effort 超过 500 在队列中标记 oversized。候选的修复标记按 0 策略代入并写入缺失原因。
+
+### 4.4 批量预测与风险队列（A25/A26）
+
+`POST /api/v1/prediction-tasks`
+
+```json
+{
+  "repository_id": "uuid",
+  "model_run_id": "uuid",
+  "base_ref": "main",
+  "window_days": 90,
+  "max_candidates": 500
+}
+```
+
+时间窗口限 1～90 天，候选数量限 1～500 条，超出范围在入队前返回 422 `PRED_INPUT_LIMIT`。批量预测恒为异步，返回 202 任务引用 `{"task_id": "uuid", "status": "queued", "prediction_task_id": "uuid"}`，同键重放与冲突语义同 A24。
+
+`GET /api/v1/prediction-tasks/{id}/results` 查询队列，支持 `page`（默认 1）、`page_size`（1～100，默认 20）、`level`（high/medium/low）、`oversized`（布尔）筛选：
+
+```json
+{
+  "prediction_task_id": "uuid",
+  "task_id": "uuid",
+  "status": "succeeded",
+  "repository_id": "uuid",
+  "model_run_id": "uuid",
+  "base_ref": "main",
+  "candidate_kind": "batch",
+  "feature_version": "kamei14-dg-v1",
+  "threshold": 0.5,
+  "empty": false,
+  "items": [
+    {
+      "prediction_id": "uuid",
+      "candidate_sha": "40位sha",
+      "event_time": "2026-10-23T00:00:00.000000Z",
+      "probability": 0.82,
+      "risk_level": "high",
+      "effort": 126,
+      "risk_density": 0.006508,
+      "oversized": false,
+      "top_factors": [
+        {"feature": "la", "value": 92.0, "contribution": 0.18, "direction": "increase"}
+      ]
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+队列按概率降序、事件时间升序、候选提交标识升序排列；任务完成且无记录时 `empty` 为 true。任务不存在返回 404 `PRED_NOT_FOUND`。
+
+### 4.5 预测解释（A27）
+
+`GET /api/v1/predictions/{prediction_id}/explanation`
+
+```json
+{
+  "prediction_id": "uuid",
+  "candidate_sha": "40位sha",
+  "event_time": "2026-10-23T00:00:00.000000Z",
+  "probability": 0.82,
+  "risk_level": "high",
+  "model_run_id": "uuid",
+  "feature_version": "kamei14-dg-v1",
+  "threshold": 0.5,
+  "method": "lr-scaled-coefficient-v1",
+  "factors": [
+    {"feature": "la", "value": 92.0, "contribution": 0.18, "direction": "increase"}
+  ],
+  "limitations": ["模型结果用于安排审查顺序，不是自动合并或拒绝结论。"]
+}
+```
+
+逻辑回归的解释方法为 `lr-scaled-coefficient-v1`（样本值乘以系数除以标准化尺度），随机森林为 `rf-shap-tree-v1`；factors 按贡献绝对值降序，返回特征名、原始值、贡献值和方向，不承诺因果根因。
 
 ## 5 错误码分组
 
@@ -203,8 +282,8 @@ erDiagram
 | `dataset_item` | `dataset_id`, `commit_id`, `split`, `label`, `feature_version`, `label_version`; `PK(dataset_id,commit_id)` | 数据集成员 |
 | `model_run` | `id`, `dataset_id`, `plugin`, `family`, `code_sha`, `dependency_digest`, `params_json`, `seed`, `status`, `metrics_json`, `threshold`, `calibration`, `source_run_id` | 一次训练运行 |
 | `model_artifact` | `id`, `model_run_id`, `kind`, `uri`, `sha256`, `size` | 模型、预处理器、校准器、词表 |
-| `prediction_task` | `id`, `model_run_id`, `repository_id`, `base_ref`, `candidate_ref`, `input_hash`, `status` | 单次或批量预测任务 |
-| `prediction_result` | `id`, `prediction_task_id`, `commit_sha`, `candidate_key`, `probability`, `risk_level`, `effort`, `risk_density`, `explanation_json` | 一任务多结果 |
+| `prediction_task` | `id`（与 async_task 同键）, `model_run_id`, `repository_id`, `base_ref`/`base_sha`, `candidate_kind`（single_ref/single_diff/batch）, `candidate_json`, `feature_version`, `input_digest` | 单次或批量预测任务 |
+| `prediction_result` | `id`, `task_id`, `candidate_ordinal`, `candidate_sha`, `event_time`, `probability`, `threshold`, `risk_level`, `effort`, `risk_density`, `oversized`, `numeric_json`/`reasons_json`/`explanation_json`/`input_json`; `UNIQUE(task_id,candidate_sha)` | 一任务多结果 |
 | `async_task` | `id`, `type`, `scope_key`, `idempotency_key`, `payload_hash`, `actor_id`, `status`, `progress`, `heartbeat_at`, `lease_until`, `execution_token`, `retry_of UNIQUE`, `error_code`; 唯一任务键 | 通用长任务状态，细则见第 10 节 |
 | `task_outbox` | `id`, `task_id`, `event_type`, `status`, `attempts`, `next_attempt_at`, `lease_until`, `delivery_token`; `UNIQUE(task_id,event_type)` | 事务内创建、至少一次投递 |
 | `operation_log` | `id`, `actor_id`, `action`, `object_type`, `object_id`, `result`, `request_id`, `created_at`, `detail_json` | 操作审计 |
@@ -219,7 +298,7 @@ erDiagram
 - `commit_feature(feature_version)`；
 - `dataset_item(dataset_id, split)`；
 - `async_task(status, heartbeat_at)`；
-- `prediction_result(prediction_task_id, probability)`。
+- `prediction_result(task_id, probability)`。
 
 外键按业务生命周期选择限制或级联，不能依赖应用代码模拟唯一性。批量写入使用事务和 upsert；checkpoint 只能在对应批次成功提交后推进。
 
@@ -405,3 +484,7 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 ## 第二十二阶段模型研究增量
 
 当前schema0011_models。model_run保存dataset_id/plugin/params_json/seed/code_sha/snapshot_json/metrics_json/output_json/latest_task_id，模型JSON无损文本；model_artifact保存固定kind/uri/hash/size。code_sha为规范源文件和锁文件SHA256，Git交付另绑定。A20仅dataset_id/plugin/params/seed，A21支持固定名称artifact下载；A23分页研究运行并明确production_models=[]，A22 Admin仍拒绝不兼容研究用途。0011在整条降级请求任何DDL前检查所有将受影响旧表、引用和任务，0001～0010不改。
+
+## 第二十三阶段候选预测增量
+
+当前schema0012_prediction。prediction_task与async_task共用主键，保存repository_id/model_run_id/base_ref/base_sha/candidate_kind（single_ref/single_diff/batch）/candidate_json/feature_version/input_digest，候选结果唯一约束(task_id,candidate_sha)，队列索引(task_id,probability)；prediction_result保存定点小数概率与阈值、等级、effort、风险密度、超大标识，以及数值、缺失原因、解释和输入快照的JSON无损文本。A24支持candidate_ref与candidate_diff二选一，同步一秒内完成、超时转任务；A25批量范围在入队前拒绝，恒为异步；A26队列按概率降序、事件时间和提交标识并列稳定，支持等级与超大筛选；A27返回解释方法、因素和声明。0012降级在任何DDL前检查预测任务类型与两张表均为空，0001～0011不改。

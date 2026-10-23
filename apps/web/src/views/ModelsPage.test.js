@@ -84,6 +84,54 @@ test("uncertain training reuses operation key and immutable dataset ID", async (
   expect(router.currentRoute.value.path).toBe("/model-runs/new");
   wrapper.unmount();
 });
+test("Admin publish button surfaces the incompatible-purpose error", async () => {
+  const send = vi
+    .spyOn(client, "request")
+    .mockImplementation(async (path, options) => {
+      if (options?.method === "POST")
+        throw new ApiError(409, "MODEL_PURPOSE_INCOMPATIBLE");
+      return {
+        id: "ready",
+        dataset_id: "fixed",
+        plugin: "lr",
+        seed: 42,
+        status: "succeeded",
+        registered: true,
+        task_id: "worker",
+        snapshot: {},
+      };
+    });
+  const { wrapper } = await view(ModelPage, "Admin", "/model-runs/ready");
+  const button = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("发布为候选产品"));
+  expect(button).toBeTruthy();
+  await button.trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).toContain("研究模型尚不具备候选产品发布资格");
+  expect(wrapper.text()).toContain("MODEL_PURPOSE_INCOMPATIBLE");
+  expect(send.mock.calls.some(([path, options]) =>
+    path === "/model-runs/ready/publish" && options?.method === "POST",
+  )).toBe(true);
+  wrapper.unmount();
+});
+test("Member model page hides the publish button", async () => {
+  vi.spyOn(client, "request").mockResolvedValue({
+    id: "ready",
+    dataset_id: "fixed",
+    plugin: "lr",
+    seed: 42,
+    status: "succeeded",
+    registered: true,
+    task_id: "worker",
+    snapshot: {},
+  });
+  const { wrapper } = await view(ModelPage, "Member", "/model-runs/ready");
+  expect(
+    wrapper.findAll("button").some((b) => b.text().includes("发布为候选产品")),
+  ).toBe(false);
+  wrapper.unmount();
+});
 test("failed model hides artifacts and links cancellation/retry task", async () => {
   vi.spyOn(client, "request").mockResolvedValue({
     id: "failed",

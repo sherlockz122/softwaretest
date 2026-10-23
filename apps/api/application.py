@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException
 from apps.api.auth import router
 from apps.api.datasets import router as datasets_router
 from apps.api.models import router as models_router
+from apps.api.predictions import router as predictions_router
 from apps.api.repositories import router as repositories_router
 from apps.api.repositories import szz_router
 from apps.api.tasks import diagnostic_router
@@ -20,6 +21,7 @@ from packages.auth.security import AuthError
 from packages.mining.public_assets import AssetError
 from packages.mining.research_dataset import ResearchError
 from packages.modeling.policy import ModelError
+from packages.prediction.policy import PredictionError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
 from packages.repositories.safety import RepositoryError
@@ -122,6 +124,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
             request, 409, "DATA_SOURCE_OR_STORAGE_INVALID", "数据源或工件不可用，请核对来源后重试"
         )
 
+    @app.exception_handler(PredictionError)
+    async def prediction_error(request: Request, exc: PredictionError):
+        return error(
+            request, exc.status, exc.code, "预测请求未通过，请检查引用、改动内容或模型资格"
+        )
+
     @app.exception_handler(RepositoryError)
     async def repository_error(request: Request, exc: RepositoryError):
         return error(
@@ -146,6 +154,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     app.include_router(szz_router)
     app.include_router(datasets_router)
     app.include_router(models_router)
+    app.include_router(predictions_router)
     if settings.environment != "production":
         app.include_router(diagnostic_router)
 

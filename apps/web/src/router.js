@@ -10,11 +10,15 @@ import DatasetsPage from "./views/DatasetsPage.vue";
 import DatasetPage from "./views/DatasetPage.vue";
 import ModelsPage from "./views/ModelsPage.vue";
 import ModelPage from "./views/ModelPage.vue";
+import ReviewPage from "./views/ReviewPage.vue";
+import RiskPage from "./views/RiskPage.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/models", component: ModelsPage, meta: { auth: true } },
     { path: "/model-runs/:id", component: ModelPage, meta: { auth: true } },
+    { path: "/review", component: ReviewPage, meta: { auth: true } },
+    { path: "/risk", component: RiskPage, meta: { auth: true } },
     { path: "/datasets", component: DatasetsPage, meta: { auth: true } },
     { path: "/datasets/:id", component: DatasetPage, meta: { auth: true } },
     { path: "/", redirect: "/tasks" },

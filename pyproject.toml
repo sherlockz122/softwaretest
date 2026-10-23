@@ -24,6 +24,7 @@ dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.9,<1"]
 modeling = [
     "psutil==7.1.0",
     "scikit-learn==1.7.2",
+    "shap==0.47.2",
     "skops==0.13.0",
 ]
 
