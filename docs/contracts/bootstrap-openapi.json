@@ -245,7 +245,7 @@
           "commit_limit": {
             "anyOf": [
               {
-                "maximum": 10000000.0,
+                "maximum": 700.0,
                 "minimum": 1.0,
                 "type": "integer"
               },

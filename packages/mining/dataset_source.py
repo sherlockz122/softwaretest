@@ -8,7 +8,15 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from packages.mining.dataset import DatasetError, Evidence, Link, Observation, Policy, audit
+from packages.mining.dataset import (
+    WINDOW_DAYS,
+    DatasetError,
+    Evidence,
+    Link,
+    Observation,
+    Policy,
+    audit,
+)
 from packages.mining.feature_service import decode_input
 from packages.mining.features import (
     FEATURE_VERSION,
@@ -69,7 +77,9 @@ class DatasetSource:
         except (FeatureInputError, KeyError, TypeError, ValueError, IndexError):
             raise DatasetError("DATA_SOURCE_CONFLICT") from None
 
-    def _load(self, repository_id, feature_run_id, szz_run_ids, snapshot_at=None, window_days=90):
+    def _load(
+        self, repository_id, feature_run_id, szz_run_ids, snapshot_at=None, window_days=WINDOW_DAYS
+    ):
         # No table update, audit insert, Git command, remote lookup or historical repair.
         if not 1 <= len(szz_run_ids) <= 32 or len(set(szz_run_ids)) != len(szz_run_ids):
             raise DatasetError("DATA_OBSERVATION_SELECTION_INVALID")

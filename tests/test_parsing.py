@@ -20,7 +20,7 @@ from packages.persistence.models import (
     ParseCheckpoint,
     Repository,
 )
-from packages.repositories.parse_policy import PARSE_GROWTH, PARSER_VERSION
+from packages.repositories.parse_policy import COMMIT_LIMIT, PARSE_GROWTH, PARSER_VERSION
 from packages.repositories.parser import ParseExecutor, identity
 from packages.repositories.parsing import ParsingService
 from packages.repositories.safety import RepositoryError
@@ -302,6 +302,8 @@ def test_recent_window_idempotency_and_real_api_permissions(parse_env, monkeypat
             {"commit_limit": True},
             {"commit_limit": "3"},
             {"unknown": 1},
+            # 超过解析预算的取值在入队前就被拒绝，不产生任务。
+            {"commit_limit": COMMIT_LIMIT + 1},
         ):
             assert (
                 api.post(

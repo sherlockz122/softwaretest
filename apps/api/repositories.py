@@ -9,6 +9,7 @@ from packages.mining.feature_service import FeatureService
 from packages.mining.fix import FixService
 from packages.mining.fix_rules import RULE_VERSION
 from packages.mining.szz import SZZService
+from packages.repositories.parse_policy import COMMIT_LIMIT
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
 from packages.repositories.sync import SyncService
@@ -24,7 +25,8 @@ class RepositoryBody(BaseModel):
 
 class ParseBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    commit_limit: int | None = Field(default=None, ge=1, le=10000000, strict=True)
+    # 留空仍表示全历史；这条边界只约束显式取值，避免提交必然超出解析预算的任务。
+    commit_limit: int | None = Field(default=None, ge=1, le=COMMIT_LIMIT, strict=True)
 
 
 class SyncBody(BaseModel):
