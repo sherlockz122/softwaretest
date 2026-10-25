@@ -68,6 +68,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 | A33 | `GET /operations` | 操作审计 | Admin |
 | A34 | `GET /health` | 最小存活状态 | Public |
 | A35 | `POST /tasks/diagnostic` | 开发环境受限诊断任务 | Member，仅 development/test |
+| A36 | `GET /model-runs/{id}/risk-items` | 历史风险列表：按模型运行返回逐提交概率与风险等级，默认只列验证与测试分区，不返回真实标签 | Viewer |
 
 ## 4 关键请求与响应
 

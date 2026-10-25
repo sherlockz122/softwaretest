@@ -86,8 +86,9 @@ def main():
     styled = check_change_doc_style()
     api = (ROOT / "docs/04-API与数据库规格.md").read_text(encoding="utf-8")
     ids = re.findall(r"^\| (A\d+) \|", api, flags=re.M)
-    if len(ids) != 35 or len(set(ids)) != 35:
-        raise RuntimeError("Documented API inventory must contain 35 unique IDs")
+    # 计数刻意固定：新增或删减接口必须在这里改一次，避免文档清单悄悄变化。
+    if len(ids) != 36 or len(set(ids)) != 36:
+        raise RuntimeError("Documented API inventory must contain 36 unique IDs")
     application = create_app(load_settings(environment="test"))
     generated = (
         json.dumps(application.openapi(), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
@@ -98,7 +99,7 @@ def main():
     elif not CONTRACT.exists() or CONTRACT.read_text(encoding="utf-8") != generated:
         raise RuntimeError("OpenAPI drift: export and review the contract with --export")
     print(
-        f"PASS {links} local links, 35 API IDs, bootstrap OpenAPI contract, "
+        f"PASS {links} local links, {len(ids)} API IDs, bootstrap OpenAPI contract, "
         f"{styled} change docs match the writing style"
     )
 
