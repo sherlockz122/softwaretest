@@ -79,7 +79,9 @@ def test_actual_fix_worker_kill_preserves_review_and_resumes(live, tmp_path):  #
             )
         )
     path = "/api/v1/repositories/" + repo_id
-    result = api.post(path + "/parse", json={}, headers={"Idempotency-Key": str(uuid4())})
+    result = api.post(
+        path + "/parse", json={"full_history": True}, headers={"Idempotency-Key": str(uuid4())}
+    )
     assert result.status_code == 202
     assert wait_task(api, result.json()["task_id"], {"succeeded"}, timeout=150)["processed"] == 80
     result = api.post(path + "/fix-detection", json={}, headers={"Idempotency-Key": str(uuid4())})

@@ -33,7 +33,14 @@ const windows = useLatest((input, signal) =>
   ),
 );
 const failure = ref(null);
-const commitLimit = ref("");
+// 提交窗口必须显式给出：默认填上限值，想解析全历史要另外勾选，不能让留空悄悄变成全量。
+const commitLimit = ref("700");
+const fullHistory = ref(false);
+const scopeReady = computed(() => {
+  if (fullHistory.value) return true;
+  const value = Number(commitLimit.value);
+  return Number.isInteger(value) && value >= 1 && value <= 700;
+});
 const selected = ref(null);
 const filePage = ref(1);
 const files = useLatest((input, signal) =>
@@ -144,8 +151,10 @@ async function startParse() {
   parsing.value = true;
   failure.value = null;
   const id = route.params.id;
-  const limit = commitLimit.value === "" ? null : Number(commitLimit.value);
-  const input = JSON.stringify([id, limit]);
+  const body = fullHistory.value
+    ? { full_history: true }
+    : { commit_limit: Number(commitLimit.value) };
+  const input = JSON.stringify([id, body]);
   try {
     await client.request(`/repositories/${encodeURIComponent(id)}/parse`, {
       method: "POST",
@@ -153,7 +162,7 @@ async function startParse() {
         "Content-Type": "application/json",
         "Idempotency-Key": keys.get("parse", input),
       },
-      body: JSON.stringify({ commit_limit: limit }),
+      body: JSON.stringify(body),
     });
     keys.done("parse", input);
     if (id === route.params.id) await repo.load(id);
@@ -272,18 +281,22 @@ onUnmounted(() => clearInterval(poll));
         @submit.prevent="startParse"
       >
         <div>
-          <label for="commit-limit">提交窗口（留空为全部）</label
+          <label for="commit-limit">提交窗口（1–700 条）</label
           ><input
             id="commit-limit"
             v-model="commitLimit"
             type="number"
             min="1"
-            max="10000000"
+            max="700"
             step="1"
-            :disabled="parsing"
+            :disabled="parsing || fullHistory"
           />
         </div>
-        <button class="primary" :disabled="parsing">
+        <label class="scope"
+          ><input v-model="fullHistory" type="checkbox" :disabled="parsing" /> 解析全历史（大仓库
+          可能跑数小时）</label
+        >
+        <button class="primary" :disabled="parsing || !scopeReady">
           {{ parsing ? "提交中…" : "开始解析提交" }}
         </button>
       </form>

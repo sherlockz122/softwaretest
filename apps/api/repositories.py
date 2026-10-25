@@ -25,8 +25,16 @@ class RepositoryBody(BaseModel):
 
 class ParseBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # 留空仍表示全历史；这条边界只约束显式取值，避免提交必然超出解析预算的任务。
+    # 提交窗口必须二选一显式声明：要么给出 1 到上限之间的条数，要么勾全历史。
+    # 留空不再等于全历史，避免一次疏忽就触发要跑几小时的全量解析。
     commit_limit: int | None = Field(default=None, ge=1, le=COMMIT_LIMIT, strict=True)
+    full_history: bool = Field(default=False, strict=True)
+
+    @model_validator(mode="after")
+    def one_scope(self):
+        if self.full_history == (self.commit_limit is not None):
+            raise ValueError("PARSING_SCOPE_INVALID")
+        return self
 
 
 class SyncBody(BaseModel):
@@ -220,7 +228,11 @@ def parse(
     key: str = Header(alias="Idempotency-Key"),
 ):
     return parsing(request).create(
-        user, str(repository_id), key, body.commit_limit, request.state.request_id
+        user,
+        str(repository_id),
+        key,
+        None if body.full_history else body.commit_limit,
+        request.state.request_id,
     )
 
 
