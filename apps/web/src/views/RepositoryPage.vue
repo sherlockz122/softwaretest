@@ -293,8 +293,8 @@ onUnmounted(() => clearInterval(poll));
           />
         </div>
         <label class="scope"
-          ><input v-model="fullHistory" type="checkbox" :disabled="parsing" /> 解析全历史（大仓库
-          可能跑数小时）</label
+          ><input v-model="fullHistory" type="checkbox" :disabled="parsing" />
+          解析全历史（大仓库 可能跑数小时）</label
         >
         <button class="primary" :disabled="parsing || !scopeReady">
           {{ parsing ? "提交中…" : "开始解析提交" }}

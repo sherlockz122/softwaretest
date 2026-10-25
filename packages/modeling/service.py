@@ -1,5 +1,6 @@
 """Model task fences and supervised fit; artifacts register only in the last transaction."""
 
+import csv
 import json
 import os
 import shutil
@@ -16,10 +17,86 @@ from sqlalchemy.orm import Session
 
 from packages.auth.security import require_role
 from packages.mining import public_assets as assets
+from packages.mining import research_dataset as research
 from packages.modeling import data, policy
 from packages.modeling.policy import ModelError
 from packages.persistence.models import AsyncTask, ModelArtifact, ModelRun
 from packages.tasks.service import TaskService, audit, database_now, key_valid
+
+# 风险列表直接读训练已写出的 probabilities.csv，不另存一份分数。读取必须有界：
+# 行数超限或工件体积超限都明确报错，静默截断会让人以为已经看到全部高风险提交。
+RISK_ROW_LIMIT = 20000
+RISK_BYTE_LIMIT = 16 * 1024**2
+RISK_EVAL_PARTITIONS = ("validation", "test")
+PROBABILITY_HEADER = (
+    "partition",
+    "canonical_repository",
+    "commit_id",
+    "event_epoch",
+    "label",
+    "probability",
+)
+
+
+def risk_level(probability, threshold):
+    """按该次运行自己的阈值分三档；阈值缺失时不臆造等级。"""
+    if type(threshold) not in (int, float):
+        return None
+    if probability >= threshold:
+        return "high"
+    if probability >= threshold / 2:
+        return "medium"
+    return "low"
+
+
+def risk_rows(reader, partitions, limit=RISK_ROW_LIMIT):
+    """解析逐提交概率，丢掉标签列，只保留可对外展示的字段。
+
+    传入的是 csv.DictReader，读文件的工作留给调用方，逻辑本身不碰磁盘。
+    """
+    if tuple(reader.fieldnames or ()) != PROBABILITY_HEADER:
+        raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
+    rows = []
+    for count, row in enumerate(reader, start=1):
+        if count > limit:
+            raise ModelError("MODEL_RISK_LIST_LIMIT", 413)
+        if row["partition"] not in partitions:
+            continue
+        try:
+            probability = float(row["probability"])
+            epoch = int(float(row["event_epoch"]))
+        except (TypeError, ValueError):
+            raise ModelError("MODEL_ARTIFACT_DRIFT", 409) from None
+        if not 0.0 <= probability <= 1.0:
+            raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
+        rows.append(
+            {
+                "commit_id": row["commit_id"],
+                "event_epoch": epoch,
+                "partition": row["partition"],
+                "probability": probability,
+            }
+        )
+    return rows
+
+
+def risk_page(rows, page, page_size, threshold, partitions):
+    """概率降序、同概率按提交编号升序，保证同一份工件每次顺序一致。"""
+    if type(page) is not int or page < 1 or type(page_size) is not int or not 1 <= page_size <= 100:
+        raise ModelError("MODEL_INVALID_INPUT")
+    ordered = sorted(rows, key=lambda item: (-item["probability"], item["commit_id"]))
+    start = (page - 1) * page_size
+    items = [dict(item, risk_level=risk_level(item["probability"], threshold))
+             for item in ordered[start : start + page_size]]
+    return {
+        "items": items,
+        "total": len(ordered),
+        "page": page,
+        "page_size": page_size,
+        "partitions": list(partitions),
+        "threshold": threshold,
+        "in_sample": "train" in partitions,
+    }
 
 
 def task_request(payload):
@@ -397,7 +474,8 @@ class ModelService:
             )
             return result
 
-    def download(self, run_id, kind):
+    def artifact(self, run_id, kind):
+        """定位并校验已发布工件，返回（路径, 工件记录, 运行报告）。"""
         if kind not in policy.FILES:
             raise ModelError("MODEL_INVALID_INPUT")
         with Session(self.engine) as db:
@@ -419,6 +497,7 @@ class ModelService:
                 raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
             if record.uri != f"{run_id}/{output['attempt_id']}/{kind}":
                 raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
+            report = run.metrics_json or {}
         assets.verify_seal(output)
         directory = assets.safe_path(
             self.output / str(UUID(run_id)) / str(UUID(output["attempt_id"]))
@@ -429,7 +508,26 @@ class ModelService:
         path = assets.safe_path(directory / kind)
         if assets.file_digest(path, budget.check) != output["files"][kind]:
             raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
-        return path
+        return path, record, report
+
+    def download(self, run_id, kind):
+        return self.artifact(run_id, kind)[0]
+
+    def risk_items(self, run_id, page=1, page_size=20, partitions=None):
+        """历史风险列表：默认只看验证与测试分区，训练分区要显式请求。"""
+        chosen = tuple(partitions) if partitions else RISK_EVAL_PARTITIONS
+        if (
+            not chosen
+            or len(set(chosen)) != len(chosen)
+            or any(item not in research.PARTITIONS for item in chosen)
+        ):
+            raise ModelError("MODEL_INVALID_INPUT")
+        path, record, report = self.artifact(run_id, "probabilities.csv")
+        if record.size > RISK_BYTE_LIMIT:
+            raise ModelError("MODEL_RISK_LIST_LIMIT", 413)
+        with path.open(encoding="utf-8", newline="") as stream:
+            rows = risk_rows(csv.DictReader(stream), chosen)
+        return risk_page(rows, page, page_size, report.get("threshold"), chosen)
 
     def release(self, user, run_id):
         require_role(user, "Admin")

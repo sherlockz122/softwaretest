@@ -5,6 +5,7 @@ import { client } from "../api";
 import { useLatest } from "../latest";
 import { active, labels } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
+import RiskPanel from "../components/RiskPanel.vue";
 const route = useRoute();
 const data = useLatest((id, signal) =>
   client.request(`/model-runs/${encodeURIComponent(id)}`, { signal }),
@@ -162,6 +163,7 @@ async function download(kind) {
             下载 {{ kind }}
           </button>
         </div>
+        <RiskPanel :run="String(route.params.id)" />
         <details>
           <summary>参数、校准、区间与复现信息</summary>
           <pre>{{ JSON.stringify(report, null, 2) }}</pre>
