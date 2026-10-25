@@ -404,7 +404,8 @@ test("public repository lost-response replay, real Worker clone and persisted me
     `/api/v1/repositories/${accepted}/parse`,
     {
       headers: parseHeaders,
-      data: { commit_limit: null },
+      // 页面默认按 700 条提交，重放必须用同一请求体才会命中同一个幂等键。
+      data: { commit_limit: 700 },
     },
   );
   expect(replay.status()).toBe(202);

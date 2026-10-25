@@ -108,7 +108,9 @@ def test_real_sync_worker_kill_retains_base_candidate_and_atomic_resume(live, tm
             )
         )
     response = api.post(
-        f"/api/v1/repositories/{repo_id}/parse", json={}, headers={"Idempotency-Key": str(uuid4())}
+        f"/api/v1/repositories/{repo_id}/parse",
+        json={"full_history": True},
+        headers={"Idempotency-Key": str(uuid4())},
     )
     assert response.status_code == 202
     initial_id = response.json()["task_id"]

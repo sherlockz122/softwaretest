@@ -20,6 +20,11 @@ from packages.repositories.parse_policy import PARSER_VERSION
 
 LABEL_VERSION = "time-labels-v1"
 
+# 标签观察窗口的默认天数。探针实测后由 90 上调至 180：90 天在 ActiveMQ 上只覆盖 35.2%
+# 的真实缺陷引入提交，其余会被标成 clean；180 天把覆盖率提到 43.4%，右端只多丢 1.9%。
+# 这只是无法按仓库标定时的回退值，标定结果写入数据集策略快照并优先于它。
+WINDOW_DAYS = 180
+
 
 class DatasetError(ValueError):
     def __init__(self, code):
@@ -30,7 +35,7 @@ class DatasetError(ValueError):
 @dataclass(frozen=True)
 class Policy:
     snapshot_at: datetime
-    window_days: int = 90
+    window_days: int = WINDOW_DAYS
     train: float = 0.70
     validation: float = 0.15
     test: float = 0.15

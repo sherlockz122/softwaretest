@@ -10,6 +10,7 @@ from pathlib import Path
 
 from packages.mining.causal_features import VERSION as FEATURE_VERSION
 from packages.mining.causal_features import CausalRun
+from packages.mining.dataset import WINDOW_DAYS
 from packages.mining.features import FEATURES, SHA, digest, utc
 
 VERSION = "historical-horizon-replay-v1"
@@ -28,7 +29,7 @@ def hashed(value):
 @dataclass(frozen=True)
 class ReplayPolicy:
     as_of: datetime
-    horizon_days: int = 90
+    horizon_days: int = WINDOW_DAYS
     knowledge_lag_days: int = 7
 
     def __post_init__(self):
