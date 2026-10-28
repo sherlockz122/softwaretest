@@ -1,13 +1,28 @@
 """Synthetic observed timelines, not measured project label/accuracy ground truth."""
 
+import inspect
 from dataclasses import FrozenInstanceError, replace
 from datetime import datetime, timedelta
 
 import pytest
 
-from packages.mining.dataset import DatasetError, Evidence, Link, Observation, Policy, audit, build
+from packages.mining.dataset import (
+    WINDOW_DAYS,
+    DatasetError,
+    Evidence,
+    Link,
+    Observation,
+    Policy,
+    audit,
+    build,
+)
+from packages.mining.dataset_source import DatasetSource
 from packages.mining.features import FEATURES, FeatureVector, Snapshot
 from tests.test_features import commit, sha
+
+# 这个夹具的观测时间按 90 天窗口排布。它验证的是成熟度与切分逻辑，不是产品默认值，
+# 所以把窗口钉死，避免以后调整默认值时要连带改断言。
+FIXTURE_WINDOW = 90
 
 
 def timeline(count=30):
@@ -25,7 +40,7 @@ def timeline(count=30):
     )
     rounds = []
     for i, c in enumerate(commits):
-        observed = c.event_time + timedelta(days=90)
+        observed = c.event_time + timedelta(days=FIXTURE_WINDOW)
         records = tuple(
             Evidence(
                 prior.sha,
@@ -52,8 +67,16 @@ def timeline(count=30):
                 records,
             )
         )
-    policy = Policy(rounds[-1].published_at)
+    policy = Policy(rounds[-1].published_at, window_days=FIXTURE_WINDOW)
     return snapshot, vectors, tuple(rounds), policy
+
+
+def test_window_default_comes_from_one_source():
+    """窗口默认值只由 WINDOW_DAYS 一处提供，四处使用者都跟着它走。"""
+    assert WINDOW_DAYS == 180
+    assert Policy(datetime(2026, 10, 1)).window_days == WINDOW_DAYS
+    default = inspect.signature(DatasetSource._load).parameters["window_days"].default
+    assert default is WINDOW_DAYS
 
 
 def test_success_raw_immutable_hash_and_train_only_weights():

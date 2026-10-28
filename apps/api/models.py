@@ -49,6 +49,18 @@ def detail(
     return service(request).detail(str(run_id))
 
 
+@router.get("/model-runs/{run_id:uuid}/risk-items")
+def risk_items(
+    run_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    partition: list[Literal["train", "validation", "test"]] | None = Query(default=None),
+):
+    return service(request).risk_items(str(run_id), page, page_size, partition)
+
+
 @router.get("/models")
 def listing(
     request: Request,

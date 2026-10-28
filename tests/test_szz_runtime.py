@@ -69,8 +69,8 @@ def test_actual_szz_worker_kill_frozen_review_and_resume(live, tmp_path):  # noq
             )
         )
     path = "/api/v1/repositories/" + repo_id
-    for suffix in ("/parse", "/fix-detection"):
-        response = api.post(path + suffix, json={}, headers={"Idempotency-Key": str(uuid4())})
+    for suffix, body in (("/parse", {"full_history": True}), ("/fix-detection", {})):
+        response = api.post(path + suffix, json=body, headers={"Idempotency-Key": str(uuid4())})
         assert response.status_code == 202
         assert (
             wait_task(api, response.json()["task_id"], {"succeeded"}, timeout=180)["processed"]

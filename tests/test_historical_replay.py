@@ -346,6 +346,14 @@ def test_invalid_policy_rejected(days, lag):
         ReplayPolicy(START, days, lag)
 
 
+def test_horizon_default_matches_the_dataset_window():
+    """回放观察窗与数据集窗口同源，不各用各的默认值。"""
+    from packages.mining.dataset import WINDOW_DAYS
+
+    assert ReplayPolicy(START).horizon_days == WINDOW_DAYS
+    assert ReplayPolicy(START).knowledge_lag_days == 7
+
+
 def test_label_equal_to_train_cutoff_is_not_known_strictly_before(case):
     result = evaluate(case, policy=replace(case[4], knowledge_lag_days=9))
     assert {"sha": sha(14), "split": "train", "reason": "label_after_cutoff"} in result["purged"]

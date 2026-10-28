@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from packages.mining.dataset import DatasetError
+from packages.mining.dataset import WINDOW_DAYS, DatasetError
 from packages.mining.dataset_source import DatasetSource
 from packages.platform.config import load_settings
 from packages.platform.connections import Connections
@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--repository-id", type=UUID, required=True)
     parser.add_argument("--feature-run-id", type=UUID, required=True)
     parser.add_argument("--szz-run-id", type=UUID, action="append", required=True)
-    parser.add_argument("--window-days", type=int, default=90)
+    parser.add_argument("--window-days", type=int, default=WINDOW_DAYS)
     parser.add_argument("--snapshot-at", default=None)
     args = parser.parse_args()
     settings = load_settings()

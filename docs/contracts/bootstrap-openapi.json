@@ -339,7 +339,7 @@
           "commit_limit": {
             "anyOf": [
               {
-                "maximum": 10000000.0,
+                "maximum": 700.0,
                 "minimum": 1.0,
                 "type": "integer"
               },
@@ -348,6 +348,11 @@
               }
             ],
             "title": "Commit Limit"
+          },
+          "full_history": {
+            "default": false,
+            "title": "Full History",
+            "type": "boolean"
           }
         },
         "title": "ParseBody",
@@ -952,6 +957,99 @@
           }
         ],
         "summary": "Publish",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/v1/model-runs/{run_id}/risk-items": {
+      "get": {
+        "operationId": "risk_items_api_v1_model_runs__run_id__risk_items_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partition",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "train",
+                      "validation",
+                      "test"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Partition"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Risk Items",
         "tags": [
           "models"
         ]

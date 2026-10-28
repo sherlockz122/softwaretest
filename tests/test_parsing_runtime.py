@@ -113,7 +113,9 @@ def test_real_parser_kill_preserves_batch_and_successor_resumes(live, tmp_path):
             )
         )
     response = api.post(
-        f"/api/v1/repositories/{repo_id}/parse", json={}, headers={"Idempotency-Key": str(uuid4())}
+        f"/api/v1/repositories/{repo_id}/parse",
+        json={"full_history": True},
+        headers={"Idempotency-Key": str(uuid4())},
     )
     assert response.status_code == 202
     task_id = response.json()["task_id"]
