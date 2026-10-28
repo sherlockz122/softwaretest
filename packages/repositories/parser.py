@@ -114,6 +114,17 @@ class NativeReader:
                     if process.poll() is not None:
                         break
                     time.sleep(0.02)
+            # A final poll can race with the child's last flush or supervision expiry.
+            # Check after exit and closed streams, before accepting bytes or status.
+            self.tick()
+            if time.monotonic() >= self.deadline:
+                raise RepositoryError(422, "REPOSITORY_PARSE_TIMEOUT")
+            if errors.stat().st_size > 65536:
+                raise RepositoryError(422, "REPOSITORY_OUTPUT_LIMIT")
+            if output.stat().st_size > limit:
+                if allow_limit:
+                    return None
+                raise RepositoryError(422, "REPOSITORY_PARSE_RESOURCE_LIMIT")
             if process.returncode not in codes:
                 raise RepositoryError(422, "REPOSITORY_PARSE_FAILED")
             return process.returncode if exit_code else output.read_bytes()
