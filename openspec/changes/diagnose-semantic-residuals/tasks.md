@@ -6,4 +6,6 @@
 ## 2 Acceptance
 - [x] 2.1 Execute fixed declared real diagnostics twice, compare all diagnosis bytes and independently restore new artifacts; decide next strategy from evidence, no model/readiness promotion. Final-source declaration and two complete repeats are verified; old artifacts retained.
 - [x] 2.2 Complete required backend/CPU/frontend/fresh-browser/static/locks/audit/spec/contracts, failure evidence, old/data/model/user guards/restores/storage and zero-active stop preserving normal volumes.
-- [ ] 2.3 Synchronize effective docs, report/issues/next steps; wang ordinary delivery, implementation CI and final own-SHA CI independently green before next batch.
+- [x] 2.3 Synchronize effective docs, report/issues/next steps; wang ordinary delivery, implementation CI and final own-SHA CI independently green before next batch.
+
+Implementation261e39b97eb12e595c56ee3c5a52c22644dd3841 / CI40751989081 is verified. Final-document self-SHA acceptance remains an independent post-push condition: write runtime/acceptance/stage27/final-ci-success.json and final-delivery.json only after actual success. A checked delivery task does not pre-certify a pending final run; do not close the batch or start the next batch until this condition is proven.
