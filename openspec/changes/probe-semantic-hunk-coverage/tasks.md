@@ -7,4 +7,6 @@
 ## 2 Acceptance and delivery
 - [x] 2.1 Validate actual selected96 or fail explicitly; preserve incomplete coverage and resource limits, restore new artifacts independently.
 - [x] 2.2 Run required root/CPU/frontend/fresh browser, locks/audit/static/spec/contracts, image/old material/normal-data guards and backups; storage guard and zero-active stop preserve normal volumes.
-- [ ] 2.3 Synchronize roadmap/issues/guides/report and TUN notes; ordinary wang delivery, implementation CI and final documentation exact-SHA CI independently green.
+- [x] 2.3 Synchronize roadmap/issues/guides/report and TUN notes; ordinary wang delivery, implementation CI and final documentation exact-SHA CI independently green.
+
+Implementation d7ef288f5177f9e7889508145867c4a8b4698661 / CI40725938791 is verified. Final documentation self-SHA acceptance is a separate post-push condition recorded only after actual success in runtime/acceptance/stage26/final-ci-success.json and final-delivery.json. The checked delivery task does not pre-certify a pending final run; do not report the batch closed before that condition is met.
