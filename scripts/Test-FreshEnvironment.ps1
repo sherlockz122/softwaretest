@@ -24,12 +24,12 @@ $contents = [IO.File]::ReadAllText($config).Replace('DG_MYSQL_PORT=13306', "DG_M
 if ($Browser) {
     Add-Content -LiteralPath $config -Value 'DG_LOGIN_RATE_LIMIT=1000'
     if (-not $NodePath) { $NodePath = (Get-Command node -ErrorAction Stop).Source }
-    if (-not $EvidenceDirectory) { $EvidenceDirectory = Join-Path $root ('runtime/acceptance/' + $runId) }
-    $EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
-    $evidenceRoot = Join-Path $root 'runtime/acceptance'
-    if (-not $EvidenceDirectory.StartsWith($evidenceRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Evidence must stay under project runtime/acceptance; never fall back to another drive.' }
-    $null = New-Item -ItemType Directory -Path $EvidenceDirectory -Force
 }
+if (-not $EvidenceDirectory) { $EvidenceDirectory = Join-Path $root ('runtime/acceptance/' + $runId) }
+$EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
+$evidenceRoot = Join-Path $root 'runtime/acceptance'
+if (-not $EvidenceDirectory.StartsWith($evidenceRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Evidence must stay under project runtime/acceptance; never fall back to another drive.' }
+$null = New-Item -ItemType Directory -Path $EvidenceDirectory -Force
 Add-Content -LiteralPath $config -Value ('DG_REPOSITORY_DATA_DIR=' + (Join-Path $work 'repositories').Replace('\','/'))
 Add-Content -LiteralPath $config -Value ('DG_PUBLIC_ASSET_DIR=' + (Join-Path $work 'public-assets').Replace('\','/'))
 Add-Content -LiteralPath $config -Value ('DG_DATASET_DATA_DIR=' + (Join-Path $work 'datasets').Replace('\','/'))
@@ -80,12 +80,26 @@ try {
 } finally {
     # Only this uniquely named acceptance project; never the wang development volumes.
     if ($project -notmatch '^dg-fresh-[0-9a-f]{12}$') { throw 'Disposable cleanup scope invalid' }
-    if ($Browser) {
-        # Local ignored evidence only; retain_evidence redacts generated config secrets.
-        & $DockerPath @base --profile full logs --no-color *> (Join-Path $EvidenceDirectory 'services.log')
-        if ($LASTEXITCODE -ne 0) { $acceptanceFailed = $true }
+    try {
+        try {
+            & (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -ExpectedGrowthGiB 0.02 -FilePath $projectPython -ArgumentList @('-m','scripts.collect_fresh_task_evidence','--docker',$DockerPath,'--project',$project,'--config',$config,'--override',$override,'--output',(Join-Path $EvidenceDirectory 'task-summary.json'))
+        } catch {
+            $acceptanceFailed = $true
+            Write-Warning 'Safe task evidence unavailable; acceptance fails and cleanup continues.'
+        }
+        if ($Browser) {
+            try {
+                # Local ignored evidence only; retain_evidence redacts generated config secrets.
+                & $DockerPath @base --profile full logs --no-color *> (Join-Path $EvidenceDirectory 'services.log')
+                if ($LASTEXITCODE -ne 0) { $acceptanceFailed = $true }
+            } catch {
+                $acceptanceFailed = $true
+                Write-Warning 'Service evidence unavailable; cleanup continues.'
+            }
+        }
+    } finally {
+        try { Invoke-FreshCompose -Arguments @('--profile','full','--profile','maintenance','down','--volumes','--remove-orphans') }
+        finally { Pop-Location }
     }
-    try { Invoke-FreshCompose -Arguments @('--profile','full','--profile','maintenance','down','--volumes','--remove-orphans') }
-    finally { Pop-Location }
 }
 if ($acceptanceFailed) { exit 1 }
