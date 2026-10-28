@@ -156,19 +156,30 @@ def test_e2e02_candidate_batch_explanation_queue_and_error_paths(tmp_path):
             },
         )
         assert response.status_code == 202, response.text
-        body = response.json()
-        if "prediction_id" in body:
-            prediction_id = body["prediction_id"]
-            assert_prediction_fields(body)
+        first = response.json()
+        if "prediction_id" in first:
+            prediction_id = first["prediction_id"]
+            assert_prediction_fields(first)
         else:
-            assert body["status"] == "queued"
-            wait_task(api, body["task_id"], {"succeeded"}, timeout=120)
-            queue = api.get(f"/api/v1/prediction-tasks/{body['task_id']}/results").json()
+            assert first["status"] == "queued"
+            wait_task(api, first["task_id"], {"succeeded"}, timeout=120)
+            queue = api.get(f"/api/v1/prediction-tasks/{first['task_id']}/results").json()
             assert queue["total"] == 1
             prediction_id = queue["items"][0]["prediction_id"]
             item = queue["items"][0]
             assert item["candidate_sha"] == shas[100]
-            assert_prediction_fields({**item, "threshold": queue["threshold"], "feature_version": queue["feature_version"]})
+            # 队列项按规格显示审查成本、风险密度和显著标识，阈值与特征版本在队列顶层。
+            for field in (
+                "probability",
+                "risk_level",
+                "effort",
+                "risk_density",
+                "oversized",
+                "top_factors",
+            ):
+                assert field in item
+            assert queue["threshold"] is not None
+            assert queue["feature_version"] == FEATURE_VERSION
 
         # 4. 解释：因素按贡献绝对值降序，携带方法和非因果声明。
         explanation = api.get(f"/api/v1/predictions/{prediction_id}/explanation")
@@ -281,12 +292,12 @@ def test_e2e02_candidate_batch_explanation_queue_and_error_paths(tmp_path):
             },
         )
         assert replay.status_code == 202
-        if "prediction_id" in body:
-            assert replay.json() == body
+        if "prediction_id" in first:
+            assert replay.json() == first
         else:
             # 异步路径重放时任务已完成，返回完整预测或原任务引用都指向同一结果。
             assert (
-                replay.json().get("task_id") == body["task_id"]
+                replay.json().get("task_id") == first["task_id"]
                 or "prediction_id" in replay.json()
             )
         conflict = api.post(

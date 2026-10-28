@@ -289,13 +289,13 @@ class PredictionService:
             )
         return repo, feature_run, frozen
 
-    def _bare(self, repo, feature_run):
-        path = safe_path(self.storage.root / feature_run.storage_key)
+    def _bare(self, repo_id, storage_key):
+        path = safe_path(self.storage.root / storage_key)
         parts = path.relative_to(self.storage.root).parts
         if (
             len(parts) != 4
             or parts[0] != "objects"
-            or parts[1] != repo.id
+            or parts[1] != repo_id
             or parts[3] != "repo.git"
             or not path.is_dir()
         ):
@@ -525,29 +525,34 @@ class PredictionService:
                 return self._replay(db, replay)
             repo, feature_run, frozen = self._feature_context(db, request["repository_id"])
             self.eligible_model(db, request["model_run_id"])
+            repo_id = repo.id
+            storage_key = feature_run.storage_key
+            feature_run_id = feature_run.root_task_id
         sync_request = dict(request)
         sync_request["candidate_diff"] = canonical_diff
         try:
-            result = self._synchronize(sync_request, repo, feature_run, frozen, payload, user.id)
+            result = self._synchronize(
+                sync_request, repo_id, storage_key, frozen, payload, user.id
+            )
         except SyncTimeout:
             result = None
         if result is not None:
             return self._commit_single(
-                user, key, payload, scope, request, request_id, feature_run, result
+                user, key, payload, scope, request, request_id, feature_run_id, result
             )
         return self._enqueue(user, key, payload, scope, request, request_id)
 
-    def _synchronize(self, request, repo, feature_run, frozen, payload, actor_id):
+    def _synchronize(self, request, repo_id, storage_key, frozen, payload, actor_id):
         started = time.monotonic()
 
         def budget():
             if time.monotonic() - started > SYNC_SECONDS:
                 raise SyncTimeout
 
-        bare = self._bare(repo, feature_run)
+        bare = self._bare(repo_id, storage_key)
         attempt = None
         try:
-            attempt = self.storage.attempt(repo.id, str(uuid4()))
+            attempt = self.storage.attempt(repo_id, str(uuid4()))
             reader = self._reader(bare, attempt, self.settings, self.engine, budget)
             with Session(self.engine) as db:
                 run = self.eligible_model(db, payload["model_run_id"])
@@ -572,7 +577,7 @@ class PredictionService:
             budget()
             candidate = self._candidate(reader, request, base_sha, history, actor_id)
             budget()
-            values, reasons = self._candidate_vector(history, candidate, repo.id, budget)
+            values, reasons = self._candidate_vector(history, candidate, repo_id, budget)
             budget()
             result = self._result(bundle, values, reasons, candidate)
             result["base_sha"] = base_sha
@@ -586,7 +591,9 @@ class PredictionService:
             if attempt is not None:
                 self.storage.remove(attempt)
 
-    def _commit_single(self, user, key, payload, scope, request, request_id, feature_run, result):
+    def _commit_single(
+        self, user, key, payload, scope, request, request_id, feature_run_id, result
+    ):
         try:
             with Session(self.engine) as db, db.begin():
                 self.tasks.actor(db, user)
@@ -604,7 +611,7 @@ class PredictionService:
                     kind="prediction.candidate",
                     enqueue=False,
                 )
-                point = self._point(db, task, request, feature_run, result)
+                point = self._point(db, task, request, feature_run_id, result)
                 row = self._insert_result(db, point, 0, result)
                 task.result_json = {"prediction_id": row.id, "results": 1}
                 task.progress, task.processed, task.total = 100, 1, 1
@@ -639,7 +646,7 @@ class PredictionService:
                     request_id,
                     kind="prediction.candidate",
                 )
-                self._point(db, task, request, feature_run, None)
+                self._point(db, task, request, feature_run.root_task_id, None)
                 return self.tasks.acknowledgement(task) | {"prediction_task_id": task.id}
         except IntegrityError as exc:
             if exc.orig and exc.orig.args and exc.orig.args[0] == 1062:
@@ -680,7 +687,7 @@ class PredictionService:
                 task = self.tasks.new_task(
                     db, user.id, key, payload, scope, request_id, kind="prediction.batch"
                 )
-                self._point(db, task, request, feature_run, None)
+                self._point(db, task, request, feature_run.root_task_id, None)
                 return self.tasks.acknowledgement(task) | {"prediction_task_id": task.id}
         except IntegrityError as exc:
             if exc.orig and exc.orig.args and exc.orig.args[0] == 1062:
@@ -707,7 +714,7 @@ class PredictionService:
         return task
 
     @staticmethod
-    def _point(db, task, request, feature_run, result):
+    def _point(db, task, request, feature_run_id, result):
         candidate_ref = request.get("candidate_ref")
         candidate_diff = request.get("candidate_diff")
         if result:
@@ -744,7 +751,7 @@ class PredictionService:
             candidate_sha=result["candidate_sha"] if result else None,
             candidate_json=summary,
             feature_version=FEATURE_VERSION,
-            feature_run_id=feature_run.root_task_id,
+            feature_run_id=feature_run_id,
             window_days=request.get("window_days"),
             batch_limit=request.get("max_candidates"),
             input_digest=digest(request),
@@ -968,8 +975,15 @@ class PredictionService:
                 raise PredictionError(
                     "PRED_HISTORY_UNAVAILABLE", reason="历史特征轮次的冻结输入摘要不一致"
                 )
-            bare = self._bare(repo, feature_run)
-            return task, point, repo, bare, frozen
+            bare = self._bare(repo.id, feature_run.storage_key)
+            return SimpleNamespace(
+                actor_id=task.actor_id,
+                model_run_id=point.model_run_id,
+                candidate_json=point.candidate_json,
+                repository_id=repo.id,
+                bare=bare,
+                frozen=frozen,
+            )
 
     def plan(self, task_id, token, reader, payload):
         try:
@@ -989,9 +1003,9 @@ class PredictionService:
         source = self.source(task_id, token)
         if source is None:
             raise ExecutionStopped
-        task, point, repo, _, frozen = source
+        frozen = source.frozen
         with Session(self.engine) as db:
-            run = self.eligible_model(db, point.model_run_id)
+            run = self.eligible_model(db, source.model_run_id)
         bundle = self.load_bundle(run)
         base_sha = self._resolve_base(reader, payload["base_ref"])
         reachable = set(reader.plan(base_sha, None))
@@ -1013,7 +1027,9 @@ class PredictionService:
         self._candidate_sha = None
         if payload.get("candidate_ref") or payload.get("candidate_diff") is not None:
             if payload["candidate_diff"] is not None:
-                stored = point.candidate_json.get("diff") if point.candidate_json else None
+                stored = (
+                    source.candidate_json.get("diff") if source.candidate_json else None
+                )
                 if (
                     not stored
                     or hashlib.sha256(stored.replace("\r\n", "\n").encode()).hexdigest()
@@ -1024,11 +1040,13 @@ class PredictionService:
                     )
             request = {
                 "candidate_ref": payload["candidate_ref"],
-                "candidate_diff": point.candidate_json.get("diff") if point.candidate_json else None,
+                "candidate_diff": (
+                    source.candidate_json.get("diff") if source.candidate_json else None
+                ),
             }
-            candidate = self._candidate(reader, request, base_sha, history, task.actor_id)
+            candidate = self._candidate(reader, request, base_sha, history, source.actor_id)
             self._candidate_sha = candidate.sha
-            values, reasons = self._candidate_vector(history, candidate, repo.id, tick)
+            values, reasons = self._candidate_vector(history, candidate, source.repository_id, tick)
             result = self._result(bundle, values, reasons, candidate)
             self.prepared_results = {candidate.sha: result}
             return [candidate.sha]
@@ -1042,7 +1060,7 @@ class PredictionService:
             ),
             key=lambda commit: commit.order,
         )[-payload["batch_limit"] :]
-        snapshot = Snapshot(repo.id, base_sha, tuple(history.values()), "full")
+        snapshot = Snapshot(source.repository_id, base_sha, tuple(history.values()), "full")
         rows = {row.sha: row for row in compute(snapshot, "candidate", tick)}
         self.prepared_results = {}
         for candidate in candidates:
@@ -1132,7 +1150,7 @@ class PredictionExecutor:
             source = self.service.source(task_id, token)
             if source is None:
                 return False
-            bare = source[3]
+            bare = source.bare
             attempt = self.storage.attempt(payload["repository_id"], str(uuid4()))
             clone = CloneExecutor(
                 self.settings,
