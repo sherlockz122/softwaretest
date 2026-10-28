@@ -46,7 +46,7 @@ jobs:
         run: ./scripts/New-LocalConfig.ps1 -BootstrapUsername ci-admin
       - name: Isolated frozen encoder CPU regression
         run: |
-          if tools/semantic/.venv/bin/python -m pytest tests/semantic_encoder_cases.py tests/semantic_admission_cpu_cases.py -q --junitxml=runtime/acceptance/ci/semantic-encoder.xml > runtime/acceptance/ci/semantic-encoder.log 2>&1; then
+          if tools/semantic/.venv/bin/python -m pytest tests/semantic_encoder_cases.py tests/semantic_admission_cpu_cases.py tests/semantic_coverage_cpu_cases.py -q --junitxml=runtime/acceptance/ci/semantic-encoder.xml > runtime/acceptance/ci/semantic-encoder.log 2>&1; then
             result=0
           else
             result=$?
