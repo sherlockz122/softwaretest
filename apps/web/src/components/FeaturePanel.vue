@@ -2,7 +2,14 @@
 import { computed, ref, watch } from "vue";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { operationKeys, date } from "../task-tools";
+import { operationKeys, date, shortId } from "../task-tools";
+import {
+  featureNames,
+  featureReason,
+  featureStatus,
+  label,
+  ruleVersions,
+} from "../terms";
 import RequestError from "./RequestError.vue";
 const props = defineProps({
   repo: { type: Object, required: true },
@@ -59,14 +66,30 @@ const names = [
   "REXP",
   "SEXP",
 ];
-const statuses = {
-  pending: "未提取",
-  queued: "提取排队中",
-  extracting: "提取中",
-  extracted: "提取完成",
-  failed: "提取失败",
-  cancelled: "提取已取消",
-};
+function featureLabel(name) {
+  return label(featureNames, name);
+}
+function rounded(value) {
+  if (value == null) return "未知";
+  if (typeof value !== "number") return value;
+  return Number.isInteger(value) ? value : Math.round(value * 1000) / 1000;
+}
+function featureValue(name, value) {
+  if (name === "FIX") {
+    if (value === 1) return "是";
+    if (value === 0) return "否";
+  }
+  return rounded(value);
+}
+function valueLine(item) {
+  return (feature.value ? [feature.value] : names)
+    .map((name) => {
+      const value = featureValue(name, item.result.values[name]);
+      const reason = item.result.reasons[name];
+      return `${featureLabel(name)}：${value}${reason ? `（${label(featureReason, reason)}）` : ""}`;
+    })
+    .join(" · ");
+}
 const canStart = computed(
   () =>
     props.canWrite &&
@@ -179,150 +202,164 @@ async function start() {
 </script>
 <template>
   <section data-testid="feature-panel">
-    <h2>Kamei14 原始特征与质量</h2>
+    <h2>第四步：计算每个提交的统计指标</h2>
     <p data-testid="feature-status">
-      {{ statuses[repo.feature_status] || "未提取" }}
+      {{ label(featureStatus, repo.feature_status) }}
     </p>
     <p class="hint">
-      缺失保留原因，不填充或生成缺陷标签。不同特征版本不能混用于模型。
+      每个提交会算一组统计指标：改了多少行、涉及多少文件、作者对项目有多熟等。算不出来的指标会留空并写明原因，不会被填成 0；指标本身不含「是否有缺陷」的结论。
     </p>
     <div v-if="canStart">
       <label
-        >特征版本
+        >指标版本
         <select v-model="version" :disabled="busy || sending">
-          <option value="kamei14-dg-message-v2">v2 提交消息用途</option>
-          <option value="kamei14-dg-v1">v1 历史兼容</option>
+          <option value="kamei14-dg-message-v2">
+            v2（推荐，按提交说明判断是否修复）
+          </option>
+          <option value="kamei14-dg-v1">v1（旧版，兼容以前的结果）</option>
         </select>
       </label>
       <p v-if="v2" class="hint">
-        v2 核对固定 Git 记录，历史与候选使用相同消息规则。FIX=0
-        只表示未命中启发式，不表示非修复或无缺陷；消息未验证时保留缺失。最多1000提交，完整负例与训练资格仍需单独验收。
+        v2 会核对 Git 里的原始记录，历史提交和待预测提交用同一套规则。FIX=0
+        只表示提交说明里没看到修复迹象，不代表这条提交不是修复，更不代表它没有问题；说明读不出内容时会留空。一次最多处理 1000 个提交。
       </p>
       <p v-else class="hint">
-        v1 冻结 Fix 复核版本，历史 FIX 仅使用事件时已可用证据；候选模式默认
-        FIX=0。
+        v1 固定使用当时那一轮修复识别结果，只看当时已经能拿到的证据；待预测的提交一律按
+        FIX=0 处理。
       </p>
       <label
-        >特征用途
+        >算哪些提交
         <select v-model="purpose" :disabled="busy || sending">
-          <option value="historical">历史事件</option>
+          <option value="historical">历史提交</option>
           <option value="candidate">
-            {{ v2 ? "候选提交（同消息规则）" : "候选提交（FIX 默认 0）" }}
+            {{ v2 ? "待预测的提交（同样规则）" : "待预测的提交（FIX 默认 0）" }}
           </option>
         </select></label
       >
       <button class="primary" :disabled="busy || sending" @click="start">
-        {{ sending ? "提交中…" : "提取 Kamei14 特征" }}
+        {{ sending ? "提交中…" : "开始计算统计指标" }}
       </button>
     </div>
     <p v-else-if="!canWrite" class="hint">
-      Viewer 可查看特征质量；提取需要 Member 或 Admin。
+      Viewer（只读账号）可以查看指标质量；开始计算需要 Member 或
+      Admin 账号（普通成员或管理员）。
     </p>
-    <p v-else class="hint">请先完成接受 HEAD 的提交解析。</p>
+    <p v-else class="hint">先完成第一步：当前最新提交的提交记录还没整理好。</p>
     <RequestError :error="failure || runs.error.value || results.error.value" />
     <p v-if="runs.loading.value || results.loading.value" role="status">
-      正在读取特征结果…
+      正在读取指标结果…
     </p>
     <ul class="task-list" data-testid="feature-runs">
       <li v-for="item in runs.data.value?.items" :key="item.root_task_id">
-        <span class="task-id">{{ item.root_task_id }}</span
+        <span class="task-id">{{ shortId(item.root_task_id) }}</span
         ><span
-          >{{ date(item.created_at) }} · {{ item.processed }} /
-          {{ item.total ?? "待扫描" }} ·
-          {{ item.complete ? "完整" : "未完成" }} ·
+          >{{ date(item.created_at) }} · 已计算 {{ item.processed }} /
+          {{ item.total ?? "待扫描" }} 个提交 ·
+          {{ item.complete ? "完整" : "还没算完" }} ·
           {{ item.feature_version }}</span
         ><button
           :disabled="selected === item.root_task_id"
           @click="select(item.root_task_id)"
         >
-          查看特征轮次
+          查看这一轮指标
         </button>
       </li>
     </ul>
     <div v-if="runs.data.value?.total" class="pagination">
       <button :disabled="runsPage <= 1" @click="runsPage--">
-        特征轮次上一页</button
+        上一页指标</button
       ><span>{{ runsPage }}</span
       ><button
         :disabled="runsPage * 10 >= runs.data.value.total"
         @click="runsPage++"
       >
-        特征轮次下一页
+        下一页指标
       </button>
     </div>
-    <p v-else-if="!runs.loading.value">尚无特征轮次。</p>
+    <p v-else-if="!runs.loading.value">还没有计算过指标。</p>
     <div v-if="run" data-testid="feature-results">
       <dl class="task-facts">
-        <dt>特征版本</dt>
-        <dd>{{ run.feature_version }}</dd>
-        <dt>接受 HEAD</dt>
-        <dd class="task-id">{{ run.head_sha }}</dd>
-        <dt>用途</dt>
+        <dt>指标版本</dt>
+        <dd>{{ label(ruleVersions, run.feature_version) }}</dd>
+        <dt>基于哪个最新提交</dt>
+        <dd class="task-id">{{ shortId(run.head_sha) }}</dd>
+        <dt>算哪些提交</dt>
         <dd>
           {{
             run.purpose === "historical"
-              ? "历史事件"
+              ? "历史提交"
               : run.feature_version === "kamei14-dg-message-v2"
-                ? "候选提交（同消息规则）"
-                : "候选提交（FIX 默认 0）"
+                ? "待预测的提交（同样规则）"
+                : "待预测的提交（FIX 默认 0）"
           }}
         </dd>
-        <dt>历史覆盖</dt>
+        <dt>覆盖的历史范围</dt>
         <dd>
           {{
-            run.history_coverage === "full" ? "全部可达历史" : "有限历史窗口"
+            run.history_coverage === "full"
+              ? "仓库全部可追溯的历史"
+              : "只有最近一段历史"
           }}
         </dd>
-        <dt>源摘要</dt>
-        <dd class="task-id">{{ run.source_digest || "待冻结" }}</dd>
+        <dt>结果指纹（用来确认结果没被改过）</dt>
+        <dd class="task-id" :title="run.source_digest || ''">
+          {{ shortId(run.source_digest) || "待生成" }}
+        </dd>
       </dl>
       <p
         v-if="run.feature_version === 'kamei14-dg-message-v2'"
         class="hint"
         data-testid="feature-version-semantics"
       >
-        本轮 FIX 是提交消息用途启发式，0 不代表非修复或 clean。Git
-        特征校验不证明缺陷标签覆盖完整，也不证明模型可训练。
+        这一轮的 FIX 是「提交说明里有没有修复迹象」的粗略判断：0
+        不代表这条提交不是修复，也不代表它没有问题。核对过 Git
+        记录，只说明指标算得对，不说明缺陷标签已经齐全，也不说明可以直接拿去训练模型。
       </p>
       <p
         v-if="quality?.source_validation"
         data-testid="feature-source-validation"
       >
-        Git 来源绑定：{{ quality.source_validation.version }}；特征历史{{
+        已核对指标和 Git 原始记录的对应关系（版本
+        {{ label(ruleVersions, quality.source_validation.version) }}）；历史范围：{{
           quality.source_validation.feature_population_complete
             ? "完整"
-            : "有限窗口"
-        }}；标签覆盖尚未认证，训练资格未通过。
+            : "只有最近一段"
+        }}；缺陷标签是否覆盖完整、能不能直接用来训练模型，目前都还没有确认。
       </p>
       <p v-if="!quality">
-        本轮未完成，暂不发布总体质量统计。已提交批次可查看，但不表示完整结果。
+        这一轮还没算完，暂时不发布总体统计。已经算好的部分可以看，但不代表完整结果。
       </p>
       <div v-else data-testid="feature-quality" class="feature-table-wrap">
+        <p class="hint">
+          表里的 25 / 50 / 75
+          分位，是把数值从小到大排后这些位置上的值，用来大致看出分布；中位数就是
+          50 分位。
+        </p>
         <table class="feature-table">
           <caption>
-            完整轮次
+            这一轮算了
             {{
               quality.count
             }}
-            个提交；原始值分位数
+            个提交；下表是每个指标的分布（最小值、四分位数、最大值）
           </caption>
           <thead>
             <tr>
-              <th>特征</th>
-              <th>有效 / 缺失</th>
-              <th>min</th>
-              <th>p25</th>
-              <th>median</th>
-              <th>p75</th>
-              <th>p95</th>
-              <th>max</th>
+              <th>指标</th>
+              <th>有值 / 缺失</th>
+              <th>最小</th>
+              <th>25 分位</th>
+              <th>中位数</th>
+              <th>75 分位</th>
+              <th>95 分位</th>
+              <th>最大</th>
               <th>缺失原因</th>
-              <th>下钻</th>
+              <th>查看</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="name in names" :key="name">
-              <th>{{ name }}</th>
+              <th>{{ featureLabel(name) }}<small>（{{ name }}）</small></th>
               <td>
                 {{ quality.features[name].valid }} /
                 {{ quality.features[name].missing }}
@@ -331,33 +368,34 @@ async function start() {
                 v-for="q in ['min', 'p25', 'median', 'p75', 'p95', 'max']"
                 :key="q"
               >
-                {{ quality.features[name][q] ?? "未知" }}
+                {{ rounded(quality.features[name][q]) }}
               </td>
               <td>
                 {{
                   Object.entries(quality.features[name].missing_reasons)
-                    .map(([reason, count]) => `${reason}: ${count}`)
+                    .map(
+                      ([reason, count]) =>
+                        `${label(featureReason, reason)}：${count} 个`,
+                    )
                     .join("，") || "无"
                 }}
               </td>
               <td>
-                <button @click="drill(name, true)">{{ name }} 缺失</button
-                ><button @click="drill(name, false)">
-                  {{ name }} 数值降序
-                </button>
+                <button @click="drill(name, true)">看缺失的提交</button
+                ><button @click="drill(name, false)">数值从高到低</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       <p>
-        结果筛选：{{ feature || "全部特征" }} ·
+        正在看：{{ feature ? featureLabel(feature) : "全部指标" }} ·
         {{
           mode === "missing"
-            ? "仅缺失"
+            ? "只看缺失的提交"
             : mode === "valid"
-              ? "有效值降序"
-              : "全部"
+              ? "按数值从高到低"
+              : "全部提交"
         }}
         <button
           @click="
@@ -366,7 +404,7 @@ async function start() {
             page = 1;
           "
         >
-          清除特征筛选
+          取消筛选
         </button>
       </p>
       <ul class="task-list">
@@ -375,27 +413,22 @@ async function start() {
           :key="item.ordinal"
           data-testid="feature-result"
         >
-          <span class="task-id">{{ item.sha }}</span
-          ><span v-if="!item.result">待处理</span
-          ><template v-else
-            ><span>{{ date(item.result.event_time) }}</span
-            ><span v-for="name in feature ? [feature] : names" :key="name"
-              >{{ name }}={{ item.result.values[name] ?? "未知"
-              }}<span v-if="item.result.reasons[name]"
-                >（{{ item.result.reasons[name] }}）</span
-              ></span
-            ></template
-          >
+          <p class="task-id">{{ shortId(item.sha) }}</p>
+          <p v-if="!item.result">待处理</p>
+          <template v-else>
+            <p>{{ date(item.result.event_time) }}</p>
+            <p>{{ valueLine(item) }}</p>
+          </template>
         </li>
       </ul>
       <div class="pagination">
-        <button :disabled="page <= 1" @click="page--">特征结果上一页</button
+        <button :disabled="page <= 1" @click="page--">上一页结果</button
         ><span>{{ page }}</span
         ><button
           :disabled="page * 10 >= (results.data.value?.total || 0)"
           @click="page++"
         >
-          特征结果下一页
+          下一页结果
         </button>
       </div>
     </div>

@@ -63,13 +63,13 @@ test("line evidence and paginated results retain unknown boundaries", async () =
     props: { repo, canWrite: false, reload: async () => {} },
   });
   await flushPromises();
-  expect(view.text()).toContain("有限历史窗口");
-  expect(view.text()).toContain("删除行 2");
-  expect(view.text()).toContain("原始行 3");
-  expect(view.text()).toContain("outside_parsed_history");
+  expect(view.text()).toContain("只有最近一段历史");
+  expect(view.text()).toContain("删掉了第 2 行");
+  expect(view.text()).toContain("第 3 行");
+  expect(view.text()).toContain("来源提交不在已整理的提交记录里");
   await view
     .findAll("button")
-    .find((button) => button.text() === "SZZ 证据下一页")
+    .find((button) => button.text() === "下一页线索")
     .trigger("click");
   await flushPromises();
   expect(send.mock.calls.some(([path]) => path.includes("links?page=2"))).toBe(
@@ -85,7 +85,7 @@ test("Viewer reads SZZ boundaries without startup", async () => {
   await flushPromises();
   expect(view.text()).toContain("Viewer");
   expect(view.find("button.primary").exists()).toBe(false);
-  expect(view.text()).toContain("未知或无证据");
+  expect(view.text()).toContain("不会当成「肯定不是缺陷」");
   view.unmount();
 });
 test("uncertain SZZ startup reuses key and prevents concurrent writes", async () => {

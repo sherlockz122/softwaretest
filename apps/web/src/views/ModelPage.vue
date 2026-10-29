@@ -3,7 +3,13 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { active, labels } from "../task-tools";
+import { active, labels, shortId } from "../task-tools";
+import {
+  effortMetrics,
+  effortNames,
+  metricNames,
+  metrics,
+} from "../terms";
 import RequestError from "../components/RequestError.vue";
 import RiskPanel from "../components/RiskPanel.vue";
 const route = useRoute();
@@ -31,22 +37,19 @@ const report = computed(() => data.data.value?.report);
 const summaries = computed(() =>
   report.value
     ? [
-        ["验证阈值子集", report.value.metrics.validation_threshold],
-        ["测试集", report.value.metrics.test],
-        ["训练先验常数基线（测试）", report.value.baseline.metrics],
+        ["验证区（定好判定门槛后）", report.value.metrics.validation_threshold],
+        ["测试区（最终评价）", report.value.metrics.test],
+        ["对照：哪类多就全猜哪类（测试区）", report.value.baseline.metrics],
       ]
     : [],
 );
-const fields = {
-  precision: "Precision",
-  recall: "Recall",
-  f1: "F1",
-  pr_auc: "PR-AUC（AP）",
-  roc_auc: "ROC-AUC",
-  mcc: "MCC",
-  brier: "Brier",
+const modelNames = { lr: "逻辑回归", rf: "随机森林" };
+const artifactNames = {
+  "report.json": "评估报告（report.json）",
+  "probabilities.csv": "每条提交的风险概率（probabilities.csv）",
+  "model.skops": "模型文件（model.skops）",
 };
-const number = (value) => (value == null ? "未定义" : Number(value).toFixed(4));
+const number = (value) => (value == null ? "—" : Number(value).toFixed(4));
 async function download(kind) {
   downloading.value = true;
   error.value = null;
@@ -71,49 +74,50 @@ async function download(kind) {
 <template>
   <section>
     <div class="section-heading">
-      <h1>模型运行详情</h1>
+      <h1>模型训练结果</h1>
       <button
         :disabled="data.loading.value"
         @click="data.load(route.params.id)"
       >
-        刷新结果
+        刷新
       </button>
     </div>
-    <RouterLink to="/models">返回模型研究</RouterLink>
+    <RouterLink to="/models">返回模型列表</RouterLink>
     <RequestError :error="error || data.error.value" />
-    <p v-if="data.loading.value" role="status">正在加载…</p>
+    <p v-if="data.loading.value" role="status">正在读取…</p>
     <template v-if="data.data.value">
-      <p class="task-id">运行编号：{{ data.data.value.id }}</p>
+      <p class="task-id">编号：{{ shortId(data.data.value.id) }}</p>
       <p>
-        {{ data.data.value.plugin.toUpperCase() }} · 种子{{
-          data.data.value.seed
-        }}
-        · {{ labels[data.data.value.status] || data.data.value.status }}
+        {{ modelNames[data.data.value.plugin] || data.data.value.plugin }} ·
+        随机种子 {{ data.data.value.seed }} ·
+        {{ labels[data.data.value.status] || data.data.value.status }}
       </p>
       <div class="actions">
         <RouterLink :to="`/datasets/${data.data.value.dataset_id}`"
-          >查看固定数据集</RouterLink
+          >查看用的数据集</RouterLink
         ><RouterLink :to="`/tasks/${data.data.value.task_id}`"
-          >查看训练任务／取消重试</RouterLink
+          >查看训练任务，可取消或重试</RouterLink
         >
       </div>
       <p>
-        限定后验弱监督二分类研究。未认证历史在线效果、缺陷类型、跨语言泛化或候选发布资格。
+        这是事后训练出来的研究模型：没有在真实历史时间点验证过，没有区分缺陷类型的把握，也不能直接发布用来预警。
       </p>
-      <h2 v-if="data.data.value.registered">研究工件已注册</h2>
-      <p v-else>尚无可用研究模型。失败与取消任务可在任务页查看原因和重试。</p>
+      <h2 v-if="data.data.value.registered">模型已生成</h2>
+      <p v-else>
+        还没有可用的模型。失败的或取消的任务，可以到任务页看原因、重试。
+      </p>
       <template v-if="report">
         <p class="task-id">
-          训练规则：{{ report.provenance.version }} · 源码摘要：{{
-            report.provenance.code_sha
-          }}
+          训练规则：{{ report.provenance.version }} · 代码指纹（用来确认训练时用的代码没被改过）：<span
+            :title="report.provenance.code_sha"
+            >{{ shortId(report.provenance.code_sha) }}</span
+          >
         </p>
         <p>
-          概率阈值：{{ number(report.threshold) }}。验证区前{{
-            report.calibration.calibration_rows
-          }}条校准，后{{
-            report.calibration.threshold_rows
-          }}条选择阈值；同时间组不拆分。
+          判定门槛：{{ number(report.threshold) }}（模型给出的概率超过它，就算「可能引入缺陷」）。验证区前
+          {{ report.calibration.calibration_rows }} 条用来校准概率（把分数调得更接近真实比例），后
+          {{ report.calibration.threshold_rows }}
+          条用来定判定门槛，同一时间段的提交不拆开。
         </p>
         <div
           class="table-scroll"
@@ -130,28 +134,35 @@ async function download(kind) {
             </thead>
             <tbody>
               <tr>
-                <th>clean / buggy</th>
-                <td v-for="[name, score] in summaries" :key="name">
+                <th>正常 / 有缺陷</th>
+                <td v-for="[summary, score] in summaries" :key="summary">
                   {{ score.support.clean }} / {{ score.support.buggy }}
                 </td>
               </tr>
-              <tr v-for="(label, key) in fields" :key="key">
-                <th>{{ label }}</th>
-                <td v-for="[name, score] in summaries" :key="name">
+              <tr v-for="(name, key) in metricNames" :key="key">
+                <th>{{ name }}</th>
+                <td v-for="[summary, score] in summaries" :key="summary">
                   {{ number(score[key]) }}
                 </td>
               </tr>
-              <tr v-for="key in ['pofb20', 'ifa', 'popt']" :key="key">
-                <th>{{ key.toUpperCase() }}</th>
-                <td v-for="[name, score] in summaries" :key="name">
+              <tr v-for="(name, key) in effortNames" :key="key">
+                <th>{{ name }}</th>
+                <td v-for="[summary, score] in summaries" :key="summary">
                   {{ number(score.effort[key]) }}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <details>
+          <summary>这些指标是什么意思？</summary>
+          <ul>
+            <li v-for="text in metrics" :key="text">{{ text }}</li>
+            <li v-for="text in effortMetrics" :key="text">{{ text }}</li>
+          </ul>
+        </details>
         <p>
-          验证结果受阈值选择影响；测试集仅最终评价。置信区间来自固定时间块重采样，不能证明标签真实性。成本按LA+LD估算，解释不等于缺陷根因。
+          验证区的结果会受判定门槛高低影响，测试区只做最后评价。表格里的区间是把数据按时间段重新抽样算出来的，只能说明结果有多不稳定，不能证明标签就是对的。工作量按新增和删除的行数估算；风险高也不等于找到了缺陷的根因。
         </p>
         <div class="actions">
           <button
@@ -160,17 +171,17 @@ async function download(kind) {
             :disabled="downloading"
             @click="download(kind)"
           >
-            下载 {{ kind }}
+            下载 {{ artifactNames[kind] }}
           </button>
         </div>
         <RiskPanel :run="String(route.params.id)" />
         <details>
-          <summary>参数、校准、区间与复现信息</summary>
+          <summary>完整参数与复现信息（JSON）</summary>
           <pre>{{ JSON.stringify(report, null, 2) }}</pre>
         </details>
       </template>
       <details>
-        <summary>固定来源与分区审计</summary>
+        <summary>数据来源与划分记录（JSON）</summary>
         <pre>{{ JSON.stringify(data.data.value.snapshot, null, 2) }}</pre>
       </details>
     </template>

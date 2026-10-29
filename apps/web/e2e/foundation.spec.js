@@ -59,8 +59,8 @@ test("real login, create, Worker success, persisted reload and logout", async ({
   await expect(page.getByRole("heading", { name: "执行结果" })).toBeVisible();
   await shot(page, info, "task-success");
   await page.getByRole("link", { name: "← 返回任务中心" }).click();
-  await expect(page.getByRole("link", { name: id, exact: true })).toBeVisible();
-  await page.getByRole("link", { name: id, exact: true }).click();
+  await expect(page.getByTestId("task-link-" + id)).toBeVisible();
+  await page.getByTestId("task-link-" + id).click();
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
@@ -155,7 +155,7 @@ test("transient query errors recover, empty filters and pagination are actionabl
   await page.getByRole("button", { name: "刷新列表" }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByLabel("状态筛选").selectOption("cancel_requested");
-  await expect(page.getByText(/暂无符合条件的任务/)).toBeVisible();
+  await expect(page.getByText(/还没有符合条件的任务/)).toBeVisible();
   await expect(page.getByRole("button", { name: "下一页" })).toBeDisabled();
   await shot(page, info, "empty-filter");
 });
@@ -325,12 +325,12 @@ test("pagination and Viewer controls follow API data and route query", async ({
   await page.getByRole("button", { name: "下一页" }).click();
   await expect(page).toHaveURL(/page=2/);
   await expect(
-    page.getByRole("link", { name: "00000000-0000-4000-8000-000000000002" }),
+    page.getByTestId("task-link-00000000-0000-4000-8000-000000000002"),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "下一页" })).toBeDisabled();
   await page.getByRole("button", { name: "上一页" }).click();
   await expect(
-    page.getByRole("link", { name: "00000000-0000-4000-8000-000000000001" }),
+    page.getByTestId("task-link-00000000-0000-4000-8000-000000000001"),
   ).toBeVisible();
 });
 
@@ -340,7 +340,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   test.setTimeout(120000);
   await login(page);
   await page.getByRole("link", { name: "仓库目录", exact: true }).click();
-  await expect(page.getByText("尚未添加仓库。")).toBeVisible();
+  await expect(page.getByText("还没有添加过仓库。")).toBeVisible();
   let first = true;
   let accepted;
   const keys = [];
@@ -367,10 +367,14 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await page.getByRole("button", { name: "添加仓库", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
   expect(keys[0]).toBe(keys[1]);
-  await expect(page.getByTestId("repository-status")).toHaveText("已克隆", {
+  await expect(page.getByTestId("repository-status")).toHaveText("仓库已下载", {
     timeout: 60000,
   });
   await expect(page.getByTestId("repository-head")).toHaveText(
+    /^[0-9a-f]{8}$/,
+  );
+  await expect(page.getByTestId("repository-head")).toHaveAttribute(
+    "title",
     /^[0-9a-f]{40}$/,
   );
   await shot(page, info, "repository-cloned");
@@ -396,7 +400,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
       await route.fulfill({ response });
     }
   });
-  await page.getByRole("button", { name: "开始解析提交" }).click();
+  await page.getByRole("button", { name: "开始整理提交记录" }).click();
   await expect.poll(() => firstParse).toBe(false);
   // The poll may discover the accepted task before another click. Use the same
   // browser request/key to prove uncertain-result replay independently of timing.
@@ -410,16 +414,16 @@ test("public repository lost-response replay, real Worker clone and persisted me
   );
   expect(replay.status()).toBe(202);
   expect((await replay.json()).task_id).toBe(parseTask);
-  await expect(page.getByTestId("parse-status")).toHaveText("解析完成", {
+  await expect(page.getByTestId("parse-status")).toHaveText("提交记录已整理", {
     timeout: 60000,
   });
-  await expect(page.getByTestId("commit-list")).toContainText("个已入库提交");
+  await expect(page.getByTestId("commit-list")).toContainText("个已整理的提交");
   await expect(page.getByTestId("commit-list").locator("li")).not.toHaveCount(
     0,
   );
   await shot(page, info, "repository-parsed");
   await page
-    .getByRole("button", { name: "查看文件变更", exact: true })
+    .getByRole("button", { name: "看改动了哪些文件", exact: true })
     .first()
     .click();
   await expect(page.getByTestId("file-list").locator("li")).not.toHaveCount(0);
@@ -433,7 +437,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     syncTask = (await response.json()).task_id;
     await route.abort("failed");
   });
-  await page.getByRole("button", { name: "同步默认分支", exact: true }).click();
+  await page.getByRole("button", { name: "同步最新提交", exact: true }).click();
   await expect.poll(() => syncTask).toBeTruthy();
   const syncReplay = await page.request.post(
     `/api/v1/repositories/${accepted}/sync`,
@@ -441,12 +445,12 @@ test("public repository lost-response replay, real Worker clone and persisted me
   );
   expect(syncReplay.status()).toBe(202);
   expect((await syncReplay.json()).task_id).toBe(syncTask);
-  await expect(page.getByTestId("sync-status")).toHaveText("同步完成", {
+  await expect(page.getByTestId("sync-status")).toHaveText("已同步", {
     timeout: 60000,
   });
-  await expect(page.getByTestId("sync-windows")).toContainText("HEAD 未变化");
+  await expect(page.getByTestId("sync-windows")).toContainText("没有新提交");
   await expect(page.getByTestId("sync-windows")).toContainText(
-    "已入库 0 / 0 个新提交",
+    "已处理 0 / 0 个新提交",
   );
   await shot(page, info, "repository-synced");
   let fixTask;
@@ -459,7 +463,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     await route.abort("failed");
   });
   await page
-    .getByRole("button", { name: "运行 Fix 识别", exact: true })
+    .getByRole("button", { name: "开始找出疑似修复的提交", exact: true })
     .click();
   await expect.poll(() => fixTask).toBeTruthy();
   const fixReplay = await page.request.post(
@@ -500,29 +504,31 @@ test("public repository lost-response replay, real Worker clone and persisted me
     },
   );
   await assessment
-    .getByRole("button", { name: "确认修复", exact: true })
+    .getByRole("button", { name: "确认是修复", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("复核记录已被更新");
-  await expect(assessment).toContainText("人工拒绝");
+  await expect(assessment).toContainText("已否定这条候选");
   await assessment
-    .getByRole("button", { name: "确认修复", exact: true })
+    .getByRole("button", { name: "确认是修复", exact: true })
     .click();
-  await expect(assessment).toContainText("人工确认");
-  await assessment.getByText("复核记录（最近20次）", { exact: true }).click();
+  await expect(assessment).toContainText("已确认是修复");
+  await assessment.getByText("复核历史（最近 20 次）", { exact: true }).click();
   await expect(assessment).toContainText("concurrent browser review");
   await shot(page, info, "repository-fix-reviewed");
   await page.unroute("**/api/v1/repositories/*/fix-detection");
-  await page.getByLabel("纳入中等级关键词候选").uncheck();
+  await page.getByLabel("中等把握的提交也算作疑似修复").uncheck();
   await page
-    .getByRole("button", { name: "运行 Fix 识别", exact: true })
+    .getByRole("button", { name: "开始找出疑似修复的提交", exact: true })
     .click();
   await expect(page.getByTestId("fix-status")).toHaveText("识别完成", {
     timeout: 60000,
   });
   await expect(page.getByTestId("fix-runs").locator("li")).toHaveCount(2);
-  await page.getByRole("button", { name: "查看此轮证据", exact: true }).click();
+  await page
+    .getByRole("button", { name: "查看这一轮的判断", exact: true })
+    .click();
   await expect(page.getByTestId("fix-assessment").first()).toContainText(
-    "人工确认",
+    "已确认是修复",
   );
   let szzTask;
   let szzHeaders;
@@ -537,7 +543,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     await route.abort("failed");
   });
   await page
-    .getByRole("button", { name: "运行 SZZ 追溯", exact: true })
+    .getByRole("button", { name: "开始追查缺陷引入", exact: true })
     .click();
   await expect.poll(() => szzTask).toBeTruthy();
   const szzReplay = await page.request.post(
@@ -556,7 +562,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await shot(page, info, "repository-szz-complete");
   await page.unroute("**/api/v1/repositories/*/szz-runs");
   await page
-    .getByRole("button", { name: "运行 SZZ 追溯", exact: true })
+    .getByRole("button", { name: "开始追查缺陷引入", exact: true })
     .click();
   await expect(page.getByTestId("szz-status")).toHaveText("追溯完成", {
     timeout: 60000,
@@ -575,7 +581,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     await route.abort("failed");
   });
   await page
-    .getByRole("button", { name: "提取 Kamei14 特征", exact: true })
+    .getByRole("button", { name: "开始计算统计指标", exact: true })
     .click();
   await expect.poll(() => featureTask).toBeTruthy();
   const featureReplay = await page.request.post(
@@ -584,11 +590,11 @@ test("public repository lost-response replay, real Worker clone and persisted me
   );
   expect(featureReplay.status()).toBe(202);
   expect((await featureReplay.json()).task_id).toBe(featureTask);
-  await expect(page.getByTestId("feature-status")).toHaveText("提取完成", {
+  await expect(page.getByTestId("feature-status")).toHaveText("计算完成", {
     timeout: 60000,
   });
   await expect(page.getByTestId("feature-quality")).toContainText(
-    "完整轮次 3 个提交",
+    /这一轮算了\s*3\s*个提交/,
   );
   const featureData = await page.request.get(
     `/api/v1/repositories/${accepted}/feature-quality?run_id=${featureTask}`,
@@ -607,21 +613,27 @@ test("public repository lost-response replay, real Worker clone and persisted me
   expect(featureQuality.source_validation.product_training_ready).toBe(false);
   await expect(page.getByTestId("feature-version-semantics")).toBeVisible();
   await expect(page.getByTestId("feature-source-validation")).toContainText(
-    "标签覆盖尚未认证",
+    "目前都还没有确认",
   );
   await info.attach("feature-quality", {
     body: JSON.stringify(featureDocument, null, 2),
     contentType: "application/json",
   });
   await expect(page.getByTestId("feature-result")).toHaveCount(3);
-  await page.getByRole("button", { name: "FIX 缺失", exact: true }).click();
+  await page
+    .getByRole("row", { name: /是否疑似修复/ })
+    .getByRole("button", { name: "看缺失的提交", exact: true })
+    .click();
   await expect(page.getByTestId("feature-result")).toHaveCount(
     featureQuality.features.FIX.missing,
   );
   await expect(page.getByTestId("feature-results")).toContainText(
-    "message_unverified",
+    "提交说明无法核对",
   );
-  await page.getByRole("button", { name: "EXP 数值降序", exact: true }).click();
+  await page
+    .getByRole("row", { name: /作者此前提交次数/ })
+    .getByRole("button", { name: "数值从高到低", exact: true })
+    .click();
   await expect(page.getByTestId("feature-result")).toHaveCount(
     featureQuality.features.EXP.valid,
   );
@@ -639,12 +651,12 @@ test("public repository lost-response replay, real Worker clone and persisted me
     .fill(config.DG_BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("/repositories/" + accepted + "$"));
-  await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
-  await expect(page.getByTestId("parse-status")).toHaveText("解析完成");
-  await expect(page.getByTestId("sync-status")).toHaveText("同步完成");
+  await expect(page.getByTestId("repository-status")).toHaveText("仓库已下载");
+  await expect(page.getByTestId("parse-status")).toHaveText("提交记录已整理");
+  await expect(page.getByTestId("sync-status")).toHaveText("已同步");
   await expect(page.getByTestId("fix-status")).toHaveText("识别完成");
   await expect(page.getByTestId("szz-status")).toHaveText("追溯完成");
-  await expect(page.getByTestId("feature-status")).toHaveText("提取完成");
+  await expect(page.getByTestId("feature-status")).toHaveText("计算完成");
 });
 
 test("unsafe repository address rejected without catalog mutation", async ({
@@ -678,7 +690,9 @@ test("repository Viewer controls and mobile detail remain readable", async ({
     page.getByRole("button", { name: "添加仓库", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByText("Viewer 可查看仓库；添加需要 Member 或 Admin。"),
+    page.getByText(
+      "Viewer（只读账号）可查看仓库；添加仓库需要 Member 或 Admin 账号（普通成员或管理员）。",
+    ),
   ).toBeVisible();
   await page
     .getByRole("link", {
@@ -686,26 +700,26 @@ test("repository Viewer controls and mobile detail remain readable", async ({
       exact: true,
     })
     .click();
-  await expect(page.getByTestId("repository-status")).toHaveText("已克隆");
+  await expect(page.getByTestId("repository-status")).toHaveText("仓库已下载");
   await expect(
-    page.getByRole("button", { name: "同步默认分支", exact: true }),
+    page.getByRole("button", { name: "同步最新提交", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByTestId("fix-panel")).toBeVisible();
   await expect(page.getByTestId("szz-panel")).toBeVisible();
   await expect(page.getByTestId("feature-panel")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "提取 Kamei14 特征", exact: true }),
+    page.getByRole("button", { name: "开始计算统计指标", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "运行 SZZ 追溯", exact: true }),
+    page.getByRole("button", { name: "开始追查缺陷引入", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "运行 Fix 识别", exact: true }),
+    page.getByRole("button", { name: "开始找出疑似修复的提交", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "确认修复", exact: true }),
+    page.getByRole("button", { name: "确认是修复", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByTestId("feature-status")).toHaveText("提取完成");
+  await expect(page.getByTestId("feature-status")).toHaveText("计算完成");
   await expect(page.getByTestId("feature-quality")).toBeVisible();
   const overflow = await page.evaluate(() => ({
     viewport: innerWidth,
@@ -769,22 +783,24 @@ test("history review UI preserves accepted HEAD and blocks another sync", async 
       exact: true,
     })
     .click();
-  await expect(page.getByTestId("sync-status")).toHaveText("历史变化待复核");
+  await expect(page.getByTestId("sync-status")).toHaveText("历史发生变化，需要人工确认");
   await expect(page.getByTestId("sync-window-error")).toBeVisible();
   queriesAvailable = true;
   await page.getByRole("button", { name: "刷新详情", exact: true }).click();
-  await expect(page.getByTestId("sync-windows")).toContainText("HEAD 未变化");
+  await expect(page.getByTestId("sync-windows")).toContainText("没有新提交");
   await expect(page.getByTestId("sync-window-error")).toHaveCount(0);
-  await expect(page.getByRole("alert")).toContainText(
-    "已暂停同步并保留旧 HEAD",
-  );
+  await expect(page.getByRole("alert")).toContainText("自动同步已经暂停");
   await expect(
-    page.getByText("初次解析只选取最近 N 个提交", { exact: false }),
+    page.getByText("只整理了最近一段历史", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "同步默认分支", exact: true }),
+    page.getByRole("button", { name: "同步最新提交", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByTestId("repository-head")).toHaveText(
+    /^[0-9a-f]{8}$/,
+  );
+  await expect(page.getByTestId("repository-head")).toHaveAttribute(
+    "title",
     /^[0-9a-f]{40}$/,
   );
   await shot(page, info, "repository-review-required");
