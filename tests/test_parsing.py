@@ -292,8 +292,13 @@ def test_recent_window_idempotency_and_real_api_permissions(parse_env, monkeypat
     app.dependency_overrides[current_user] = lambda: identity[0]
     path = f"/api/v1/repositories/{repo_id}"
     with TestClient(app) as api:
+        # 只读账号没有发起权限：请求本身合法（提交窗口显式二选一），仍应 403。
         assert (
-            api.post(path + "/parse", json={}, headers={"Idempotency-Key": "same"}).status_code
+            api.post(
+                path + "/parse",
+                json={"commit_limit": 3},
+                headers={"Idempotency-Key": "same"},
+            ).status_code
             == 403
         )
         identity[0] = actors[1]
