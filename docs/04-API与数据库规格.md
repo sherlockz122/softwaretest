@@ -408,6 +408,8 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 
 当前schema0011_models。model_run保存dataset_id/plugin/params_json/seed/code_sha/snapshot_json/metrics_json/output_json/latest_task_id，模型JSON无损文本；model_artifact保存固定kind/uri/hash/size。code_sha为规范源文件和锁文件SHA256，Git交付另绑定。A20仅dataset_id/plugin/params/seed，A21支持固定名称artifact下载；A23分页研究运行并明确production_models=[]，A22 Admin仍拒绝不兼容研究用途。0011在整条降级请求任何DDL前检查所有将受影响旧表、引用和任务，0001～0010不改。
 
-## 第三十阶段语义资产消费合同（2026-10-29，实施中）
+## 第三十阶段语义资产消费合同（2026-10-29，个人增量）
 
 A36 GET /semantic-assets（page>=1，page_size<=100）返回确定性hash序的已安装研究资产摘要、total/page/page_size及受限用途；列表校验receipt/原始manifest，不声称矩阵当前完整性。A37 GET /semantic-assets/{asset_id}仅64位小写hex，offset>=0/limit<=100及partition=train或validation可选，完整核验原始三负载及schema后返回摘要和有界成员/coverage/total，不返回向量、文本、路径、依赖详情。Viewer/Member/Admin均用既有有效会话只读；无HTTP写入/下载/发布端点。不存在404、非法参数422、不可用/漂移409语义安全码。schema仍0011，无新表。操作员安装与在线长任务明确分开，未来语义任务/API另设计。 见[资产读取指导](development/语义资产读取与验收.md)。
+
+本切片实现与本机验收已完成，实现自身SHA CI已成功；最终文档提交的独立CI和后验证明实际完成后才记本批交付。当前资格/未完成故事不随其晋升，确切提交与状态见[本批报告](reports/2026-10-29-第三十阶段语义资产读取报告.md)。
