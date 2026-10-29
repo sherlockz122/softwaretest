@@ -3,7 +3,8 @@ import { onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { labels, date } from "../task-tools";
+import { labels, date, shortId } from "../task-tools";
+import { label, partitions } from "../terms";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const offset = ref(0);
@@ -69,43 +70,43 @@ async function download(partition) {
         刷新详情
       </button>
     </div>
-    <RouterLink to="/datasets">返回数据集</RouterLink>
+    <RouterLink to="/datasets">返回数据集列表</RouterLink>
     <RequestError :error="data.error.value || downloadError" />
-    <p v-if="data.loading.value" role="status">正在加载…</p>
+    <p v-if="data.loading.value" role="status">正在读取…</p>
     <template v-if="data.data.value">
       <h2>{{ data.data.value.name }}</h2>
       <dl>
         <dt>用途</dt>
-        <dd>公开发布弱监督二分类研究</dd>
+        <dd>研究用二分类数据（标签来自原公开数据的规则判断）</dd>
         <dt>状态</dt>
         <dd>{{ labels[data.data.value.status] || data.data.value.status }}</dd>
-        <dt>成员进度</dt>
+        <dt>进度（已处理 / 总数）</dt>
         <dd>
           {{ data.data.value.processed }} / {{ data.data.value.total ?? "—" }}
         </dd>
         <dt>创建时间</dt>
         <dd>{{ date(data.data.value.created_at) }}</dd>
-        <dt>数据来源</dt>
-        <dd class="break-anywhere">{{ data.data.value.asset_id }}</dd>
+        <dt>数据来源编号</dt>
+        <dd class="break-anywhere">{{ shortId(data.data.value.asset_id) }}</dd>
       </dl>
       <RouterLink :to="`/tasks/${data.data.value.task_id}`"
-        >查看任务、取消或重试</RouterLink
+        >查看任务，可取消或重试</RouterLink
       >
       <p v-if="!data.data.value.ready">
-        数据集尚未完成；半成品不能导出或用于训练。失败、取消和重试可在任务详情中处理。
+        数据集还没生成完；没完成的不能下载，也不能用于训练。如果失败了，可以到任务详情里取消或重试。
       </p>
       <template v-else>
-        <h3>限定研究就绪</h3>
+        <h3>数据集已可用</h3>
         <p>
-          来源与分区结构已经验证，真实标签/负例覆盖尚未独立认证。本版本不支持历史在线回放、候选发布、语义、类型或定位用途；尚未训练模型。
+          数据来源和划分结构已经核对过。标签是原公开数据自带的规则判断，准不准、两类样本够不够还没有单独确认；这个版本也不支持按历史时间点回放、发布模型或判断缺陷类型。
         </p>
         <p>
-          切分：{{
+          划分方式：{{
             data.data.value.policy.split_strategy === "time_ordered"
-              ? "按时间同组"
-              : "按独立仓库留出"
+              ? "按时间先后（同一时间段的提交不拆开）"
+              : "按仓库划分（留出独立仓库做测试）"
           }}
-          · 12项数值，原发布fix标志不作为特征。
+          · 共 12 项数值指标；原数据里的 fix 标志不参与计算，避免提前泄露答案。
         </p>
         <p class="hint">窄屏下可左右滚动表格，查看全部列与下载操作。</p>
         <div
@@ -118,9 +119,9 @@ async function download(partition) {
             <thead>
               <tr>
                 <th>分区</th>
-                <th>clean</th>
-                <th>buggy</th>
-                <th>导出</th>
+                <th>正常提交</th>
+                <th>有缺陷提交</th>
+                <th>下载</th>
               </tr>
             </thead>
             <tbody>
@@ -128,12 +129,12 @@ async function download(partition) {
                 v-for="(count, partition) in data.data.value.summary.partitions"
                 :key="partition"
               >
-                <td>{{ partition }}</td>
+                <td>{{ label(partitions, partition) }}</td>
                 <td>{{ count.clean }}</td>
                 <td>{{ count.buggy }}</td>
                 <td>
                   <button :disabled="downloading" @click="download(partition)">
-                    下载 {{ partition }} CSV
+                    下载{{ label(partitions, partition) }}数据（CSV）
                   </button>
                 </td>
               </tr>
@@ -141,32 +142,32 @@ async function download(partition) {
           </table>
         </div>
         <details>
-          <summary>来源、分区和能力审计</summary>
+          <summary>数据来源和划分详情</summary>
           <dl>
-            <dt>原数据取得时间</dt>
+            <dt>原数据获取时间</dt>
             <dd>
               {{
                 date(data.data.value.summary.source_acquisition?.acquired_at)
               }}
             </dd>
-            <dt>源首次保存时间</dt>
+            <dt>数据首次保存时间</dt>
             <dd>{{ date(data.data.value.summary.source_first_stored_at) }}</dd>
-            <dt>数据许可</dt>
+            <dt>使用许可</dt>
             <dd>
               {{
                 data.data.value.summary.source_acquisition?.apachejit_license ||
                 "待核验"
               }}
             </dd>
-            <dt>原始行 / 去重成员</dt>
+            <dt>原始行数 / 去重后提交数</dt>
             <dd>
               {{ data.data.value.summary.original_rows }} /
               {{ data.data.value.summary.rows }}
             </dd>
-            <dt>合并重复行</dt>
+            <dt>合并的重复行</dt>
             <dd>{{ data.data.value.summary.duplicate_rows }}</dd>
-            <dt>事件时间</dt>
-            <dd>原发布作者时间；用于后验研究，不代表历史当时已知标签。</dd>
+            <dt>提交时间</dt>
+            <dd>用的是原作者提交时间。这是事后研究，不表示当时就能知道标签。</dd>
           </dl>
           <p
             v-if="
@@ -186,8 +187,8 @@ async function download(partition) {
               <thead>
                 <tr>
                   <th>独立仓库</th>
-                  <th>clean</th>
-                  <th>buggy</th>
+                  <th>正常提交</th>
+                  <th>有缺陷提交</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,9 +206,12 @@ async function download(partition) {
           </div>
         </details>
         <p class="break-anywhere">
-          不可变清单摘要：{{ data.data.value.manifest_hash }}
+          内容指纹（用来确认文件没有被改过）：<span
+            :title="data.data.value.manifest_hash"
+            >{{ shortId(data.data.value.manifest_hash) }}</span
+          >
         </p>
-        <h3>成员预览</h3>
+        <h3>数据样例</h3>
         <div
           class="table-scroll"
           role="region"
@@ -220,15 +224,17 @@ async function download(partition) {
                 <th>仓库</th>
                 <th>提交</th>
                 <th>分区</th>
-                <th>原发布标签</th>
+                <th>标签</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in data.data.value.members" :key="row.ordinal">
                 <td>{{ row.canonical_repository }}</td>
-                <td class="break-anywhere">{{ row.commit_id }}</td>
-                <td>{{ row.partition }}</td>
-                <td>{{ row.label ? "buggy" : "clean" }}</td>
+                <td class="break-anywhere" :title="row.commit_id">
+                  {{ shortId(row.commit_id) }}
+                </td>
+                <td>{{ label(partitions, row.partition) }}</td>
+                <td>{{ row.label ? "有缺陷" : "正常" }}</td>
               </tr>
             </tbody>
           </table>

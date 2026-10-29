@@ -19,7 +19,7 @@ test("Viewer can query evidence without detection or review controls", async () 
   await flushPromises();
   expect(view.text()).toContain("Viewer");
   expect(view.find("form").exists()).toBe(false);
-  expect(view.text()).not.toContain("确认修复");
+  expect(view.text()).not.toContain("确认是修复");
   view.unmount();
 });
 test("uncertain detection retains key and blocks concurrent submission", async () => {
@@ -103,14 +103,14 @@ test("review conflict refreshes revision before a deliberate second decision", a
   await view.get('input:not([type="checkbox"])').setValue("review rationale");
   await view
     .findAll("button")
-    .find((b) => b.text() === "确认修复")
+    .find((b) => b.text() === "确认是修复")
     .trigger("click");
   await flushPromises();
   expect(view.text()).toContain("复核记录已被更新");
-  expect(view.text()).toContain("人工拒绝");
+  expect(view.text()).toContain("已否定这条候选");
   await view
     .findAll("button")
-    .find((b) => b.text() === "确认修复")
+    .find((b) => b.text() === "确认是修复")
     .trigger("click");
   await flushPromises();
   const requests = send.mock.calls.filter((c) => c[1]?.method === "PATCH");

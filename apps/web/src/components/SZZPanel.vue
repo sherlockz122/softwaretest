@@ -2,7 +2,16 @@
 import { computed, ref, watch } from "vue";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { operationKeys, date } from "../task-tools";
+import { operationKeys, date, shortId } from "../task-tools";
+import {
+  confidenceNames,
+  fixReview,
+  label,
+  szzAlgorithms,
+  szzReason,
+  szzResult,
+  szzStatus,
+} from "../terms";
 import RequestError from "./RequestError.vue";
 const props = defineProps({
   repo: { type: Object, required: true },
@@ -36,21 +45,9 @@ const links = useLatest((input, signal) =>
   ),
 );
 const run = computed(() => results.data.value?.run);
-const statusLabels = {
-  pending: "未追溯",
-  queued: "追溯排队中",
-  tracing: "追溯中",
-  traced: "追溯完成",
-  failed: "追溯失败",
-  cancelled: "追溯已取消",
-};
-const resultLabels = {
-  unknown: "未知",
-  partial: "部分追溯",
-  traced: "已追溯",
-  no_traceable_lines: "无可追溯旧代码行",
-  not_candidate: "冻结输入非候选",
-};
+function reasons(list) {
+  return (list || []).map((reason) => label(szzReason, reason)).join("；");
+}
 const canStart = computed(
   () =>
     props.canWrite &&
@@ -150,13 +147,12 @@ async function start() {
 </script>
 <template>
   <section data-testid="szz-panel">
-    <h2>Baseline SZZ 缺陷引入追溯</h2>
+    <h2>第三步：追查缺陷是哪次改动引入的</h2>
     <p data-testid="szz-status">
-      {{ statusLabels[repo.szz_status] || "未追溯" }}
+      {{ label(szzStatus, repo.szz_status) }}
     </p>
     <p class="hint">
-      冻结当前 Fix
-      轮次与复核版本，在唯一父提交追溯删除或替换行。候选缺陷引入证据保留可用时间；未知或无证据均不表示无缺陷。
+      从第二步找出的修复提交出发往回翻：这次被删掉或改掉的代码，最早是哪次提交写进来的。翻不到的时候会写明原因（历史太短、文件太大等），不会当成「肯定不是缺陷」。
     </p>
     <button
       v-if="canStart"
@@ -164,12 +160,15 @@ async function start() {
       :disabled="busy || sending"
       @click="start"
     >
-      {{ sending ? "提交中…" : "运行 SZZ 追溯" }}
+      {{ sending ? "提交中…" : "开始追查缺陷引入" }}
     </button>
     <p v-else-if="!canWrite" class="hint">
-      Viewer 可查看 SZZ 证据；启动需要 Member 或 Admin。
+      Viewer（只读账号）可以查看追溯结果；开始追溯需要 Member 或
+      Admin 账号（普通成员或管理员）。
     </p>
-    <p v-else class="hint">请先完成当前接受 HEAD 的 Fix 识别。</p>
+    <p v-else class="hint">
+      先完成第二步：当前最新提交的疑似修复识别还没做完。
+    </p>
     <RequestError
       :error="
         failure || runs.error.value || results.error.value || links.error.value
@@ -179,7 +178,7 @@ async function start() {
       v-if="runs.loading.value || results.loading.value || links.loading.value"
       role="status"
     >
-      正在读取 SZZ 结果…
+      正在读取追溯结果…
     </p>
     <ul
       v-if="runs.data.value?.items.length"
@@ -187,46 +186,49 @@ async function start() {
       data-testid="szz-runs"
     >
       <li v-for="item in runs.data.value.items" :key="item.root_task_id">
-        <span class="task-id">{{ item.root_task_id }}</span
-        ><span
-          >{{ date(item.created_at) }} · {{ item.processed }} /
-          {{ item.total ?? "待扫描" }}</span
-        ><button
+        <p class="task-id">{{ shortId(item.root_task_id) }}</p>
+        <p>
+          {{ date(item.created_at) }} · 已追查 {{ item.processed }} /
+          {{ item.total ?? "待扫描" }} 个提交
+        </p>
+        <button
           :disabled="selected === item.root_task_id"
           @click="select(item.root_task_id)"
         >
-          查看 SZZ 轮次
+          查看这一轮追溯
         </button>
       </li>
     </ul>
     <div v-if="runs.data.value?.total" class="pagination">
       <button :disabled="runsPage <= 1" @click="runsPage--">
-        SZZ 轮次上一页</button
+        上一页追溯</button
       ><span>{{ runsPage }}</span
       ><button
         :disabled="runsPage * 10 >= runs.data.value.total"
         @click="runsPage++"
       >
-        SZZ 轮次下一页
+        下一页追溯
       </button>
     </div>
-    <p v-else-if="!runs.loading.value">尚无 SZZ 轮次。</p>
+    <p v-else-if="!runs.loading.value">还没有做过追溯。</p>
     <div v-if="run" data-testid="szz-results">
       <dl class="task-facts">
-        <dt>算法</dt>
-        <dd>{{ run.algorithm_version }}</dd>
-        <dt>Fix 轮次</dt>
-        <dd class="task-id">{{ run.fix_root_task_id }}</dd>
-        <dt>观察截止</dt>
+        <dt>追溯方法</dt>
+        <dd>{{ label(szzAlgorithms, run.algorithm_version) }}</dd>
+        <dt>基于哪一轮修复识别</dt>
+        <dd class="task-id">{{ shortId(run.fix_root_task_id) }}</dd>
+        <dt>只看到这个时间为止</dt>
         <dd>{{ date(run.as_of) }}</dd>
-        <dt>历史覆盖</dt>
+        <dt>覆盖的历史范围</dt>
         <dd>
           {{
-            run.history_coverage === "full" ? "全部可达历史" : "有限历史窗口"
+            run.history_coverage === "full"
+              ? "仓库全部可追溯的历史"
+              : "只有最近一段历史"
           }}
         </dd>
-        <dt>标签版本</dt>
-        <dd class="task-id">{{ run.label_version }}</dd>
+        <dt>结果版本</dt>
+        <dd class="task-id">{{ shortId(run.label_version) }}</dd>
       </dl>
       <ul class="task-list">
         <li
@@ -234,54 +236,70 @@ async function start() {
           :key="item.id"
           data-testid="szz-result"
         >
-          <span class="task-id">{{ item.sha }}</span
-          ><span
-            >复核版本 {{ item.input.review_revision }} ·
-            {{ item.input.review_status }}</span
-          ><span
-            >{{ item.result ? resultLabels[item.result.status] : "待处理" }} ·
-            {{ item.links_count }} 条行证据</span
-          ><span v-if="item.result?.reasons.length">{{
-            item.result.reasons.join("，")
-          }}</span>
+          <p class="task-id">{{ shortId(item.sha) }}</p>
+          <p>
+            提交当时的人工复核：{{
+              label(fixReview, item.input.review_status)
+            }}<span v-if="item.input.review_revision > 0"
+              >（第 {{ item.input.review_revision }} 次修改后）</span
+            >
+          </p>
+          <p>
+            追溯结果：{{
+              item.result ? label(szzResult, item.result.status) : "待处理"
+            }}
+            · {{ item.links_count }} 条代码行线索
+          </p>
+          <p v-if="item.result?.reasons.length">
+            原因：{{ reasons(item.result.reasons) }}
+          </p>
         </li>
       </ul>
       <div class="pagination">
-        <button :disabled="page <= 1" @click="page--">SZZ 结果上一页</button
+        <button :disabled="page <= 1" @click="page--">上一页结果</button
         ><span>{{ page }}</span
         ><button
           :disabled="page * 10 >= (results.data.value?.total || 0)"
           @click="page++"
         >
-          SZZ 结果下一页
+          下一页结果
         </button>
       </div>
-      <h3>行级证据</h3>
+      <h3>代码行线索</h3>
       <ul class="task-list" data-testid="szz-links">
         <li v-for="(item, index) in links.data.value?.items" :key="index">
-          <span>旧路径 {{ item.path }} · 删除行 {{ item.fixed_line }}</span
-          ><span class="task-id">Fix {{ item.fix_sha }}</span
-          ><span class="task-id"
-            >来源 {{ item.blamed_sha }} · 原始行 {{ item.blamed_line }}</span
-          ><span>来源路径 {{ item.origin_path }}</span
-          ><span
-            >{{ item.eligible ? "候选缺陷引入" : "未知" }} ·
-            {{ item.reason || item.confidence }}</span
-          ><span>标签可用时间 {{ date(item.label_available_at) }}</span>
+          <p>文件 {{ item.path }} · 删掉了第 {{ item.fixed_line }} 行</p>
+          <p>
+            <span class="task-id">这次修复 {{ shortId(item.fix_sha) }}</span>
+            ·
+            <span class="task-id"
+              >最早来自提交 {{ shortId(item.blamed_sha) }} 的第
+              {{ item.blamed_line }} 行</span
+            >
+          </p>
+          <p v-if="item.origin_path">原文件：{{ item.origin_path }}</p>
+          <p>
+            {{ item.eligible ? "可能是引入缺陷的提交" : "无法确定" }} ·
+            {{
+              item.reason
+                ? label(szzReason, item.reason)
+                : `把握：${label(confidenceNames, item.confidence)}`
+            }} · 结果可用时间 {{ date(item.label_available_at) }}
+          </p>
         </li>
       </ul>
       <p v-if="!links.data.value?.total">
-        本轮没有已发布的行级证据；不能据此生成 clean 标签。
+        这一轮没有可用的代码行线索；这种情况下不能把这些提交当成「没有问题」。
       </p>
       <div class="pagination">
         <button :disabled="linksPage <= 1" @click="linksPage--">
-          SZZ 证据上一页</button
+          上一页线索</button
         ><span>{{ linksPage }}</span
         ><button
           :disabled="linksPage * 10 >= (links.data.value?.total || 0)"
           @click="linksPage++"
         >
-          SZZ 证据下一页
+          下一页线索
         </button>
       </div>
     </div>

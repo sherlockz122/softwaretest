@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { labels, operationKeys } from "../task-tools";
+import { labels, operationKeys, shortId } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 const router = useRouter();
 const page = ref(1);
@@ -25,6 +25,7 @@ const leaf = ref(2);
 const creating = ref(false);
 const error = ref(null);
 const keys = operationKeys();
+const modelNames = { lr: "逻辑回归", rf: "随机森林" };
 const canCreate = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
@@ -80,18 +81,18 @@ async function create() {
 <template>
   <section>
     <div class="section-heading">
-      <h1>模型研究</h1>
+      <h1>训练模型</h1>
       <button :disabled="list.loading.value" @click="list.load(page)">
-        刷新模型
+        刷新
       </button>
     </div>
     <p>
-      使用固定公开数据训练LR/RF二分类基线。研究标签未经金标认证，结果不能直接用于候选变更预警。
+      用选定的研究数据集训练一个二分类模型，判断「这次提交会不会引入缺陷」。标签来自原公开数据的规则判断，没有人工逐条确认，所以结果只适合研究对照，不能直接拿来预警。
     </p>
     <RequestError :error="error || list.error.value || datasets.error.value" />
     <form v-if="canCreate" @submit.prevent="create">
       <label
-        >已发布数据集<select v-model="dataset" required :disabled="creating">
+        >用哪个数据集<select v-model="dataset" required :disabled="creating">
           <option value="">请选择数据集</option>
           <option
             v-for="row in datasets.data.value?.items || []"
@@ -99,8 +100,8 @@ async function create() {
             :value="row.id"
             :disabled="!row.ready"
           >
-            {{ row.name }} · {{ row.total ?? "—" }}条{{
-              row.ready ? "" : "（未就绪）"
+            {{ row.name }} · {{ row.total ?? "—" }} 条{{
+              row.ready ? "" : "（还没生成完，不能选）"
             }}
           </option>
         </select></label
@@ -111,7 +112,7 @@ async function create() {
           :disabled="datasetPage === 1 || creating"
           @click="datasetPage--"
         >
-          上一页数据集
+          上一页
         </button>
         <button
           type="button"
@@ -120,13 +121,13 @@ async function create() {
           "
           @click="datasetPage++"
         >
-          下一页数据集
+          下一页
         </button>
       </div>
       <label
-        >算法<select v-model="plugin" :disabled="creating">
-          <option value="lr">Logistic Regression</option>
-          <option value="rf">Random Forest</option>
+        >用哪种模型<select v-model="plugin" :disabled="creating">
+          <option value="lr">逻辑回归（Logistic Regression）</option>
+          <option value="rf">随机森林（Random Forest）</option>
         </select></label
       >
       <label
@@ -141,7 +142,7 @@ async function create() {
       /></label>
       <template v-if="plugin === 'lr'">
         <label
-          >正则化参数 C<input
+          >正则化参数 C（防止模型死记训练数据；越大越贴合训练数据）<input
             v-model.number="c"
             type="number"
             min="0.001"
@@ -151,7 +152,7 @@ async function create() {
             :disabled="creating"
         /></label>
         <label
-          >最大迭代次数<input
+          >最多训练多少轮（越大越慢，通常保持默认）<input
             v-model.number="iterations"
             type="number"
             min="50"
@@ -163,7 +164,7 @@ async function create() {
       </template>
       <template v-else>
         <label
-          >树数量<input
+          >树的数量（越多越稳，也越慢）<input
             v-model.number="trees"
             type="number"
             min="10"
@@ -173,7 +174,7 @@ async function create() {
             :disabled="creating"
         /></label>
         <label
-          >最大树深度<input
+          >每棵树的最大深度（越深越容易死记训练数据）<input
             v-model.number="depth"
             type="number"
             min="2"
@@ -183,7 +184,7 @@ async function create() {
             :disabled="creating"
         /></label>
         <label
-          >叶子最少样本<input
+          >每片叶子至少要放的样本数（越大模型越简单）<input
             v-model.number="leaf"
             type="number"
             min="1"
@@ -194,16 +195,19 @@ async function create() {
         /></label>
       </template>
       <p>
-        沿用数据集原分区；仅训练区拟合模型，验证区分别校准概率、选择阈值，测试区只做最终评价。任务中断后从固定输入重训。
+        三份数据各司其职：训练区用来训练模型，验证区用来调整概率、定判定门槛，测试区只做最后评价、不参与调整。任务中断后会用同样的输入重新训练。
       </p>
       <button :disabled="creating || !dataset">
-        {{ creating ? "正在提交…" : "开始研究训练" }}
+        {{ creating ? "正在提交…" : "开始训练" }}
       </button>
     </form>
-    <p v-else>当前账号可查看研究结果；训练需要Member或Admin权限。</p>
-    <p v-if="list.loading.value" role="status">正在加载…</p>
+    <p v-else>
+      当前账号可以查看训练结果；训练模型需要 Member 或 Admin
+      账号（普通成员或管理员）。
+    </p>
+    <p v-if="list.loading.value" role="status">正在读取…</p>
     <p v-if="list.data.value && !list.data.value.items.length">
-      尚无模型运行。
+      还没有训练过模型。
     </p>
     <div
       v-if="list.data.value?.items.length"
@@ -215,9 +219,9 @@ async function create() {
       <table>
         <thead>
           <tr>
-            <th>运行编号</th>
-            <th>算法</th>
-            <th>种子</th>
+            <th>编号</th>
+            <th>模型</th>
+            <th>随机种子</th>
             <th>状态</th>
             <th>用途</th>
           </tr>
@@ -226,25 +230,25 @@ async function create() {
           <tr v-for="row in list.data.value.items" :key="row.id">
             <td>
               <RouterLink :to="`/model-runs/${row.id}`">{{
-                row.id
+                shortId(row.id)
               }}</RouterLink>
             </td>
-            <td>{{ row.plugin.toUpperCase() }}</td>
+            <td>{{ modelNames[row.plugin] || row.plugin }}</td>
             <td>{{ row.seed }}</td>
             <td>{{ labels[row.status] || row.status }}</td>
-            <td>限定二分类研究</td>
+            <td>研究用二分类模型</td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="actions">
-      <button :disabled="page === 1" @click="page--">上一页模型</button
-      ><span>第{{ page }}页</span
+      <button :disabled="page === 1" @click="page--">上一页</button
+      ><span>第 {{ page }} 页</span
       ><button
         :disabled="page * 10 >= (list.data.value?.total || 0)"
         @click="page++"
       >
-        下一页模型
+        下一页
       </button>
     </div>
   </section>

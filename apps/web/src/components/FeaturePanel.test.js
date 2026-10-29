@@ -129,11 +129,11 @@ test("Viewer reads v2 source boundary without training or clean claims", async (
   await flushPromises();
   expect(
     view.get('[data-testid="feature-version-semantics"]').text(),
-  ).toContain("0 不代表非修复或 clean");
+  ).toContain("不代表这条提交不是修复");
   expect(
     view.get('[data-testid="feature-source-validation"]').text(),
-  ).toContain("标签覆盖尚未认证");
-  expect(view.text()).toContain("候选提交（同消息规则）");
+  ).toContain("目前都还没有确认");
+  expect(view.text()).toContain("待预测的提交（同样规则）");
   view.unmount();
 });
 test("quality drills down missing or descending values and pages independently", async () => {
@@ -182,24 +182,24 @@ test("quality drills down missing or descending values and pages independently",
     props: { repo, canWrite: false, reload: async () => {} },
   });
   await flushPromises();
-  expect(view.text()).toContain("有限历史窗口");
-  expect(view.text()).toContain("first_file_change: 1");
-  await view
-    .findAll("button")
-    .find((button) => button.text() === "AGE 缺失")
-    .trigger("click");
+  expect(view.text()).toContain("只有最近一段历史");
+  expect(view.text()).toContain("这些文件以前没有改动记录：1 个");
+  const drill = (name, action) =>
+    view
+      .findAll("tr")
+      .find((row) => row.text().includes(`（${name}）`))
+      .findAll("button")
+      .find((button) => button.text() === action);
+  await drill("AGE", "看缺失的提交").trigger("click");
   await flushPromises();
   expect(send.mock.calls.at(-1)[0]).toContain("feature=AGE&missing=true");
   await view
     .findAll("button")
-    .find((button) => button.text() === "特征结果下一页")
+    .find((button) => button.text() === "下一页结果")
     .trigger("click");
   await flushPromises();
   expect(send.mock.calls.at(-1)[0]).toContain("page=2");
-  await view
-    .findAll("button")
-    .find((button) => button.text() === "EXP 数值降序")
-    .trigger("click");
+  await drill("EXP", "数值从高到低").trigger("click");
   await flushPromises();
   expect(send.mock.calls.at(-1)[0]).toContain("feature=EXP&missing=false");
   expect(send.mock.calls.at(-1)[0]).toContain("page=1");
@@ -223,7 +223,7 @@ test("Viewer sees incomplete boundaries and no write controls", async () => {
   });
   await flushPromises();
   expect(view.text()).toContain("Viewer");
-  expect(view.text()).toContain("本轮未完成");
+  expect(view.text()).toContain("这一轮还没算完");
   expect(view.find("button.primary").exists()).toBe(false);
   view.unmount();
 });

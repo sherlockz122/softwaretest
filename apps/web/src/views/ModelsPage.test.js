@@ -37,8 +37,8 @@ test("Viewer reads models without training or release controls", async () => {
   vi.spyOn(client, "request").mockResolvedValue(modelList);
   const { wrapper } = await view(ModelsPage, "Viewer");
   expect(wrapper.find("form").exists()).toBe(false);
-  expect(wrapper.text()).toContain("Member或Admin");
-  expect(wrapper.text()).toContain("尚无模型运行");
+  expect(wrapper.text()).toContain("Member 或 Admin");
+  expect(wrapper.text()).toContain("还没有训练过模型");
   wrapper.unmount();
 });
 test("uncertain training reuses operation key and immutable dataset ID", async () => {
@@ -95,7 +95,7 @@ test("failed model hides artifacts and links cancellation/retry task", async () 
     task_id: "worker",
   });
   const { wrapper } = await view(ModelPage, "Viewer", "/model-runs/failed");
-  expect(wrapper.text()).toContain("尚无可用研究模型");
+  expect(wrapper.text()).toContain("还没有可用的模型");
   expect(wrapper.find('a[href="/tasks/worker"]').exists()).toBe(true);
   expect(wrapper.findAll("button").some((b) => b.text().includes("下载"))).toBe(
     false,
