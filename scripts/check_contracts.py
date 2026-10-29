@@ -36,8 +36,8 @@ def main():
                     raise RuntimeError(f"Broken link in {path.relative_to(ROOT)}: {target}")
     api = (ROOT / "docs/04-API与数据库规格.md").read_text(encoding="utf-8")
     ids = re.findall(r"^\| (A\d+) \|", api, flags=re.M)
-    if len(ids) != 37 or set(ids) != {f"A{i:02}" for i in range(1, 38)}:
-        raise RuntimeError("Documented API inventory must contain A01 through A37 exactly once")
+    if len(ids) != 38 or set(ids) != {f"A{i:02}" for i in range(1, 39)}:
+        raise RuntimeError("Documented API inventory must contain A01 through A38 exactly once")
     application = create_app(load_settings(environment="test"))
     generated = (
         json.dumps(application.openapi(), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
@@ -47,7 +47,7 @@ def main():
         CONTRACT.write_text(generated, encoding="utf-8")
     elif not CONTRACT.exists() or CONTRACT.read_text(encoding="utf-8") != generated:
         raise RuntimeError("OpenAPI drift: export and review the contract with --export")
-    print(f"PASS {links} local links, 37 API IDs, bootstrap OpenAPI contract")
+    print(f"PASS {links} local links, 38 API IDs, bootstrap OpenAPI contract")
 
 
 if __name__ == "__main__":

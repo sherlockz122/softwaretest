@@ -1,11 +1,36 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Path, Query, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from apps.api.auth import current_user
+from packages.auth.security import require_role
 from packages.semantic import asset_catalog
+from packages.semantic.asset_reader import ConsumptionError
+from packages.semantic.verification import VerificationService
 
 router = APIRouter(prefix="/api/v1/semantic-assets", tags=["semantic-assets"])
+
+
+async def verification_actor(request: Request, user=Depends(current_user)):
+    require_role(user, "Member")
+    async for chunk in request.stream():
+        if chunk:
+            raise ConsumptionError("SEMANTIC_TASK_INVALID_INPUT", 422)
+    return user
+
+
+@router.post("/{asset_id}/verifications", status_code=202)
+def verification(
+    asset_id: Annotated[str, Path(pattern="^[0-9a-f]{64}$")],
+    request: Request,
+    response: Response,
+    user=Depends(verification_actor),
+    key: str = Header(alias="Idempotency-Key"),
+):
+    response.headers["Cache-Control"] = "no-store"
+    return VerificationService(request.app.state.settings, request.app.state.connections).create(
+        user, key, asset_id, request.state.request_id
+    )
 
 
 @router.get("")

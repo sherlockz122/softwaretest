@@ -1,15 +1,21 @@
 <script setup>
-import { onUnmounted, watch } from "vue";
+import { computed, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { active, date, labels } from "../task-tools";
+import { active, date, labels, taskTypes } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 import TaskActions from "../components/TaskActions.vue";
 const route = useRoute();
 const router = useRouter();
 const task = useLatest((id, signal) =>
   client.request("/tasks/" + encodeURIComponent(id), { signal }),
+);
+const requiresNewVerification = computed(
+  () =>
+    task.data.value?.type === "semantic.verify" &&
+    task.data.value.status === "failed" &&
+    task.data.value.error?.code === "SEMANTIC_TASK_BINDING_CONFLICT",
 );
 watch(
   () => route.params.id,
@@ -40,6 +46,11 @@ onUnmounted(() => clearInterval(poll));
       >查看来源数据集</RouterLink
     >
     <RouterLink to="/tasks">← 返回任务中心</RouterLink>
+    <RouterLink
+      v-if="task.data.value?.semantic_asset_id && !task.error.value"
+      :to="`/semantic-assets/${task.data.value.semantic_asset_id}`"
+      >查看来源语义资产</RouterLink
+    >
     <div class="section-heading">
       <h1>任务详情</h1>
       <button
@@ -63,7 +74,7 @@ onUnmounted(() => clearInterval(poll));
       </p>
       <dl class="task-facts">
         <dt>类型</dt>
-        <dd>{{ task.data.value.type }}</dd>
+        <dd>{{ taskTypes[task.data.value.type] || task.data.value.type }}</dd>
         <dt>阶段</dt>
         <dd>{{ task.data.value.stage }}</dd>
         <dt>进度</dt>
@@ -102,12 +113,27 @@ onUnmounted(() => clearInterval(poll));
         }}</RouterLink>
       </p>
       <div v-if="task.data.value.error" role="alert" class="error">
-        <p>{{ task.data.value.error.message }}</p>
+        <p v-if="requiresNewVerification">
+          固定输入或校验程序版本已变化，请由任务创建者从来源资产创建新的校验任务。
+        </p>
+        <p v-else>{{ task.data.value.error.message }}</p>
         <small>错误编号：{{ task.data.value.error.code }}</small
         ><small>请求编号：{{ task.data.value.error.request_id }}</small>
       </div>
       <div v-if="task.data.value.result" class="result">
         <h2>执行结果</h2>
+        <template v-if="task.data.value.type === 'semantic.verify'">
+          <p>
+            完整性校验通过：{{ task.data.value.result.shape[0] }} 条 ×
+            {{ task.data.value.result.shape[1] }} 维；train
+            {{ task.data.value.result.partitions.train }} / validation
+            {{ task.data.value.result.partitions.validation }}。
+          </p>
+          <p>核验时间：{{ date(task.data.value.result.verified_at) }}</p>
+          <p>
+            这是一次检查的结果，不保证资产之后永不变化，也不授予训练、历史或候选发布资格。
+          </p>
+        </template>
         <p
           v-if="task.data.value.result.disposition === 'requires_review'"
           role="alert"
@@ -123,6 +149,7 @@ onUnmounted(() => clearInterval(poll));
         <pre>{{ JSON.stringify(task.data.value.result, null, 2) }}</pre>
       </div>
       <TaskActions
+        v-if="!requiresNewVerification"
         :key="task.data.value.id"
         :task="task.data.value"
         @changed="task.load(route.params.id)"

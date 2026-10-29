@@ -1,6 +1,14 @@
 import { reactive } from "vue";
 
 const messages = {
+  SEMANTIC_TASK_BINDING_CONFLICT:
+    "固定资产或校验程序版本发生变化，请核对后创建新的校验任务。",
+  SEMANTIC_TASK_INVALID_INPUT:
+    "校验任务不接收文件或额外内容，请刷新资产页面后重试。",
+  SEMANTIC_ASSET_DRIFT: "语义资产内容与固定摘要不符，请联系管理员核对来源。",
+  SEMANTIC_ASSET_UNAVAILABLE: "语义资产暂不可用，请核对部署和存储后重试。",
+  SEMANTIC_ASSET_NOT_FOUND: "语义资产不存在，请返回资产列表。",
+  SEMANTIC_ASSET_DEADLINE: "校验达到时限，请核对存储和资产后重试。",
   MODEL_DATASET_NOT_READY: "数据集尚未发布，请等待其完成后训练。",
   MODEL_DATASET_INCOMPATIBLE:
     "数据集用途或特征不兼容，请选择已发布的研究十二指标数据。",

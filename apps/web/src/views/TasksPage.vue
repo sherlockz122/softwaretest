@@ -3,12 +3,15 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { date, labels, operationKeys } from "../task-tools";
+import { date, labels, operationKeys, taskTypes } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const router = useRouter();
 const status = computed(() =>
   Object.hasOwn(labels, route.query.status) ? route.query.status : "",
+);
+const kind = computed(() =>
+  Object.hasOwn(taskTypes, route.query.type) ? route.query.type : "",
 );
 const page = computed(() =>
   Math.max(1, Number.parseInt(route.query.page, 10) || 1),
@@ -26,6 +29,7 @@ const canCreate = computed(() =>
 const query = computed(() =>
   new URLSearchParams({
     ...(status.value ? { status: status.value } : {}),
+    ...(kind.value ? { type: kind.value } : {}),
     page: page.value,
     page_size: 10,
   }).toString(),
@@ -36,13 +40,24 @@ const poll = setInterval(() => {
     list.load(query.value);
 }, 3000);
 onUnmounted(() => clearInterval(poll));
-function filter(value) {
-  router.replace({ path: "/tasks", query: value ? { status: value } : {} });
+function filter(value, field = "status") {
+  router.replace({
+    path: "/tasks",
+    query: {
+      status: status.value || undefined,
+      type: kind.value || undefined,
+      [field]: value || undefined,
+    },
+  });
 }
 function paginate(value) {
   router.replace({
     path: "/tasks",
-    query: { status: status.value || undefined, page: value },
+    query: {
+      status: status.value || undefined,
+      type: kind.value || undefined,
+      page: value,
+    },
   });
 }
 async function create() {
@@ -103,6 +118,17 @@ async function create() {
     <p v-else class="hint">Viewer 仅可查看任务，创建需要 Member 或 Admin。</p>
     <RequestError :error="failure" />
     <div class="filters">
+      <label for="task-type">任务类型</label>
+      <select
+        id="task-type"
+        :value="kind"
+        @change="filter($event.target.value, 'type')"
+      >
+        <option value="">全部类型</option>
+        <option v-for="(label, key) in taskTypes" :key="key" :value="key">
+          {{ label }}
+        </option>
+      </select>
       <label for="status">状态筛选</label
       ><select
         id="status"
@@ -143,7 +169,7 @@ async function create() {
             <tr v-for="task in list.data.value.items" :key="task.id">
               <td>
                 <RouterLink :to="'/tasks/' + task.id">{{ task.id }}</RouterLink
-                ><small>{{ task.type }}</small>
+                ><small>{{ taskTypes[task.type] || task.type }}</small>
               </td>
               <td>
                 <span :class="['badge', task.status]">{{

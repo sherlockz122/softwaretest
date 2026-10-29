@@ -1,12 +1,20 @@
 <script setup>
-import { ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
 import RequestError from "../components/RequestError.vue";
+import { operationKeys } from "../task-tools";
 const route = useRoute();
+const router = useRouter();
 const page = ref(1);
 const partition = ref("");
+const creating = ref(false);
+const creationError = ref(null);
+const keys = operationKeys();
+const canCreate = computed(() =>
+  ["Member", "Admin"].includes(client.state.user?.role),
+);
 const detail = useLatest(({ id, page, partition }, signal) =>
   client.request(
     `/semantic-assets/${encodeURIComponent(id)}?offset=${(page - 1) * 20}&limit=20${partition ? `&partition=${partition}` : ""}`,
@@ -20,11 +28,34 @@ function load() {
     partition: partition.value,
   });
 }
+async function verifyAsset() {
+  if (creating.value || !canCreate.value) return;
+  const identity = route.params.id;
+  creating.value = true;
+  creationError.value = null;
+  try {
+    const result = await client.request(
+      `/semantic-assets/${encodeURIComponent(identity)}/verifications`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": keys.get("verify", identity) },
+      },
+    );
+    keys.done("verify", identity);
+    if (route.params.id === identity)
+      await router.push("/tasks/" + result.task_id);
+  } catch (error) {
+    if (route.params.id === identity) creationError.value = error;
+  } finally {
+    creating.value = false;
+  }
+}
 watch(
   () => route.params.id,
   () => {
     page.value = 1;
     partition.value = "";
+    creationError.value = null;
     load();
   },
   { immediate: true },
@@ -45,6 +76,7 @@ watch(page, load);
       </button>
     </div>
     <RequestError :error="detail.error.value" />
+    <RequestError :error="creationError" />
     <p v-if="detail.loading.value" role="status">正在核验并加载…</p>
     <template
       v-if="detail.data.value && !detail.loading.value && !detail.error.value"
@@ -74,6 +106,12 @@ watch(page, load);
       </ul>
       <p>
         当前仅供研究查看，不能据此训练或发布产品模型。结构核验不证明变更已完整覆盖或模型有效。
+      </p>
+      <button v-if="canCreate" :disabled="creating" @click="verifyAsset">
+        {{ creating ? "提交中…" : "创建完整性校验任务" }}
+      </button>
+      <p class="hint">
+        校验任务会保存本次检查结果，支持取消和重试；结果不改变资产的训练或发布资格。
       </p>
     </template>
     <label

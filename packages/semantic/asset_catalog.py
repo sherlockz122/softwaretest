@@ -8,6 +8,7 @@ from uuid import uuid4
 from packages.mining import public_assets as assets
 from packages.mining.source_evidence import content_hash
 from packages.semantic import asset_reader as reader
+from packages.semantic.asset_lock import publication
 
 STORE = assets.ROOT / "runtime/semantic-assets"
 VERSION = "semantic-asset-read-v1"
@@ -198,23 +199,13 @@ def install(source, expected, *, store=None, budget=None):
                 "SEMANTIC_ASSET_DRIFT",
             )
         budget.check()
-        lock = reader.safe(store / ".publication-lock")
-        try:
-            descriptor = lock.open("xb")
-        except FileExistsError as exc:
-            raise reader.ConsumptionError("SEMANTIC_ASSET_INSTALL_BUSY") from exc
-        try:
-            with descriptor:
-                budget.check()
-                if target.exists():
-                    reader.require(
-                        verify(target, budget=budget)[0] == data, "SEMANTIC_ASSET_CONFLICT"
-                    )
-                else:
-                    reader.require(len(catalog_ids(store)) < 64, "SEMANTIC_ASSET_CATALOG_LIMIT")
-                    attempt.rename(target)
-        finally:
-            lock.unlink()
+        with publication(store):
+            budget.check()
+            if target.exists():
+                reader.require(verify(target, budget=budget)[0] == data, "SEMANTIC_ASSET_CONFLICT")
+            else:
+                reader.require(len(catalog_ids(store)) < 64, "SEMANTIC_ASSET_CATALOG_LIMIT")
+                attempt.rename(target)
         return target
 
     return _checked(work)

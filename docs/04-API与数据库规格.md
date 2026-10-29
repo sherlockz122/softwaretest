@@ -70,6 +70,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 | A35 | `POST /tasks/diagnostic` | 开发环境受限诊断任务 | Member，仅 development/test |
 | A36 | `GET /semantic-assets` | 已安装受限研究语义资产列表（清单校验） | Viewer |
 | A37 | `GET /semantic-assets/{asset_id}` | 有界成员及覆盖详情（完整负载校验） | Viewer |
+| A38 | `POST /semantic-assets/{asset_id}/verifications` | 对既有资产发起可靠完整性校验任务 | Member |
 
 ## 4 关键请求与响应
 
@@ -413,3 +414,11 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 A36 GET /semantic-assets（page>=1，page_size<=100）返回确定性hash序的已安装研究资产摘要、total/page/page_size及受限用途；列表校验receipt/原始manifest，不声称矩阵当前完整性。A37 GET /semantic-assets/{asset_id}仅64位小写hex，offset>=0/limit<=100及partition=train或validation可选，完整核验原始三负载及schema后返回摘要和有界成员/coverage/total，不返回向量、文本、路径、依赖详情。Viewer/Member/Admin均用既有有效会话只读；无HTTP写入/下载/发布端点。不存在404、非法参数422、不可用/漂移409语义安全码。schema仍0011，无新表。操作员安装与在线长任务明确分开，未来语义任务/API另设计。 见[资产读取指导](development/语义资产读取与验收.md)。
 
 本切片实现与本机验收已完成，实现自身SHA CI已成功；最终文档提交的独立CI和后验证明实际完成后才记本批交付。当前资格/未完成故事不随其晋升，确切提交与状态见[本批报告](reports/2026-10-29-第三十阶段语义资产读取报告.md)。
+
+## 第三十一阶段A38/任务合同（本机通过，交付CI仍后验）
+
+A38 POST /semantic-assets/{asset_id}/verifications仅64位小写hex ID及必需Idempotency-Key，拒绝非空请求正文；活动Member/Admin创建、Viewer只读。返回202 task_id/status；原键同ID重放同任务，异ID冲突，当前授权先于文件观察。无服务器路径/上传字段。固定receipt/原来源/读取规则及消费执行源摘要存既有async_task.payload，type=semantic.verify；无新表/迁移，schema0011保持。
+
+A29/A30增加semantic.verify类型和semantic_asset_id/安全结果，A31/A32沿用Owner/Admin与有限后继。Worker只读负载，60秒协作检查/心跳/取消/版本与漂移拒绝，成功及审计在有效token和未过期租约事务中一起提交；数据库故障沿用租约恢复。结果只含固定hash/版本/维度/分区/核验时点/不变受限能力，不含向量/文本/路径或依赖明细。只记录一次完整性通过，不认证训练/发布。完整合同见[指导](development/语义校验任务与验收.md)。
+
+第三十一批完整本机1116及另8存储保护、实际660任务/安装/恢复、原模型/数据/审核/用户保护和保卷停服已核验，未提升产品/来源资格；实现与最终文档各自确切SHA CI及最终后验证明仍后验，见[本批报告](reports/2026-10-29-第三十一阶段语义校验任务报告.md)。

@@ -20,6 +20,7 @@ from packages.persistence.models import (
     TaskOutbox,
     User,
 )
+from packages.tasks.kinds import TYPES
 
 STATES = {"queued", "running", "cancel_requested", "succeeded", "failed", "cancelled"}
 
@@ -86,6 +87,11 @@ def public(task, timestamp):
         "retry_of": task.retry_of,
         **({"dataset_id": task.root_task_id} if task.type == "dataset.build" else {}),
         **({"model_run_id": task.root_task_id} if task.type == "model.train" else {}),
+        **(
+            {"semantic_asset_id": task.payload["asset_id"]}
+            if task.type == "semantic.verify"
+            else {}
+        ),
         "result": task.result_json,
         "error": {
             "code": task.error_code,
@@ -238,18 +244,7 @@ class TaskService:
             return public(task, database_now(db))
 
     def listing(self, kind=None, status=None, page=1, page_size=20):
-        if kind not in {
-            None,
-            "diagnostic",
-            "dataset.build",
-            "model.train",
-            "repository.clone",
-            "repository.parse",
-            "repository.sync",
-            "repository.fix",
-            "repository.szz",
-            "repository.feature",
-        } or status not in STATES | {None}:
+        if (kind is not None and kind not in TYPES) or status not in STATES | {None}:
             raise TaskError(422, "TASK_INVALID_INPUT")
         with Session(self.engine) as db, db.begin():
             conditions = []
@@ -357,17 +352,7 @@ class TaskService:
             timestamp = database_now(db)
             if not task or task.status != "queued" or task.queued_deadline <= timestamp:
                 return None
-            if task.type not in {
-                "diagnostic",
-                "dataset.build",
-                "model.train",
-                "repository.clone",
-                "repository.parse",
-                "repository.sync",
-                "repository.fix",
-                "repository.szz",
-                "repository.feature",
-            }:
+            if task.type not in TYPES:
                 self.terminal(db, task, "failed", "TASK_UNKNOWN_TYPE")
                 audit(db, task, "task.failed")
                 return None

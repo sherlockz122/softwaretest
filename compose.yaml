@@ -116,6 +116,7 @@ services:
       - "${DG_PUBLIC_ASSET_DIR:-./runtime/public-assets}:/app/runtime/public-assets:ro"
       - "${DG_DATASET_DATA_DIR:-./runtime/datasets}:/app/runtime/datasets"
       - "${DG_MODEL_DATA_DIR:-./runtime/models}:/app/runtime/models"
+      - "${DG_SEMANTIC_ASSET_DIR:-./runtime/semantic-assets}:/app/runtime/semantic-assets:ro"
     command: ["python", "-m", "celery", "-A", "apps.worker.main:app", "worker", "--loglevel=WARNING", "--concurrency=1", "--hostname=defectguard@%h"]
     depends_on:
       model-init: {condition: service_completed_successfully}

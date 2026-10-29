@@ -14,6 +14,7 @@ from packages.repositories.parser import ParseExecutor
 from packages.repositories.parsing import ParsingService
 from packages.repositories.service import RepositoryService
 from packages.repositories.sync import SyncExecutor, SyncService
+from packages.semantic.verification import VerificationService
 from packages.tasks.service import TaskService
 
 
@@ -31,7 +32,9 @@ def execute(task_id):
             return
         token, duration = claim
         if isinstance(duration, dict):
-            if "model_version" in duration:
+            if "semantic_verification_version" in duration:
+                VerificationService(settings, connections).run(task_id, token, duration)
+            elif "model_version" in duration:
                 ModelService(settings, connections).run(task_id, token, duration)
             elif "dataset_version" in duration:
                 DatasetService(settings, connections).run(task_id, token, duration)

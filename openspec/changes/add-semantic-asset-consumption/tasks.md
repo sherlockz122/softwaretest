@@ -5,4 +5,4 @@
 ## 2. Actual acceptance and delivery
 - [x] 2.1 Install actual660, independently compare all values/files, fresh-process allocation/RSS, duplicate import and isolated restore; retain failures and qualification limits.
 - [x] 2.2 Run complete backend/fault, isolatedCPU, frontend and fresh-volume browser regressions; source/data/review/user guards and independent backups, static/strict/contracts/audit and separate original8storage checks; stop normal deployment preserving business volumes.
-- [ ] 2.3 Only wang ordinary delivery; implementation and final documentation own-SHA full CIs; posterior proof and next-batch handoff before continuing. Do not mark whole product complete.
+- [x] 2.3 Only wang ordinary delivery; implementation and final documentation own-SHA full CIs; posterior proof and next-batch handoff before continuing. Do not mark whole product complete.

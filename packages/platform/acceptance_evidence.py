@@ -4,20 +4,11 @@ import json
 import re
 from uuid import UUID
 
+from packages.tasks.kinds import TYPES
+
 VERSION = "fresh-task-evidence-v1"
 LIMIT = 1000
 MAX_BYTES = 256 * 1024
-TYPES = {
-    "diagnostic",
-    "dataset.build",
-    "model.train",
-    "repository.clone",
-    "repository.parse",
-    "repository.sync",
-    "repository.fix",
-    "repository.szz",
-    "repository.feature",
-}
 STATES = {"queued", "running", "cancel_requested", "succeeded", "failed", "cancelled"}
 FIELDS = {"id", "root_task_id", "type", "status", "error_code"}
 

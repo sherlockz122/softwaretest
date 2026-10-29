@@ -2246,6 +2246,61 @@
         ]
       }
     },
+    "/api/v1/semantic-assets/{asset_id}/verifications": {
+      "post": {
+        "operationId": "verification_api_v1_semantic_assets__asset_id__verifications_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Asset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Verification",
+        "tags": [
+          "semantic-assets"
+        ]
+      }
+    },
     "/api/v1/szz-runs/{run_id}/links": {
       "get": {
         "operationId": "szz_links_api_v1_szz_runs__run_id__links_get",
