@@ -2,7 +2,16 @@
 import { computed, ref, watch } from "vue";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { operationKeys, date } from "../task-tools";
+import { operationKeys, date, shortId } from "../task-tools";
+import {
+  confidenceNames,
+  fixEvidenceType,
+  fixExclusion,
+  fixReview,
+  fixStatus,
+  label,
+  ruleVersions,
+} from "../terms";
 import RequestError from "./RequestError.vue";
 const props = defineProps({
   repo: { type: Object, required: true },
@@ -31,20 +40,13 @@ const evidence = useLatest((input, signal) =>
     { signal },
   ),
 );
-const labels = {
-  pending: "未识别",
-  queued: "识别排队中",
-  detecting: "识别中",
-  detected: "识别完成",
-  failed: "识别失败",
-  cancelled: "识别已取消",
-};
-const reviewLabels = {
-  unreviewed: "待复核",
-  confirmed: "人工确认",
-  rejected: "人工拒绝",
-};
-const confidenceLabels = { high: "高", medium: "中", low: "低" };
+function evidenceText(item) {
+  const value =
+    item.type === "exclusion"
+      ? label(fixExclusion, item.value)
+      : item.value ?? "";
+  return `${label(fixEvidenceType, item.type)}：${value}`;
+}
 const canStart = computed(
   () =>
     props.canWrite &&
@@ -179,10 +181,10 @@ async function review(row, status) {
 </script>
 <template>
   <section data-testid="fix-panel">
-    <h2>Fix 修复证据</h2>
-    <p data-testid="fix-status">{{ labels[repo.fix_status] }}</p>
+    <h2>第二步：找出疑似修复的提交</h2>
+    <p data-testid="fix-status">{{ label(fixStatus, repo.fix_status) }}</p>
     <p class="hint">
-      证据与人工复核用于识别候选修复；没有证据不代表干净提交。SZZ 标签尚未生成。
+      这一步按提交说明里的关键词、以及关联的缺陷单，找出看起来是在修 bug 的提交，并为每条判断留下依据。没有找到依据，只说明这次没找到证据，不能断定这条提交没有问题。
     </p>
     <form v-if="canStart" class="create-task" @submit.prevent="start">
       <label
@@ -190,17 +192,18 @@ async function review(row, status) {
           v-model="includeMedium"
           type="checkbox"
           :disabled="sending || busy"
-        />纳入中等级关键词候选</label
+        />中等把握的提交也算作疑似修复</label
       >
       <button class="primary" :disabled="sending || busy">
-        {{ sending ? "提交中…" : "运行 Fix 识别" }}
+        {{ sending ? "提交中…" : "开始找出疑似修复的提交" }}
       </button>
     </form>
     <p v-if="!canWrite" class="hint">
-      Viewer 可查看证据；运行与复核需要 Member 或 Admin。
+      Viewer（只读账号）可以查看判断依据；开始识别和人工复核需要 Member 或
+      Admin 账号（普通成员或管理员）。
     </p>
     <p v-if="['failed', 'cancelled'].includes(repo.fix_status)" class="hint">
-      已提交证据保留，可在当前任务重试；新分析将保留此前结果。
+      这次没跑完，已有的识别结果还留着；可以直接重试，新一轮会保留之前的结果。
     </p>
     <RequestError :error="failure" />
     <RequestError :error="runs.error.value" />
@@ -210,16 +213,20 @@ async function review(row, status) {
       data-testid="fix-runs"
     >
       <li v-for="run in runs.data.value.items" :key="run.root_task_id">
-        <p class="task-id">{{ run.head_sha ?? "空历史" }}</p>
+        <p class="task-id">{{ shortId(run.head_sha) || "空历史" }}</p>
         <small
-          >{{ run.rule_version }} · 中等级{{
-            run.include_medium ? "纳入" : "不纳入"
+          >规则版本 {{ label(ruleVersions, run.rule_version) }} · {{
+            run.include_medium ? "中等把握也算" : "只算有把握的"
           }}
-          · {{ run.processed }} / {{ run.total ?? "待扫描" }} ·
+          · 已检查 {{ run.processed }} / {{ run.total ?? "待扫描" }} 个提交 ·
           {{ date(run.created_at) }}</small
         >
         <button @click="select(run)">
-          {{ selectedRun === run.root_task_id ? "当前分析" : "查看此轮证据" }}
+          {{
+            selectedRun === run.root_task_id
+              ? "正在查看这一轮"
+              : "查看这一轮的判断"
+          }}
         </button>
       </li>
     </ul>
@@ -228,14 +235,14 @@ async function review(row, status) {
         :disabled="runsPage <= 1 || runs.loading.value"
         @click="runsPage--"
       >
-        上一页分析
+        上一页识别
       </button>
-      <span>共 {{ runs.data.value.total }} 轮分析</span>
+      <span>共 {{ runs.data.value.total }} 轮识别</span>
       <button
         :disabled="runsPage * 10 >= runs.data.value.total || runs.loading.value"
         @click="runsPage++"
       >
-        下一页分析
+        下一页识别
       </button>
     </div>
     <RequestError :error="evidence.error.value" />
@@ -244,14 +251,14 @@ async function review(row, status) {
       data-testid="fix-evidence"
     >
       <p>
-        {{ evidence.data.value.run.rule_version }} ·
-        {{ evidence.data.value.total }} 个已判定提交；仅展示成功提交的批次。
+        规则版本 {{ evidence.data.value.run.rule_version }} · 这一轮判定了
+        {{ evidence.data.value.total }} 个提交；识别还在进行时，这里只显示已经判完的部分。
       </p>
       <p
         v-if="evidence.data.value.run.history_coverage === 'recent_window'"
         class="hint"
       >
-        此轮包含有限历史，不能代表完整仓库历史。
+        这一轮只覆盖了最近一段历史，不代表整个仓库的完整历史。
       </p>
       <ul class="repository-list">
         <li
@@ -259,30 +266,31 @@ async function review(row, status) {
           :key="row.id"
           data-testid="fix-assessment"
         >
-          <code class="task-id">{{ row.sha }}</code>
+          <code class="task-id" :title="row.sha">{{ shortId(row.sha) }}</code>
           <p>
-            {{ row.candidate ? "候选修复" : "未纳入候选" }} ·
-            {{ reviewLabels[row.review_status] }}
+            {{ row.candidate ? "疑似是修复" : "看起来不是修复" }} ·
+            {{ label(fixReview, row.review_status) }}
           </p>
           <p v-if="!row.content_complete" class="hint">
-            存在略过或不可用内容，后续行级分析需要检查。
+            这条提交里有内容没读到（文件太大或格式不支持），后面的追溯可能不完整。
           </p>
-          <p v-if="!row.evidence.length">未发现证据，不能据此判定干净提交。</p>
+          <p v-if="!row.evidence.length">
+            没有找到修复依据；但没找到不等于这条提交没有问题。
+          </p>
           <ul>
             <li v-for="(item, index) in row.evidence" :key="index">
-              {{ confidenceLabels[item.confidence] }}等级 · {{ item.type }}：{{
-                item.value
-              }}<small v-if="item.source.status"
-                >Issue 观测：{{ item.source.status }} ·
+              {{ label(confidenceNames, item.confidence) }}把握 ·
+              {{ evidenceText(item) }}<small v-if="item.source.status"
+                >缺陷单状态：{{ item.source.status }} · 记录时间
                 {{ item.source.observed_at }}</small
               >
             </li>
           </ul>
           <p v-if="row.review_note">复核理由：{{ row.review_note }}</p>
           <details v-if="row.review_history.length">
-            <summary>复核记录（最近20次）</summary>
+            <summary>复核历史（最近 20 次）</summary>
             <p v-for="item in row.review_history" :key="item.revision">
-              第 {{ item.revision }} 次 · {{ reviewLabels[item.status] }}：{{
+              第 {{ item.revision }} 次 · {{ label(fixReview, item.status) }}：{{
                 item.note
               }}
             </p>
@@ -297,16 +305,16 @@ async function review(row, status) {
             />
             <div class="pagination">
               <button :disabled="!!reviewing" @click="review(row, 'confirmed')">
-                确认修复
+                确认是修复
               </button>
               <button :disabled="!!reviewing" @click="review(row, 'rejected')">
-                拒绝候选
+                否定这条候选
               </button>
               <button
                 :disabled="!!reviewing"
                 @click="review(row, 'unreviewed')"
               >
-                恢复待复核
+                改回未复核
               </button>
             </div>
           </div>
@@ -317,7 +325,7 @@ async function review(row, status) {
           :disabled="evidencePage <= 1 || evidence.loading.value"
           @click="evidencePage--"
         >
-          上一页证据
+          上一页
         </button>
         <span>第 {{ evidencePage }} 页</span>
         <button
@@ -327,7 +335,7 @@ async function review(row, status) {
           "
           @click="evidencePage++"
         >
-          下一页证据
+          下一页
         </button>
       </div>
     </div>

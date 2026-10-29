@@ -18,9 +18,11 @@ onMounted(() => check.load());
 </script>
 <template>
   <section>
-    <p class="eyebrow">工程基础</p>
+    <p class="eyebrow">环境自检</p>
     <h1>开发环境连接检查</h1>
-    <p>检查 API、MySQL、Redis 和数据库迁移。任务执行状态可在任务中心查看。</p>
+    <p>
+      检查网站后台接口、数据库、缓存，以及数据结构是不是最新版本。后台任务的执行情况可以在任务中心查看。
+    </p>
     <div role="status">
       <p v-if="check.loading.value">正在检查连接…</p>
       <p v-else-if="check.error.value">

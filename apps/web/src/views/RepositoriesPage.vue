@@ -18,11 +18,11 @@ const creating = ref(false);
 const failure = ref(null);
 const keys = operationKeys();
 const labels = {
-  queued: "排队中",
-  cloning: "克隆中",
-  cloned: "已克隆",
-  failed: "失败",
-  cancelled: "已取消",
+  queued: "排队等待下载",
+  cloning: "正在下载",
+  cloned: "已下载",
+  failed: "下载失败",
+  cancelled: "下载已取消",
 };
 const canCreate = computed(() =>
   ["Admin", "Member"].includes(client.state.user?.role),
@@ -65,8 +65,7 @@ async function create() {
       </button>
     </div>
     <p>
-      添加公开 HTTPS Git 仓库，完成克隆后可查看默认分支和
-      HEAD，并在仓库详情启动提交解析。
+      把公开的 Git 仓库地址贴进来，系统会把它下载到本机。下载完成后点进详情页，就能一步步做后面的分析。
     </p>
     <form v-if="canCreate" class="create-task" @submit.prevent="create">
       <div>
@@ -82,14 +81,19 @@ async function create() {
         />
       </div>
       <button class="primary" :disabled="creating">
-        {{ creating ? "校验并提交中…" : "添加仓库" }}
+        {{ creating ? "正在提交…" : "添加仓库" }}
       </button>
     </form>
-    <p v-else class="hint">Viewer 可查看仓库；添加需要 Member 或 Admin。</p>
+    <p v-else class="hint">
+      Viewer（只读账号）可查看仓库；添加仓库需要 Member 或 Admin
+      账号（普通成员或管理员）。
+    </p>
     <RequestError :error="failure" /><RequestError :error="list.error.value" />
     <p v-if="list.loading.value" role="status">正在读取仓库…</p>
     <div v-if="list.data.value && !list.error.value">
-      <p v-if="!list.data.value.total">尚未添加仓库。</p>
+      <p v-if="!list.data.value.total">
+        还没有添加过仓库。在上面填入仓库地址就能开始。
+      </p>
       <ul class="repository-list">
         <li v-for="repo in list.data.value.items" :key="repo.id">
           <RouterLink :to="'/repositories/' + repo.id">{{

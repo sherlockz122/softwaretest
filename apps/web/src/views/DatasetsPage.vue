@@ -59,54 +59,64 @@ async function create() {
 <template>
   <section>
     <div class="section-heading">
-      <h1>数据集</h1>
+      <h1>研究数据集</h1>
       <button :disabled="list.loading.value" @click="list.load(page)">
-        刷新数据集
+        刷新
       </button>
     </div>
     <p>
-      保存可复现的研究数据版本，按来源、用途和固定分区追溯。研究使用原发布的弱监督标签，尚未具备历史回放、模型发布或缺陷类型认证。
+      这里保存每次生成的数据集，之后可以回来对照。每个数据集都记录了数据从哪来、按什么规则切开；标签用的是原公开数据自带的判断（由规则生成，不是人工逐个确认）。
     </p>
     <RequestError :error="list.error.value || error" />
     <form v-if="canCreate" @submit.prevent="create">
       <label
-        >数据集名称<input
+        >起个名字<input
           v-model="name"
           maxlength="80"
           required
           :disabled="creating"
       /></label>
       <label
-        >公开数据来源<select v-model="assetId" required :disabled="creating">
-          <option value="">请选择已保存数据</option>
+        >用哪份公开数据<select v-model="assetId" required :disabled="creating">
+          <option value="">请选择已保存的数据</option>
           <option
             v-for="asset in assets"
             :key="asset.asset_id"
             :value="asset.asset_id"
           >
-            {{ asset.asset_id.slice(0, 12) }} · {{ asset.rows }} 条
+            {{ asset.rows }} 行数据 · 编号 {{ asset.asset_id.slice(0, 8) }}
           </option>
         </select></label
       >
       <label
-        >分区策略<select v-model="strategy" :disabled="creating">
-          <option value="time_ordered">按时间顺序（同时间组不拆分）</option>
-          <option value="repository_holdout">按独立仓库留出</option>
+        >怎么划分训练 / 验证 / 测试<select
+          v-model="strategy"
+          :disabled="creating"
+        >
+          <option value="time_ordered">
+            按时间先后（同一时间段的提交不拆开）
+          </option>
+          <option value="repository_holdout">
+            按仓库划分（留出独立仓库做测试）
+          </option>
         </select></label
       >
       <p>
-        用途：公开二分类研究 · 12项数值指标 · 默认70% / 15% /
-        15%。完整源和两类条件由后台任务验证，数据集原子完成后才能导出。
+        每个数据集用 12 项数值指标，默认按 70% / 15% / 15%
+        分成训练、验证、测试三份。后台会核对数据来源和两类的数量，全部完成后才能下载。
       </p>
       <button :disabled="creating || !assetId || !name.trim()">
-        {{ creating ? "正在提交…" : "创建研究数据集" }}
+        {{ creating ? "正在提交…" : "生成研究数据集" }}
       </button>
       <p v-if="!assets.length && !list.loading.value">
-        目前没有可选公开数据，请先完成数据导入。
+        目前没有可用的公开数据，需要先把数据导入。
       </p>
     </form>
-    <p v-else>当前账号可查看数据集；创建需要Member或Admin权限。</p>
-    <p v-if="list.loading.value" role="status">正在加载…</p>
+    <p v-else>
+      当前账号可以查看数据集；生成数据集需要 Member 或 Admin
+      账号（普通成员或管理员）。
+    </p>
+    <p v-if="list.loading.value" role="status">正在读取…</p>
     <p v-if="list.data.value?.items.length" class="hint">
       窄屏下可左右滚动表格，查看全部列；键盘用户可聚焦表格后使用方向键。
     </p>
@@ -123,7 +133,7 @@ async function create() {
             <th>名称</th>
             <th>用途</th>
             <th>状态</th>
-            <th>成员</th>
+            <th>进度（已处理 / 总数）</th>
             <th>创建时间</th>
           </tr>
         </thead>
@@ -142,7 +152,7 @@ async function create() {
         </tbody>
       </table>
     </div>
-    <p v-else-if="list.data.value">尚无数据集。</p>
+    <p v-else-if="list.data.value">还没有生成过数据集。</p>
     <div class="actions">
       <button :disabled="page <= 1 || list.loading.value" @click="page--">
         上一页</button

@@ -39,27 +39,27 @@ test("new-volume LR/RF research registers and downloads checked artifacts", asyn
   await login(page);
   // Build our own small fixed dataset; do not depend on another test's side effects.
   await page.getByRole("link", { name: "数据集", exact: true }).click();
-  await page.getByLabel("数据集名称").fill("模型独立验收数据");
-  await page.getByLabel("公开数据来源").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "创建研究数据集" }).click();
-  await expect(page.getByRole("heading", { name: "限定研究就绪" })).toBeVisible(
+  await page.getByLabel("起个名字").fill("模型独立验收数据");
+  await page.getByLabel("用哪份公开数据").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "生成研究数据集" }).click();
+  await expect(page.getByRole("heading", { name: "数据集已可用" })).toBeVisible(
     { timeout: 60000 },
   );
   const id = page.url().split("/").at(-1);
   for (const plugin of ["lr", "rf"]) {
     await page.getByRole("link", { name: "模型研究", exact: true }).click();
-    await page.getByLabel("已发布数据集").selectOption(id);
-    await page.getByLabel("算法").selectOption(plugin);
-    await page.getByRole("button", { name: "开始研究训练" }).click();
+    await page.getByLabel("用哪个数据集").selectOption(id);
+    await page.getByLabel("用哪种模型").selectOption(plugin);
+    await page.getByRole("button", { name: "开始训练" }).click();
     await expect(
-      page.getByRole("heading", { name: "研究工件已注册" }),
+      page.getByRole("heading", { name: "模型已生成" }),
     ).toBeVisible({ timeout: 45000 });
     await expect(
       page.getByRole("region", { name: "模型评估指标" }),
     ).toBeVisible();
     const downloading = page.waitForEvent("download");
     await page
-      .getByRole("button", { name: "下载 report.json", exact: true })
+      .getByRole("button", { name: "下载 评估报告（report.json）", exact: true })
       .click();
     const file = info.outputPath(`${plugin}-report.json`);
     await (await downloading).saveAs(file);
@@ -71,11 +71,11 @@ test("new-volume LR/RF research registers and downloads checked artifacts", asyn
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
-    await page.getByText("参数、校准、区间与复现信息", { exact: true }).click();
+    await page.getByText("完整参数与复现信息（JSON）", { exact: true }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);
-    await page.getByText("固定来源与分区审计", { exact: true }).click();
+    await page.getByText("数据来源与划分记录（JSON）", { exact: true }).click();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(360);

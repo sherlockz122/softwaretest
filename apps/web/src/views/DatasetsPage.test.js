@@ -42,7 +42,7 @@ test("Viewer reads dataset list with an explicit reason and no creation form", a
   vi.spyOn(client, "request").mockResolvedValue(listing);
   const { wrapper } = await view(DatasetsPage, "Viewer");
   expect(wrapper.find("form").exists()).toBe(false);
-  expect(wrapper.text()).toContain("Member或Admin");
+  expect(wrapper.text()).toContain("Member 或 Admin");
   wrapper.unmount();
 });
 
@@ -86,7 +86,7 @@ test("unpublished dataset hides members and export with a task link", async () =
     members: [],
   });
   const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/pending");
-  expect(wrapper.text()).toContain("半成品不能导出");
+  expect(wrapper.text()).toContain("没完成的不能下载");
   expect(wrapper.findAll("button").some((b) => b.text().includes("下载"))).toBe(
     false,
   );
@@ -117,8 +117,8 @@ test("ready research shows release limitations and both-class partition support"
     members: [],
   });
   const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/ready");
-  expect(wrapper.text()).toContain("历史在线回放");
-  expect(wrapper.text()).toContain("原发布fix标志不作为特征");
+  expect(wrapper.text()).toContain("按历史时间点回放");
+  expect(wrapper.text()).toContain("原数据里的 fix 标志不参与计算");
   expect(
     wrapper.findAll("button").filter((b) => b.text().includes("下载")),
   ).toHaveLength(3);

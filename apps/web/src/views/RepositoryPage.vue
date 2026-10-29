@@ -3,7 +3,16 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { active, operationKeys, date } from "../task-tools";
+import { active, operationKeys, date, shortId } from "../task-tools";
+import {
+  changeType,
+  contentStatus,
+  label,
+  parseStatus,
+  ruleVersions,
+  syncRelation,
+  syncStatus,
+} from "../terms";
 import RequestError from "../components/RequestError.vue";
 import FixPanel from "../components/FixPanel.vue";
 import SZZPanel from "../components/SZZPanel.vue";
@@ -78,30 +87,6 @@ const keys = operationKeys();
 const canParse = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
-const parseLabels = {
-  pending: "未开始",
-  queued: "排队中",
-  parsing: "解析中",
-  parsed: "解析完成",
-  failed: "解析失败",
-  cancelled: "已取消",
-};
-const syncLabels = {
-  pending: "未同步",
-  queued: "同步排队中",
-  syncing: "同步中",
-  synced: "同步完成",
-  requires_review: "历史变化待复核",
-  failed: "同步失败",
-  cancelled: "同步已取消",
-};
-const relationLabels = {
-  pending: "等待新快照",
-  initial: "空历史后的首次提交",
-  unchanged: "HEAD 未变化",
-  fast_forward: "新增可达提交",
-  requires_review: "祖先关系或默认分支变化",
-};
 async function startSync() {
   if (syncing.value) return;
   const id = route.params.id;
@@ -134,18 +119,6 @@ async function startSync() {
     syncing.value = false;
   }
 }
-const contentLabels = {
-  parsed: "已解析",
-  binary: "二进制内容略过",
-  blob_limit: "文件超过内容上限",
-  diff_limit: "diff 超过保留上限",
-  commit_diff_limit: "提交超过内容预算",
-  encoding: "编码不兼容",
-  submodule: "子模块内容略过",
-  ambiguous_patch: "跨文件 patch 略过",
-  merge_skipped: "合并 diff 略过",
-  message_encoding: "消息编码异常",
-};
 async function startParse() {
   if (parsing.value) return;
   parsing.value = true;
@@ -205,12 +178,12 @@ watch(
   () => windows.load({ id: route.params.id, page: syncPage.value }),
   { immediate: true },
 );
-const labels = {
-  queued: "排队中",
-  cloning: "克隆中",
-  cloned: "已克隆",
-  failed: "失败",
-  cancelled: "已取消",
+const repoStatus = {
+  queued: "排队等待下载",
+  cloning: "正在下载仓库",
+  cloned: "仓库已下载",
+  failed: "下载失败",
+  cancelled: "下载已取消",
 };
 watch(
   () => route.params.id,
@@ -243,33 +216,50 @@ onUnmounted(() => clearInterval(poll));
     >
       <p class="task-id">{{ repo.data.value.url }}</p>
       <p data-testid="repository-status">
-        {{ labels[repo.data.value.status] || repo.data.value.status }}
+        <span :class="['badge', repo.data.value.status]">{{
+          label(repoStatus, repo.data.value.status)
+        }}</span>
+      </p>
+      <p class="hint">
+        这个仓库的分析分四步，按下面的顺序做：先整理提交记录，再找出疑似修复的提交，然后追查缺陷是哪次改动引入的，最后计算每个提交的统计指标。
       </p>
       <dl class="task-facts">
         <dt>默认分支</dt>
-        <dd>{{ repo.data.value.default_branch ?? "—" }}</dd>
-        <dt>HEAD</dt>
-        <dd class="task-id" data-testid="repository-head">
-          {{ repo.data.value.head_sha ?? "—" }}
+        <dd>
+          {{ repo.data.value.default_branch ?? "—"
+          }}<small>下载和分析都以这个分支为准</small>
+        </dd>
+        <dt>最新提交</dt>
+        <dd>
+          <span
+            class="task-id"
+            data-testid="repository-head"
+            :title="repo.data.value.head_sha ?? ''"
+            >{{ shortId(repo.data.value.head_sha) || "—" }}</span
+          >
+          <small>仓库当前最新的那次提交，后面所有分析都以它为准</small>
         </dd>
         <dt>仓库大小</dt>
-        <dd>{{ (repo.data.value.size_bytes / 1024 / 1024).toFixed(2) }} MiB</dd>
+        <dd>{{ (repo.data.value.size_bytes / 1024 / 1024).toFixed(2) }} MB</dd>
       </dl>
-      <p v-if="repo.data.value.parse_status === 'pending'">
-        克隆阶段保存 Git 数据；当前尚未导入提交和文件变更记录。
-      </p>
+      <h2>第一步：整理提交记录</h2>
       <p data-testid="parse-status">
-        {{ parseLabels[repo.data.value.parse_status] }}
+        {{ label(parseStatus, repo.data.value.parse_status) }}
+      </p>
+      <p v-if="repo.data.value.parse_status === 'pending'" class="hint">
+        下载只是把代码复制过来；还要把每次提交改了什么文件读进数据库，后面的分析才能用。
       </p>
       <p v-if="repo.data.value.parse_window">
-        已入库 {{ repo.data.value.parse_window.processed }} /
-        {{ repo.data.value.parse_window.total ?? "待扫描" }} 个提交；
-        {{
+        已整理 {{ repo.data.value.parse_window.processed }} /
+        {{ repo.data.value.parse_window.total ?? "待扫描" }} 个提交{{
           repo.data.value.parse_window.commit_limit
-            ? `最近 ${repo.data.value.parse_window.commit_limit} 个提交`
-            : "全部可达历史"
-        }}。
-        {{ repo.data.value.parse_window.parser_version }}
+            ? `（最多取最近的 ${repo.data.value.parse_window.commit_limit} 个）`
+            : "（包括全部历史）"
+        }}。<small
+          >整理这些提交时用的规则版本：{{
+            label(ruleVersions, repo.data.value.parse_window.parser_version)
+          }}</small
+        >
       </p>
       <form
         v-if="
@@ -281,7 +271,7 @@ onUnmounted(() => clearInterval(poll));
         @submit.prevent="startParse"
       >
         <div>
-          <label for="commit-limit">提交窗口（1–700 条）</label
+          <label for="commit-limit">先整理最近多少个提交</label
           ><input
             id="commit-limit"
             v-model="commitLimit"
@@ -294,26 +284,30 @@ onUnmounted(() => clearInterval(poll));
         </div>
         <label class="scope"
           ><input v-model="fullHistory" type="checkbox" :disabled="parsing" />
-          解析全历史（大仓库 可能跑数小时）</label
+          整理全部历史（大仓库可能要跑几个小时）</label
         >
         <button class="primary" :disabled="parsing || !scopeReady">
-          {{ parsing ? "提交中…" : "开始解析提交" }}
+          {{ parsing ? "提交中…" : "开始整理提交记录" }}
         </button>
+        <small>数量越少整理越快；选少了以后也能同步新的提交，但补不回更早的历史。</small>
       </form>
       <p v-if="!canParse" class="hint">
-        Viewer 可查看解析结果；启动解析需要 Member 或 Admin。
+        Viewer（只读账号）可查看整理结果；开始整理需要 Member 或
+        Admin 账号（普通成员或管理员）。
       </p>
       <RequestError v-if="!repo.data.value.parse_window" :error="failure" />
-      <h2>增量同步</h2>
+      <h2>同步新提交</h2>
       <p data-testid="sync-status">
-        {{ syncLabels[repo.data.value.sync_status] }}
+        {{ label(syncStatus, repo.data.value.sync_status) }}
+      </p>
+      <p class="hint">
+        仓库有了新提交时，点这里把它们补进来；已经整理过的提交不会重复处理。
       </p>
       <p
         v-if="repo.data.value.history_coverage === 'recent_window'"
         class="hint"
       >
-        初次解析只选取最近 N
-        个提交；增量同步不会补齐此前历史，后续特征和数据集需检查覆盖度。
+        这次只整理了最近一段历史。同步只补新提交，不会补更早的，后面的指标和数据集会沿用这个范围。
       </p>
       <button
         v-if="
@@ -325,15 +319,14 @@ onUnmounted(() => clearInterval(poll));
         :disabled="syncing || active.has(repo.data.value.task.status)"
         @click="startSync"
       >
-        {{ syncing ? "提交中…" : "同步默认分支" }}
+        {{ syncing ? "提交中…" : "同步最新提交" }}
       </button>
       <p
         v-if="repo.data.value.sync_status === 'requires_review'"
         role="alert"
         class="error"
       >
-        默认分支或历史祖先关系发生变化，已暂停同步并保留旧
-        HEAD、提交和新快照。后续需制定复核与恢复方案。
+        仓库的历史被改写过，或者默认分支换了，自动同步已经暂停。原来的提交、最新版本和快照都保留着，需要人工确认后再继续。
       </p>
       <p
         v-if="['failed', 'cancelled'].includes(repo.data.value.sync_status)"
@@ -341,7 +334,9 @@ onUnmounted(() => clearInterval(poll));
       >
         此前同步进度已保留，请在当前任务中重试。
       </p>
-      <p v-if="!canParse" class="hint">启动同步需要 Member 或 Admin。</p>
+      <p v-if="!canParse" class="hint">
+        启动同步需要 Member 或 Admin 账号（普通成员或管理员）。
+      </p>
       <RequestError :error="syncFailure" />
       <RequestError
         data-testid="sync-window-error"
@@ -357,15 +352,20 @@ onUnmounted(() => clearInterval(poll));
           :key="window.root_task_id"
         >
           <p>
-            {{ relationLabels[window.relation] }} · 已入库
+            {{ label(syncRelation, window.relation) }} · 已处理
             {{ window.processed }} / {{ window.total ?? "待扫描" }} 个新提交
           </p>
-          <p class="task-id">
-            {{ window.base_head_sha ?? "空历史" }} →
-            {{ window.head_sha ?? "待扫描或空历史" }}
+          <p>
+            <small
+              >从
+              {{ window.base_head_sha ? shortId(window.base_head_sha) : "空历史" }}
+              到
+              {{ window.head_sha ? shortId(window.head_sha) : "待扫描" }}</small
+            >
           </p>
           <small
-            >{{ window.parser_version }} · {{ date(window.created_at) }}</small
+            >{{ date(window.created_at) }} · 规则版本
+            {{ label(ruleVersions, window.parser_version) }}</small
           >
         </li>
       </ul>
@@ -377,7 +377,7 @@ onUnmounted(() => clearInterval(poll));
           上一页同步
         </button>
         <span
-          >共 {{ windows.data.value.total }} 个同步窗口，第
+          >共 {{ windows.data.value.total }} 条同步记录，第
           {{ syncPage }} 页</span
         >
         <button
@@ -392,15 +392,18 @@ onUnmounted(() => clearInterval(poll));
       <p>
         <RouterLink :to="'/tasks/' + repo.data.value.task.id"
           >查看当前任务</RouterLink
-        >，可查看进度、取消或重试。
+        >，可以看进度、取消或重试。
       </p>
       <p v-if="repo.data.value.task.health === 'stale'" role="status">
-        执行心跳已过期，等待协调器恢复。
+        这个任务很久没有更新了，后台会自动尝试恢复；这段时间请不要重复提交。
       </p>
       <div v-if="repo.data.value.task.error" role="alert" class="error">
-        <p>{{ repo.data.value.task.error.message }}</p>
-        <small>错误编号：{{ repo.data.value.task.error.code }}</small>
-        <small>请求编号：{{ repo.data.value.task.error.request_id }}</small>
+        <p><strong>这次任务没有完成。</strong>{{ repo.data.value.task.error.message }}</p>
+        <small
+          >如果反复失败，把下面两行发给开发可以定位问题：错误编号
+          {{ repo.data.value.task.error.code }}，请求编号
+          {{ repo.data.value.task.error.request_id }}</small
+        >
       </div>
       <FixPanel
         ref="fixPanel"
@@ -424,6 +427,9 @@ onUnmounted(() => clearInterval(poll));
         :reload="refresh"
       />
       <h2>提交记录</h2>
+      <p class="hint">
+        每次提交就是一次代码改动。点「看改动了哪些文件」可以展开这次提交改过的文件。
+      </p>
       <RequestError :error="commits.error.value" />
       <div
         v-if="commits.data.value && !commits.error.value"
@@ -432,24 +438,23 @@ onUnmounted(() => clearInterval(poll));
         <p>
           共
           {{ commits.data.value.total }}
-          个已入库提交。解析运行或中断时，这里显示已成功提交的批次。
+          个已整理的提交。整理还在进行或中途中断时，这里只显示已经处理完的部分。
         </p>
         <ul class="repository-list">
           <li v-for="commit in commits.data.value.items" :key="commit.id">
-            <code class="task-id">{{ commit.sha }}</code>
+            <p class="task-id" :title="commit.sha">{{ shortId(commit.sha) }}</p>
             <p>
               {{ commit.message || "（空提交消息）"
               }}{{ commit.message_truncated ? "…" : "" }}
             </p>
             <small
               >{{ commit.author.name_alias || "未命名作者" }} ·
-              {{ date(commit.committer_time) }} · {{ commit.file_count }} 个文件
-              · {{ commit.parent_count }} 个父提交 ·
-              {{
-                contentLabels[commit.parse_status] || commit.parse_status
-              }}</small
+              {{ date(commit.committer_time) }} · {{ commit.file_count }} 个文件{{
+                commit.parent_count > 1 ? " · 合并提交" : ""
+              }}
+              · {{ label(contentStatus, commit.parse_status) }}</small
             >
-            <button @click="selectCommit(commit)">查看文件变更</button>
+            <button @click="selectCommit(commit)">看改动了哪些文件</button>
           </li>
         </ul>
         <div class="pagination">
@@ -470,10 +475,10 @@ onUnmounted(() => clearInterval(poll));
           </button>
         </div>
         <section v-if="selected">
-          <h3>文件变更</h3>
-          <p class="task-id">{{ selected.sha }}</p>
+          <h3>这次改了哪些文件</h3>
+          <p class="task-id" :title="selected.sha">{{ shortId(selected.sha) }}</p>
           <p v-if="selected.parse_status === 'merge_skipped'">
-            合并提交保留父提交关系；当前策略跳过其 diff。
+            合并提交只保留「哪次提交合并进来」这个关系，不展开它改了什么。
           </p>
           <RequestError :error="files.error.value" />
           <ul
@@ -487,12 +492,11 @@ onUnmounted(() => clearInterval(poll));
                 {{ file.new_path ?? "（删除）" }}
               </p>
               <small
-                >{{ file.change_type }} · 新增 {{ file.insertions ?? "—" }} /
-                删除 {{ file.deletions ?? "—" }} · 原 LOC
+                >{{ label(changeType, file.change_type) }} · 新增
+                {{ file.insertions ?? "—" }} / 删除
+                {{ file.deletions ?? "—" }} · 改前文件行数
                 {{ file.old_loc ?? "—" }} ·
-                {{
-                  contentLabels[file.content_status] || file.content_status
-                }}</small
+                {{ label(contentStatus, file.content_status) }}</small
               >
             </li>
           </ul>

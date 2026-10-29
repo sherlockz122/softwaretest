@@ -3,7 +3,14 @@ import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
-import { date, labels, operationKeys } from "../task-tools";
+import {
+  date,
+  labels,
+  operationKeys,
+  shortId,
+  taskLine,
+  taskTitle,
+} from "../task-tools";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const router = useRouter();
@@ -82,6 +89,9 @@ async function create() {
         刷新列表
       </button>
     </div>
+    <p class="hint">
+      这里列出后台正在做和已经做完的事。每一项都来自你在其他页面点的一次操作；点任务名可以查看进度、取消或重试。
+    </p>
     <form v-if="canCreate" class="create-task" @submit.prevent="create">
       <div>
         <label for="duration">诊断时长（秒）</label
@@ -98,9 +108,12 @@ async function create() {
       </div>
       <button class="primary" :disabled="creating">
         {{ creating ? "提交中…" : "创建诊断任务" }}</button
-      ><small>0～30 秒，用于检查任务执行链路。</small>
+      ><small>创建一个几秒钟的空任务，用来确认后台服务能正常接收和执行任务。</small>
     </form>
-    <p v-else class="hint">Viewer 仅可查看任务，创建需要 Member 或 Admin。</p>
+    <p v-else class="hint">
+      Viewer（只读账号）仅可查看任务；创建任务需要 Member 或 Admin
+      账号（普通成员或管理员）。
+    </p>
     <RequestError :error="failure" />
     <div class="filters">
       <label for="status">状态筛选</label
@@ -119,10 +132,10 @@ async function create() {
     <RequestError :error="list.error.value" />
     <div v-if="list.data.value && !list.error.value">
       <p v-if="!list.data.value.items.length" class="empty">
-        暂无符合条件的任务。{{
+        还没有符合条件的任务。{{
           canCreate
-            ? "可以创建诊断任务或更改筛选。"
-            : "请更改筛选或联系任务创建者。"
+            ? "先到「仓库目录」添加一个公开仓库，后台会自动开始下载；也可以运行一次系统自检。"
+            : "请更改筛选，或联系创建任务的人。"
         }}
       </p>
       <div v-else class="table-scroll">
@@ -132,25 +145,31 @@ async function create() {
           </caption>
           <thead>
             <tr>
-              <th>任务 / 类型</th>
+              <th>任务</th>
               <th>状态</th>
               <th>进度</th>
-              <th>最近心跳</th>
+              <th>最近更新</th>
               <th>创建时间</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="task in list.data.value.items" :key="task.id">
               <td>
-                <RouterLink :to="'/tasks/' + task.id">{{ task.id }}</RouterLink
-                ><small>{{ task.type }}</small>
+                <RouterLink
+                  :to="'/tasks/' + task.id"
+                  :data-testid="'task-link-' + task.id"
+                  >{{ taskTitle(task) }}</RouterLink
+                ><small>{{ taskLine(task) }}</small
+                ><small class="task-id" :title="task.id"
+                  >编号 {{ shortId(task.id) }}</small
+                >
               </td>
               <td>
                 <span :class="['badge', task.status]">{{
                   labels[task.status] || task.status
                 }}</span
                 ><small v-if="task.health === 'stale'"
-                  >心跳过期，等待恢复</small
+                  >长时间没有更新，等待自动恢复</small
                 >
               </td>
               <td>{{ task.progress }}%</td>

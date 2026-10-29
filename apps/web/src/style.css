@@ -206,6 +206,25 @@ td:first-child {
   overflow-wrap: anywhere;
   color: #536978;
 }
+.task-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+.link-button {
+  border: 0;
+  padding: 0 0 0 8px;
+  background: none;
+  color: #126a70;
+  font-size: 14px;
+  text-decoration: underline;
+}
+.result-facts {
+  margin: 12px 0;
+  padding-left: 20px;
+  line-height: 1.9;
+}
 .repository-list li,
 .task-list li {
   overflow-wrap: anywhere;

@@ -37,14 +37,14 @@ test("fresh research dataset survives reload and exports frozen train CSV", asyn
 }, info) => {
   await login(page);
   await page.getByRole("link", { name: "数据集", exact: true }).click();
-  await expect(page.getByLabel("公开数据来源").locator("option")).toHaveCount(
+  await expect(page.getByLabel("用哪份公开数据").locator("option")).toHaveCount(
     2,
   );
-  await page.getByLabel("数据集名称").fill("新环境研究验收");
-  await page.getByLabel("公开数据来源").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "创建研究数据集" }).click();
+  await page.getByLabel("起个名字").fill("新环境研究验收");
+  await page.getByLabel("用哪份公开数据").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "生成研究数据集" }).click();
   await expect(page).toHaveURL(/\/datasets\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "限定研究就绪" })).toBeVisible(
+  await expect(page.getByRole("heading", { name: "数据集已可用" })).toBeVisible(
     { timeout: 60000 },
   );
   await page.reload();
@@ -59,11 +59,11 @@ test("fresh research dataset survives reload and exports frozen train CSV", asyn
     .fill(config.DG_BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "限定研究就绪" }),
+    page.getByRole("heading", { name: "数据集已可用" }),
   ).toBeVisible();
-  await expect(page.getByText("历史在线回放", { exact: false })).toBeVisible();
+  await expect(page.getByText("按历史时间点回放", { exact: false })).toBeVisible();
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "下载 train CSV" }).click();
+  await page.getByRole("button", { name: "下载训练数据（CSV）" }).click();
   const download = await downloading;
   const file = info.outputPath("research-train.csv");
   await download.saveAs(file);
@@ -79,7 +79,7 @@ test("fresh research dataset survives reload and exports frozen train CSV", asyn
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
-  await page.getByText("来源、分区和能力审计", { exact: true }).click();
+  await page.getByText("数据来源和划分详情", { exact: true }).click();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(360);
@@ -95,10 +95,10 @@ test("dataset list and research controls fit a narrow viewport", async ({
   await login(page);
   await page.getByRole("link", { name: "数据集", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "数据集", exact: true }),
+    page.getByRole("heading", { name: "研究数据集", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("研究使用原发布的弱监督标签", { exact: false }),
+    page.getByText("标签用的是原公开数据自带的判断", { exact: false }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
