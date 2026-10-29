@@ -66,6 +66,20 @@ def native_environment(home, bare):
     return env
 
 
+def _unlink_closed_stream(path):
+    """Bounded Windows sharing cleanup after the child and our stream have closed."""
+    deadline = time.monotonic() + 0.5
+    while True:
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except OSError as error:
+            remaining = deadline - time.monotonic()
+            if getattr(error, "winerror", None) not in {32, 33} or remaining <= 0:
+                raise
+            time.sleep(min(0.02, remaining))
+
+
 class NativeReader:
     def __init__(self, bare, home, environment, tick, deadline):
         self.bare, self.home = assets.safe_path(Path(bare)), assets.safe_path(Path(home))
@@ -115,5 +129,11 @@ class NativeReader:
             if process is not None and process.poll() is None:
                 process.kill()
                 process.wait(timeout=10)
-            output.unlink(missing_ok=True)
-            errors.unlink(missing_ok=True)
+            cleanup_errors = []
+            for path in (output, errors):
+                try:
+                    _unlink_closed_stream(path)
+                except OSError as error:
+                    cleanup_errors.append(error)
+            if cleanup_errors:
+                raise cleanup_errors[0]
