@@ -7,7 +7,14 @@ export default defineConfig({
     environment: "jsdom",
     reporters: [
       "default",
-      ["junit", { outputFile: "../../runtime/acceptance/web-unit.xml" }],
+      [
+        "junit",
+        {
+          outputFile: process.env.DG_EVIDENCE_DIR
+            ? `${process.env.DG_EVIDENCE_DIR}/web-unit.xml`
+            : "../../runtime/acceptance/web-unit.xml",
+        },
+      ],
     ],
   },
 });

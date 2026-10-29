@@ -10,9 +10,21 @@ import DatasetsPage from "./views/DatasetsPage.vue";
 import DatasetPage from "./views/DatasetPage.vue";
 import ModelsPage from "./views/ModelsPage.vue";
 import ModelPage from "./views/ModelPage.vue";
+import SemanticAssetsPage from "./views/SemanticAssetsPage.vue";
+import SemanticAssetPage from "./views/SemanticAssetPage.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {
+      path: "/semantic-assets",
+      component: SemanticAssetsPage,
+      meta: { auth: true },
+    },
+    {
+      path: "/semantic-assets/:id",
+      component: SemanticAssetPage,
+      meta: { auth: true },
+    },
     { path: "/models", component: ModelsPage, meta: { auth: true } },
     { path: "/model-runs/:id", component: ModelPage, meta: { auth: true } },
     { path: "/datasets", component: DatasetsPage, meta: { auth: true } },

@@ -34,7 +34,9 @@ Add-Content -LiteralPath $config -Value ('DG_REPOSITORY_DATA_DIR=' + (Join-Path 
 Add-Content -LiteralPath $config -Value ('DG_PUBLIC_ASSET_DIR=' + (Join-Path $work 'public-assets').Replace('\','/'))
 Add-Content -LiteralPath $config -Value ('DG_DATASET_DATA_DIR=' + (Join-Path $work 'datasets').Replace('\','/'))
 Add-Content -LiteralPath $config -Value ('DG_MODEL_DATA_DIR=' + (Join-Path $work 'models').Replace('\','/'))
+Add-Content -LiteralPath $config -Value ('DG_SEMANTIC_ASSET_DIR=' + (Join-Path $work 'semantic-assets').Replace('\','/'))
 & (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -FilePath $projectPython -ExpectedGrowthGiB 0.05 -ArgumentList @('-m','tests.seed_dataset_fixture','--store',(Join-Path $work 'public-assets'))
+& (Join-Path $PSScriptRoot 'Invoke-ProjectCommand.ps1') -FilePath $projectPython -ExpectedGrowthGiB 0.05 -ArgumentList @('-m','tests.seed_semantic_asset_fixture','--store',(Join-Path $work 'semantic-assets'))
 $override = Join-Path $work 'compose.override.yaml'
 @"
 services:
