@@ -10,7 +10,7 @@
 openspec validate --all --strict
 ```
 
-当前状态：**9 passed, 0 failed**（8 个活动 change + 1 个 spec）。
+当前状态：18 passed, 0 failed（17 个活动 change + 1 个 spec）。
 
 ---
 

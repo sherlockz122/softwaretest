@@ -1,47 +1,52 @@
 ## ADDED Requirements
 
-### Requirement: Public source assets preserve original data and reload integrity
-The future system SHALL preserve approved public data as immutable source assets with provenance, license scope, format/granularity, adapter version and hashes. Loading an asset SHALL NOT imply eligibility for every training task.
+### Requirement: 公开来源资产保留原始数据与重载完整性
+未来的系统 SHALL 把经过批准的公开数据保存为带来源、许可范围、格式与粒度、适配器版本和哈希的不可变来源资产。加载一份资产 SHALL NOT 意味着它自动具备所有训练任务的资格。
 
-#### Scenario: A valid numerical benchmark has no semantic text
-- **WHEN** an approved CSV benchmark is saved and reloaded with matching hashes
-- **THEN** its original fields and acquisition metadata remain recoverable
-- **AND** semantic or incompatible native-feature training is refused with an explicit capability deficit
+#### Scenario: 合法的数值基准没有语义文本
+- **WHEN** 一份经过批准的 CSV（逗号分隔值）基准被保存，并以一致的哈希重新加载
+- **THEN** 它的原始字段和取得元数据仍然可以恢复
+- **AND** 需要语义输入或原生特征不兼容的训练请求会被明确拒绝，并说明缺少哪项能力
 
-#### Scenario: The restored asset differs from its manifest
-- **WHEN** bytes, schema or provenance drift during reload
-- **THEN** the future system refuses derived publication and retains the prior asset and diagnostic evidence
+#### Scenario: 重载结果与清单不一致
+- **WHEN** 重新加载时字节、结构或来源信息发生漂移
+- **THEN** 系统拒绝发布派生数据，并保留原有资产和诊断证据
 
-### Requirement: Label dimensions and domain capability remain distinct
-The future system SHALL distinguish binary defect labels, type labels, location, granularity and language/domain evidence, with unknown values and versioned review provenance.
+### Requirement: 标签维度与领域能力保持独立
+未来的系统 SHALL 区分离散缺陷标签、类型标签、位置、粒度和语言/领域证据，并保留未知取值和带版本的复核来源。
 
-#### Scenario: Binary labels have no defect type evidence
-- **WHEN** a public sample contains only buggy/clean information or SZZ candidate lines
-- **THEN** its defect type remains unknown rather than an inferred gold category
-- **AND** its type or localization prediction capability is not inherited from binary-label availability
+#### Scenario: 只有二分类标签，没有缺陷类型证据
+- **WHEN** 公开样本只包含有缺陷或无缺陷的信息，或者只包含 SZZ（引入缺陷的提交追溯）候选行
+- **THEN** 它的缺陷类型保持未知，而不是被推断成一个金标类别
+- **AND** 它的类型或定位预测能力不会因为存在二分类标签就被继承
 
-#### Scenario: A new language or source uses a different sample unit
-- **WHEN** an imported function/module source or unverified language is evaluated
-- **THEN** it retains its original granularity/domain and separately reported quality and metrics
-- **AND** it cannot silently become a compatible commit-level candidate model
+#### Scenario: 新语言或新来源使用不同的样本单位
+- **WHEN** 系统评估一份导入的函数级或模块级来源，或者一种尚未核验的语言
+- **THEN** 它保留原来的粒度和领域，并分别报告质量和指标
+- **AND** 它不能静默变成兼容的提交级候选模型
 
-### Requirement: Pretrained semantic and fusion experiments use fair versioned inputs
-The future system SHALL evaluate a pinned pretrained semantic encoder and optional fusion with expert features against numerical baselines on the same eligible population and fixed partitions, with input availability, preprocessing, artifact integrity, domain and resource checks.
+### Requirement: 预训练语义与融合实验使用公平且带版本的输入
+未来的系统 SHALL 在同一份合格人口和固定分区上，用固定的预训练语义编码器和可选的专家特征融合，与数值基线比较，并检查输入可用性、预处理、工件完整性、领域适用性和资源约束。
 
-#### Scenario: Semantic text is recovered for a strict subset
-- **WHEN** only some numerical benchmark samples have verified prediction-side text
-- **THEN** comparative experiments disclose missing coverage and use a common eligible population
-- **AND** future fix text, test-fitted transforms or unverified type labels cannot enter prediction inputs
+#### Scenario: 只有一部分样本能恢复语义文本
+- **WHEN** 只有部分数值基准样本具备经过核验的预测侧文本
+- **THEN** 对比实验要披露缺失覆盖，并使用共同的合格人口
+- **AND** 未来的修复文本、在测试集上拟合的变换或未经核验的类型标签不能进入预测输入
 
-#### Scenario: A pretrained experiment shows no acceptable benefit or cannot meet resources
-- **WHEN** held-out quality, calibration, domain applicability or declared resource constraints are not met
-- **THEN** the system retains the valid baseline and records the negative result or limitation
-- **AND** it does not certify a model merely because the encoder is modern or more complex
+#### Scenario: 预训练实验没有可接受的收益或资源不达标
+- **WHEN** 留出集质量、校准、领域适用性或声明的资源约束没有达到要求
+- **THEN** 系统保留可用的基线，并记录负结果或限制
+- **AND** 它不会仅因为编码器更新或更复杂就认定模型合格
 
-### Requirement: Research engineering and product release use separate gates
-The future system SHALL support bounded research engineering without requiring perfect historical labels, while enforcing independently evidenced historical and target-domain product release requirements.
+### Requirement: 研究工程与产品发布使用彼此独立的门槛
+未来的系统 SHALL 支持在不需要完美历史标签的前提下进行有界的研究工程，同时对历史发布和目标域产品发布分别要求独立证据。
 
-#### Scenario: Published weak labels are available today but historical knowledge is missing
-- **WHEN** a dataset passes declared research-purpose checks but cannot prove historical label availability
-- **THEN** a research run can proceed under its explicit version and limitation
-- **AND** existing false readiness flags remain unchanged and historical/candidate publication does not inherit research eligibility
+#### Scenario: 今天有已发布的弱标签，但缺少历史知识
+- **WHEN** 一份数据集通过声明的研究用途检查，但无法证明历史标签在当时已经可见
+- **THEN** 研究运行可以在明确版本和限制下继续
+- **AND** 现有的 false（未就绪）标记保持不变，历史或候选发布不会继承研究用途的资格
+
+#### Scenario: 历史或候选发布缺少独立证据
+- **WHEN** 研究用途的数据准备进入历史回放或目标域候选发布
+- **THEN** 系统要求该用途自己的历史可见性、独立评估和领域证据
+- **AND** 研究运行的版本和限制不会被当作发布证据，缺少证据时保持未就绪

@@ -1,37 +1,45 @@
 ## ADDED Requirements
 
-### Requirement: Pinned acquisition SHALL preserve source identity
-The offline acquisition SHALL verify exact fixed revision, sizes, Git blob and SHA256, store a timezone-aware actual bundle acquisition time, reject unsafe paths and preserve an existing valid manifest. Upstream code SHALL never execute.
+### Requirement: 固定来源的取得与身份保持
 
-#### Scenario: Reuse or tamper
-- **WHEN** a completed source bundle is reused or its bytes or acquisition metadata change
-- **THEN** valid reuse preserves its acquisition time and tampering is rejected without silently replacing it
+离线取得流程 SHALL 校验固定的上游修订、精确字节大小、Git blob 和 SHA256，并记录带时区的实际取得时间。取得清单在完成后保持不可变，合法的复用会保留原来的取得时间；不安全的路径 SHALL 被拒绝，已经存在的有效清单不会被静默替换。系统 SHALL 保证上游代码在任何情况下都不被执行。
 
-### Requirement: Audit SHALL distinguish candidate membership from certified labels
-The independent audit SHALL retain cohort aliases, missing raw sources, duplicate and inverted clocks, raw-linked published clean rows, missing positive provenance and non-earliest selected fixes. Historical knowledge times SHALL remain unknown without evidence.
+#### Scenario: 已完成来源的复用与篡改
+- **WHEN** 已经完成的源包被复用，或者它的字节内容和取得元数据发生变化
+- **THEN** 合法的复用会保留原来的取得时间，篡改会被拒绝，不会被静默替换
 
-#### Scenario: Filtered clean overlaps raw SZZ
-- **WHEN** a published clean row appears in the raw bug candidates
-- **THEN** it enters an explicit review stratum without automatic relabeling or negative coverage certification
+#### Scenario: 不安全的取得路径
+- **WHEN** 源包路径落在项目运行目录之外，或者路径中包含符号链接、目录联接等重解析点
+- **THEN** 系统拒绝这次取得，不读取也不写入该路径
 
-#### Scenario: Selected repair differs from first raw link
-- **WHEN** the published repair matches a later raw link
-- **THEN** the selected match and earliest difference are both retained and neither becomes a historical available_at
+### Requirement: 候选成员与认证标签的区分
 
-### Requirement: Evidence publication SHALL be bounded and immutable
-The audit SHALL supervise byte/row/deadline limits and cancellation, reject input mutation and malformed schemas, return independent deterministic reports with hashes and stratified review packets, and never overwrite existing inputs or reports.
+独立审计 SHALL 保留项目分组的别名、缺失的原始来源、重复与倒置的时钟、与原始链接关联的已发布 clean 行、缺失的正向来源证据，以及不是最早链接的选中修复。历史知识时间在没有证据时 SHALL 保持未知。审计只区分候选成员和已认证标签，不会自动改写发布标签。
 
-#### Scenario: Interrupted or mutated source
-- **WHEN** a source changes, a supervisor cancels, or a resource limit is exceeded
-- **THEN** no audit report is published and existing evidence is preserved
+#### Scenario: 过滤后的 clean 与原始候选重叠
+- **WHEN** 某个已发布的 clean 行出现在原始缺陷候选中
+- **THEN** 它进入明确的复核分层，系统不会自动重新标注，也不会认证它的负例覆盖
 
-#### Scenario: Research provenance is not product readiness
-- **WHEN** all matching checks pass but native ancestry, filter replay, complete negative coverage, gold review or compatible fourteen features are missing
-- **THEN** those deficits remain explicit and product training and historical replay readiness are false
+#### Scenario: 选中的修复不是最早原始链接
+- **WHEN** 已发布的修复匹配到较晚的原始链接，而不是最早的原始链接
+- **THEN** 选中的匹配和最早链接之间的差异都会被保留，两者都不会被当作历史可用时间（available_at）
 
-### Requirement: Imported legacy account entry SHALL refuse unsupported provisioning
-The imported retired provision entry SHALL be importable without account or database side effects, exit with code 2 and point to the current explicit bootstrap command. Existing bootstrap semantics SHALL remain unchanged.
+#### Scenario: 时钟与链接异常
+- **WHEN** 原始链接出现重复、时钟顺序倒置，或者同一个 SHA 带有相互冲突的时钟
+- **THEN** 系统把这些情况记录为诊断信息，不会擅自修正原始记录
 
-#### Scenario: Invoke retired seed
-- **WHEN** the old packages.persistence.seed entry is invoked
-- **THEN** it rejects without silently translating configuration, resetting credentials, changing roles or creating an account
+### Requirement: 审计证据的有界发布与不可变性
+
+审计 SHALL 对输入字节数、行数和期限实施监督，并把取消信号传递到读取和逐行循环。输入在处理过程中发生变化、表结构不符合约定，或者发布键重复时，系统 SHALL 拒绝发布。审计 SHALL 返回带有哈希的独立、确定性报告和分层复核包，并且永远不会覆盖已有输入或已有报告。
+
+#### Scenario: 源被中断、改动或超出上限
+- **WHEN** 源在审计过程中发生变化、监督器取消任务，或者资源用量超过上限
+- **THEN** 系统不会发布任何审计报告，已有证据保持原样
+
+#### Scenario: 输入结构畸形或发布键重复
+- **WHEN** 输入的表结构不符合约定，或者发布键出现重复
+- **THEN** 系统拒绝发布，不生成报告，也不覆盖已有报告
+
+#### Scenario: 研究来源不等于产品就绪
+- **WHEN** 所有匹配检查都通过，但原生祖先关系、筛选重现、完整负例覆盖、金标人工复核或十四维兼容仍然缺失
+- **THEN** 这些缺口会保持显式记录，产品训练和历史回放的就绪状态都保持为未就绪（false）
