@@ -17,6 +17,7 @@ from packages.persistence.models import (
     AsyncTask,
     FixAssessment,
     Repository,
+    SCHEMA_HEAD,
     SZZItem,
     SZZRun,
 )
@@ -324,10 +325,11 @@ def test_capacity_before_acceptance_version_and_source_guards(szz_env, monkeypat
 
 def test_frozen_migration_empty_roundtrip_and_populated_path_guard(szz_env):
     root = start(szz_env)
-    with pytest.raises(RuntimeError, match="affected tables must be empty"):
+    # d310bbb 起 0012 降级改为全链预检，具体是哪种非空取决于数据状态，只断言拒绝语义
+    with pytest.raises(RuntimeError, match="Downgrade refused"):
         migrate(szz_env[1].engine, "downgrade", "base")
     with szz_env[1].engine.connect() as db:
-        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0011_models"
+        assert db.execute(text("SELECT version_num FROM alembic_version")).scalar() == SCHEMA_HEAD
     assert szz_env[2].results(root)["total"] == 14
     with scratch_database() as (_, engine):
         migrate(engine)

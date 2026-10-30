@@ -23,6 +23,7 @@ from packages.persistence.models import (
     FixAssessment,
     GitCommit,
     Repository,
+    SCHEMA_HEAD,
     SZZItem,
 )
 from packages.repositories.parser import ParseExecutor
@@ -259,12 +260,14 @@ def test_frozen_schema_roundtrip_and_whole_path_guard(szz_env):
     service, root = start(szz_env)
     engine = szz_env[1].engine
     for target in ("0007_szz", "base"):
-        with pytest.raises(RuntimeError, match="affected tables must be empty"):
+        # d310bbb 起 0012 降级改为全链预检，具体是哪种非空（下游表/数据集任务/引用）
+        # 取决于数据状态，这里只断言「拒绝降级」这个语义
+        with pytest.raises(RuntimeError, match="Downgrade refused"):
             migrate(engine, "downgrade", target)
         with engine.connect() as db:
             assert (
                 db.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                == "0011_models"
+                == SCHEMA_HEAD
             )
     assert service.results(szz_env[4], root)["total"] == 0
     with scratch_database() as (_, empty):
