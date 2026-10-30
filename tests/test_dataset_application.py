@@ -103,6 +103,25 @@ def test_real_batches_ready_csv_and_member_identity(environment):
     assert not service.tasks.claim(ack["task_id"])
 
 
+def test_detail_member_filters_and_counts(environment):
+    service = environment[0]
+    ack, token, payload = create_and_claim(environment)
+    service.run(ack["task_id"], token, payload)
+    dataset_id = ack["dataset_id"]
+    everything = service.detail(dataset_id)
+    assert everything["member_total"] == 40
+    train = service.detail(dataset_id, filter_partition="train")
+    assert train["member_total"] == 28
+    assert all(m["partition"] == "train" for m in train["members"])
+    buggy_test = service.detail(dataset_id, filter_partition="test", filter_label=1)
+    assert buggy_test["member_total"] >= 1
+    assert all(m["partition"] == "test" and m["label"] == 1 for m in buggy_test["members"])
+    assert len(buggy_test["members"]) == buggy_test["member_total"]
+    clean = service.detail(dataset_id, filter_label=0)
+    assert clean["member_total"] == 20
+    assert all(m["label"] == 0 for m in clean["members"])
+
+
 def test_fault_retry_resumes_and_old_token_cannot_publish(environment, monkeypatch):
     service, _, users, _, engine, _ = environment
     monkeypatch.setattr(module, "BATCH_SIZE", 10)

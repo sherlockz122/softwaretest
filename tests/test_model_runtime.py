@@ -86,3 +86,81 @@ def test_real_model_worker_kill_retry_registration_and_old_attempt():
         assert not result["candidate_release"]
         with Session(connections.engine) as db:
             assert db.get(ModelRun, run_id).output_json["attempt_id"] != old_token
+
+
+def test_feature_choice_training_on_live_stack():
+    """真实栈上带特征选择的训练：契约进报告、非法选择在入队前拒绝、缺省保持旧行为。"""
+    from packages.mining.public_dataset import NUMERIC_FIELDS
+
+    root = assets.ROOT / "runtime/temp" / ("model-features-" + uuid4().hex)
+    root.mkdir(parents=True)
+    directory, imported = fixture_asset(
+        root, rows=80, store=assets.ROOT / "runtime/public-assets"
+    )
+    with runtime_client() as (api, settings, connections):
+        response = api.post(
+            "/api/v1/datasets",
+            headers={"Idempotency-Key": uuid4().hex},
+            json={
+                "name": "feature-choice acceptance",
+                "asset_id": directory.name,
+                "source_hash": imported["manifest"]["content_hash"],
+            },
+        )
+        assert response.status_code == 202
+        dataset_id = response.json()["dataset_id"]
+        wait_task(api, response.json()["task_id"], {"succeeded"}, timeout=120)
+        # 带特征选择：la 取对数、age 标准化（缺省形式按插件补全）
+        chosen = api.post(
+            "/api/v1/model-runs",
+            headers={"Idempotency-Key": uuid4().hex},
+            json={
+                "dataset_id": dataset_id,
+                "plugin": "lr",
+                "params": {"c": 1, "max_iter": 500},
+                "seed": 42,
+                "features": ["la", "age"],
+                "forms": {"la": "log1p"},
+            },
+        )
+        assert chosen.status_code == 202, chosen.text
+        wait_task(api, chosen.json()["task_id"], {"succeeded"}, timeout=180)
+        report = api.get("/api/v1/model-runs/" + chosen.json()["model_run_id"]).json()[
+            "report"
+        ]
+        assert report["features"] == ["la", "age"]
+        assert report["forms"] == {"la": "log1p", "age": "standardize"}
+        assert set(report["standardization"]) == {"age"}
+        assert report["request"]["features"] == report["features"]
+        # 非法选择在任务创建前拒绝，不产生训练任务
+        rejected = api.post(
+            "/api/v1/model-runs",
+            headers={"Idempotency-Key": uuid4().hex},
+            json={
+                "dataset_id": dataset_id,
+                "plugin": "lr",
+                "params": {},
+                "seed": 42,
+                "features": [],
+            },
+        )
+        assert rejected.status_code == 422
+        assert rejected.json()["code"] == "MODEL_FEATURE_INVALID"
+        # 缺省请求（不带 features/forms）仍是旧行为：全部特征、rf 全原始值
+        legacy = api.post(
+            "/api/v1/model-runs",
+            headers={"Idempotency-Key": uuid4().hex},
+            json={
+                "dataset_id": dataset_id,
+                "plugin": "rf",
+                "params": {"n_estimators": 256, "max_depth": 32, "min_samples_leaf": 1},
+                "seed": 7,
+            },
+        )
+        assert legacy.status_code == 202, legacy.text
+        wait_task(api, legacy.json()["task_id"], {"succeeded"}, timeout=180)
+        legacy_report = api.get("/api/v1/model-runs/" + legacy.json()["model_run_id"]).json()[
+            "report"
+        ]
+        assert legacy_report["features"] == list(NUMERIC_FIELDS)
+        assert legacy_report["forms"] == {name: "raw" for name in NUMERIC_FIELDS}

@@ -5,8 +5,10 @@ import { client } from "../api";
 import { useLatest } from "../latest";
 import { active, labels, shortId } from "../task-tools";
 import {
+  datasetFeatureNames,
   effortMetrics,
   effortNames,
+  featureForms,
   metricNames,
   metrics,
 } from "../terms";
@@ -145,6 +147,22 @@ async function download(kind) {
           {{ report.calibration.threshold_rows }}
           条用来定判定门槛，同一时间段的提交不拆开。
         </p>
+        <div v-if="report.features" class="contract">
+          <p>
+            这次训练用了 {{ report.features.length }} 个指标：{{
+              report.features
+                .map(
+                  (name) =>
+                    `${datasetFeatureNames[name] || name}（${
+                      featureForms[report.forms?.[name]] ||
+                      report.forms?.[name] ||
+                      "原始值"
+                    }）`,
+                )
+                .join("、")
+            }}。换了指标或形式，就要重新训练，不能拿旧模型套。
+          </p>
+        </div>
         <div
           class="table-scroll"
           role="region"

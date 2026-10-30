@@ -80,8 +80,98 @@ test("uncertain training reuses operation key and immutable dataset ID", async (
     plugin: "lr",
     seed: 42,
     params: { c: 1, max_iter: 500 },
+    features: [
+      "la",
+      "ld",
+      "nf",
+      "nd",
+      "ns",
+      "ent",
+      "ndev",
+      "age",
+      "nuc",
+      "aexp",
+      "arexp",
+      "asexp",
+    ],
+    forms: {
+      la: "standardize",
+      ld: "standardize",
+      nf: "standardize",
+      nd: "standardize",
+      ns: "standardize",
+      ent: "standardize",
+      ndev: "standardize",
+      age: "standardize",
+      nuc: "standardize",
+      aexp: "standardize",
+      arexp: "standardize",
+      asexp: "standardize",
+    },
   });
   expect(router.currentRoute.value.path).toBe("/model-runs/new");
+  wrapper.unmount();
+});
+test("feature choice defaults all checked, plugin switch resets forms only", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.startsWith("/datasets?")) return datasetList;
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  const checkboxes = wrapper
+    .findAll('input[type="checkbox"]')
+    .filter((i) => i.attributes("disabled") === undefined);
+  expect(checkboxes).toHaveLength(12);
+  expect(checkboxes.every((i) => i.element.checked)).toBe(true);
+  const selects = wrapper.findAll("select");
+  // 训练表单里第 0 个是数据集、第 1 个是模型；其余 12 个是每个特征的形式
+  const featureSelects = selects.slice(2);
+  expect(featureSelects).toHaveLength(12);
+  expect(featureSelects.every((s) => s.element.value === "standardize")).toBe(
+    true,
+  );
+  await selects[1].setValue("rf");
+  await wrapper.findAll("input[type='checkbox']")[0].setValue(false);
+  expect(featureSelects.every((s) => s.element.value === "raw")).toBe(true);
+  expect(wrapper.findAll('input[type="checkbox"]')[0].element.checked).toBe(
+    false,
+  );
+  expect(wrapper.findAll('input[type="checkbox"]')[1].element.checked).toBe(
+    true,
+  );
+  wrapper.unmount();
+});
+test("empty feature choice disables submit and subset travels in body", async () => {
+  const posts = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    if (options?.method === "POST") {
+      posts.push(JSON.parse(options.body));
+      return { model_run_id: "new" };
+    }
+    if (path.startsWith("/datasets?")) return datasetList;
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  await wrapper.findAll("select")[0].setValue("fixed");
+  const submit = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("开始训练"));
+  for (const box of wrapper.findAll('input[type="checkbox"]')) {
+    await box.setValue(false);
+  }
+  expect(submit.attributes("disabled")).toBeDefined();
+  expect(wrapper.text()).toContain("至少要勾选一个指标");
+  await wrapper.findAll('input[type="checkbox"]')[0].setValue(true);
+  await wrapper.findAll('input[type="checkbox"]')[2].setValue(true);
+  await wrapper.findAll("select")[2].setValue("log1p");
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  expect(posts[0]).toMatchObject({
+    dataset_id: "fixed",
+    plugin: "lr",
+    features: ["la", "nf"],
+  });
+  expect(posts[0].forms).toEqual({ la: "log1p", nf: "standardize" });
   wrapper.unmount();
 });
 test("Admin publish button surfaces the incompatible-purpose error", async () => {
@@ -148,5 +238,46 @@ test("failed model hides artifacts and links cancellation/retry task", async () 
   expect(wrapper.findAll("button").some((b) => b.text().includes("下载"))).toBe(
     false,
   );
+  wrapper.unmount();
+});
+test("model detail shows the training feature contract", async () => {
+  vi.spyOn(client, "request").mockResolvedValue({
+    id: "ready",
+    dataset_id: "fixed",
+    plugin: "lr",
+    seed: 42,
+    status: "succeeded",
+    registered: true,
+    task_id: "worker",
+    snapshot: {},
+    report: {
+      provenance: { version: "research-lr-rf-v4", code_sha: "f".repeat(64) },
+      threshold: 0.5,
+      calibration: { calibration_rows: 4, threshold_rows: 4 },
+      features: ["la", "age"],
+      forms: { la: "log1p", age: "standardize" },
+      request: { features: ["la", "age"] },
+      metrics: {
+        validation_threshold: {
+          support: { clean: 1, buggy: 1 },
+          effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+        },
+        test: {
+          support: { clean: 1, buggy: 1 },
+          effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+        },
+      },
+      baseline: {
+        metrics: {
+          support: { clean: 1, buggy: 1 },
+          effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+        },
+      },
+    },
+  });
+  const { wrapper } = await view(ModelPage, "Viewer", "/model-runs/ready");
+  expect(wrapper.text()).toContain("这次训练用了 2 个指标");
+  expect(wrapper.text()).toContain("新增行数（取对数）");
+  expect(wrapper.text()).toContain("文件平均年龄（天）（标准化）");
   wrapper.unmount();
 });

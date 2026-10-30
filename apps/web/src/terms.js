@@ -161,6 +161,44 @@ export const featureReason = {
   message_unverified: "提交说明无法核对",
 };
 export const partitions = { train: "训练", validation: "验证", test: "测试" };
+export const datasetFeatureNames = {
+  la: "新增行数",
+  ld: "删除行数",
+  nf: "改动文件数",
+  nd: "改动目录数",
+  ns: "改动子系统数",
+  ent: "改动分散程度",
+  ndev: "参与开发者数",
+  age: "文件平均年龄（天）",
+  nuc: "文件历史改动次数",
+  aexp: "作者累计提交数",
+  arexp: "作者近期提交数",
+  asexp: "作者子系统提交数",
+};
+export const datasetFeatureHints = {
+  la: "这次改动新增了多少行代码（la）",
+  ld: "这次改动删除了多少行代码（ld）",
+  nf: "这次改动涉及多少个文件（nf）",
+  nd: "涉及文件分布在多少个目录（nd）",
+  ns: "涉及文件分布在多少个子系统（ns）",
+  ent: "改动分散在多少文件里，越大越分散（ent）",
+  ndev: "历史上改过这些文件的开发者人数（ndev）",
+  age: "这些文件距上次被改动的平均天数（age）",
+  nuc: "这些文件历史上被改动过的总次数（nuc）",
+  aexp: "作者在这次改动前的累计提交次数（aexp）",
+  arexp: "作者在最近一段时间内的提交次数（arexp）",
+  asexp: "作者在这些子系统内的提交次数（asexp）",
+};
+export const featureForms = {
+  raw: "原始值",
+  log1p: "取对数",
+  standardize: "标准化",
+};
+export const featureFormHints = {
+  raw: "数值直接用，不做处理",
+  log1p: "按 log(1+数值) 处理，压平「偶尔超大」的长尾",
+  standardize: "减均值再除标准差；均值与标准差只在训练数据上计算",
+};
 export const metricNames = {
   precision: "精确率",
   recall: "召回率",

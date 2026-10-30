@@ -2,9 +2,17 @@
 
 import numpy as np
 import pytest
+from sklearn.preprocessing import StandardScaler
 
+from packages.mining.public_dataset import NUMERIC_FIELDS
 from packages.modeling import metrics, policy
-from packages.modeling.train import calibration_split, fit_model, sigmoid_input, threshold_for
+from packages.modeling.train import (
+    calibration_split,
+    feature_matrix,
+    fit_model,
+    sigmoid_input,
+    threshold_for,
+)
 
 
 def test_hand_calculated_effort_and_ties():
@@ -82,9 +90,89 @@ def test_test_partition_cannot_change_fit_calibration_or_threshold(plugin):
     assert np.array_equal(
         first[0].predict_proba(parts["train"]["x"]), second[0].predict_proba(parts["train"]["x"])
     )
-    if plugin == "lr":
-        assert np.array_equal(first[0].steps[0][1].mean_, parts["train"]["x"].mean(axis=0))
     assert np.isfinite(sigmoid_input([0, 1])).all()
+
+
+def test_feature_plan_normalization_and_defaults():
+    plan = policy.feature_plan("lr", ["age", "la", "ld"], {"ld": "raw"})
+    assert plan["features"] == ["la", "ld", "age"]
+    assert plan["forms"] == {"la": "standardize", "ld": "raw", "age": "standardize"}
+    assert policy.feature_plan("rf", None, None)["features"] == list(NUMERIC_FIELDS)
+    assert policy.feature_plan("rf", None, None)["forms"] == {
+        name: "raw" for name in NUMERIC_FIELDS
+    }
+    assert policy.feature_plan("lr", None, None)["forms"] == {
+        name: "standardize" for name in NUMERIC_FIELDS
+    }
+
+
+@pytest.mark.parametrize(
+    "features,forms",
+    [
+        ([], None),
+        (["la", "la"], None),
+        (["bogus"], None),
+        ("la", None),
+        (["la"], {"bogus": "raw"}),
+        (["la"], {"la": "square"}),
+        (["la"], []),
+        (["la"], {"la": 3}),
+    ],
+)
+def test_feature_plan_rejections(features, forms):
+    with pytest.raises(policy.ModelError, match="MODEL_FEATURE_INVALID"):
+        policy.feature_plan("lr", features, forms)
+
+
+def fake_partitions():
+    rng = np.random.default_rng(7)
+    parts = {}
+    for p in ("train", "validation", "test"):
+        x = rng.integers(0, 30, size=(60, len(NUMERIC_FIELDS))).astype(float)
+        if p == "train":
+            x[:, 2] = 5.0  # nf 在训练分区为常数，验证零方差处理
+        parts[p] = {"x": x, "y": np.tile([0, 1], 30), "events": np.arange(60)}
+    return parts
+
+
+def test_feature_matrix_transforms_use_train_stats_only():
+    parts = fake_partitions()
+    features = ["la", "ld", "nf", "ns"]
+    forms = {"la": "raw", "ld": "log1p", "nf": "standardize", "ns": "standardize"}
+    matrices, stats = feature_matrix(parts, features, forms)
+    index = {name: i for i, name in enumerate(NUMERIC_FIELDS)}
+    train = parts["train"]["x"]
+    assert np.array_equal(matrices["train"][:, 0], train[:, index["la"]])
+    assert np.array_equal(matrices["train"][:, 1], np.log1p(train[:, index["ld"]]))
+    scaler = StandardScaler().fit(train[:, [index["nf"]]])
+    assert np.allclose(matrices["train"][:, 2], scaler.transform(train[:, [index["nf"]]])[:, 0])
+    for p in ("validation", "test"):
+        assert np.array_equal(matrices[p][:, 1], np.log1p(parts[p]["x"][:, index["ld"]]))
+        assert np.allclose(
+            matrices[p][:, 2], scaler.transform(parts[p]["x"][:, [index["nf"]]])[:, 0]
+        )
+    assert set(stats) == {"nf", "ns"}
+    assert stats["nf"]["mean"] == pytest.approx(float(scaler.mean_[0]))
+    assert stats["nf"]["scale"] == pytest.approx(float(scaler.scale_[0]))
+    # 零方差列：scale 置 1、不产生 NaN，与 StandardScaler 行为一致
+    assert scaler.scale_[0] == 1.0
+    assert np.isfinite(matrices["validation"]).all()
+
+
+def test_feature_matrix_default_matches_legacy_pipeline():
+    parts = fake_partitions()
+    defaults = {name: "standardize" for name in NUMERIC_FIELDS}
+    matrices, _ = feature_matrix(parts, list(NUMERIC_FIELDS), defaults)
+    scaler = StandardScaler().fit(parts["train"]["x"])
+    for p in ("train", "validation", "test"):
+        assert np.allclose(matrices[p], scaler.transform(parts[p]["x"]))
+
+
+def test_feature_matrix_raw_records_no_stats():
+    parts = fake_partitions()
+    matrices, stats = feature_matrix(parts, ["la"], {"la": "raw"})
+    assert stats == {}
+    assert np.array_equal(matrices["train"], parts["train"]["x"][:, [0]])
 
 
 def test_time_block_interval_reproducibility():

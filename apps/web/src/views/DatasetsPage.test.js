@@ -33,7 +33,12 @@ async function view(component, role = "Member", path = "/datasets") {
   });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(component, { global: { plugins: [router] } });
+  // attachTo：jsdom 对未挂载元素的 getComputedStyle 缓存不失效，
+  // 列显隐（v-show）往返后 isVisible() 会读到旧值。
+  const wrapper = mount(component, {
+    global: { plugins: [router] },
+    attachTo: document.body,
+  });
   await flushPromises();
   return { wrapper, router };
 }
@@ -122,5 +127,76 @@ test("ready research shows release limitations and both-class partition support"
   expect(
     wrapper.findAll("button").filter((b) => b.text().includes("下载")),
   ).toHaveLength(3);
+  wrapper.unmount();
+});
+
+test("ready dataset renders a 2D feature table with toggles and filters", async () => {
+  const calls = [];
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    calls.push(path);
+    const url = new URL(path, "http://test");
+    const partition = url.searchParams.get("filter_partition");
+    const label = url.searchParams.get("filter_label");
+    return {
+      id: "ready",
+      name: "research",
+      ready: true,
+      processed: 40,
+      total: 40,
+      member_total: 40,
+      task_id: "work",
+      status: "succeeded",
+      asset_id: asset.asset_id,
+      policy: { split_strategy: "time_ordered" },
+      summary: {
+        features: [
+          "la", "ld", "nf", "nd", "ns", "ent",
+          "ndev", "age", "nuc", "aexp", "arexp", "asexp",
+        ],
+        partitions: {
+          train: { clean: 14, buggy: 14 },
+          validation: { clean: 3, buggy: 3 },
+          test: { clean: 3, buggy: 3 },
+        },
+        source_acquisition: {},
+        repositories: {},
+      },
+      members: [
+        {
+          ordinal: 0,
+          canonical_repository: "apache/hadoop",
+          commit_id: "c".repeat(40),
+          partition: partition || "train",
+          label: label == null ? 0 : Number(label),
+          event_epoch: 1,
+          numeric12: {
+            la: 213.0, ld: 0.4235, nf: 3.0, nd: 1.0, ns: 1.0, ent: 0.9,
+            ndev: 2.0, age: 30.0, nuc: 5.0, aexp: 10.0, arexp: 2.0, asexp: 1.0,
+          },
+        },
+      ],
+    };
+  });
+  const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/ready");
+  expect(wrapper.text()).toContain("新增行数");
+  expect(wrapper.text()).toContain("213");
+  expect(wrapper.text()).toContain("0.42");
+  const checkboxes = wrapper.findAll('input[type="checkbox"]');
+  expect(checkboxes).toHaveLength(12);
+  await checkboxes[0].setValue(false);
+  expect(
+    wrapper.findAll("th").some((t) => t.isVisible() && t.text().includes("新增行数")),
+  ).toBe(false);
+  await checkboxes[0].setValue(true);
+  expect(
+    wrapper.findAll("th").some((t) => t.isVisible() && t.text().includes("新增行数")),
+  ).toBe(true);
+  const selects = wrapper.findAll("select");
+  await selects[0].setValue("test");
+  await selects[1].setValue("1");
+  await flushPromises();
+  expect(calls.some((p) => p.includes("filter_partition=test"))).toBe(true);
+  expect(calls.some((p) => p.includes("filter_label=1"))).toBe(true);
+  expect(wrapper.text()).toContain("当前按筛选条件显示");
   wrapper.unmount();
 });

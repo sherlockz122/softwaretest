@@ -489,3 +489,11 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 ## 第二十三阶段候选预测增量
 
 当前schema0012_prediction。prediction_task与async_task共用主键，保存repository_id/model_run_id/base_ref/base_sha/candidate_kind（single_ref/single_diff/batch）/candidate_json/feature_version/input_digest，候选结果唯一约束(task_id,candidate_sha)，队列索引(task_id,probability)；prediction_result保存定点小数概率与阈值、等级、effort、风险密度、超大标识，以及数值、缺失原因、解释和输入快照的JSON无损文本。A24支持candidate_ref与candidate_diff二选一，同步一秒内完成、超时转任务；A25批量范围在入队前拒绝，恒为异步；A26队列按概率降序、事件时间和提交标识并列稳定，支持等级与超大筛选；A27返回解释方法、因素和声明。0012降级在任何DDL前检查预测任务类型与两张表均为空，0001～0011不改。
+
+## 第二十五阶段特征自选与二维表增量（2026-10-30）
+
+无数据库迁移。A20请求体新增可选 `features`（12个数值字段代码的子集，非空、去重、只允许 `la/ld/nf/nd/ns/ent/ndev/age/nuc/aexp/arexp/asexp`）与 `forms`（按已选特征给出 `raw/log1p/standardize`，键必须是已选特征的子集）；缺省等于旧的固定行为：lr 全部标准化、rf 全部原始值，数值与旧管线一致。不合法在任务创建前返回 422 `MODEL_FEATURE_INVALID`，不落任务。标准化均值/尺度只在训练分区拟合（零方差列按尺度 1，与 StandardScaler 一致），全部分区共享同一套统计；effort（la+ld 工作量）始终按原始值计算，不受形式影响。所选特征与形式写入任务载荷、`request.json`、报告和模型工件，重放可复现；旧请求无这两个字段，重放语义不变。
+
+`GET /datasets/{id}` 新增可选查询参数 `filter_partition`（train/validation/test）与 `filter_label`（0/1），仅对 JSON 详情生效（format=csv 不变，仍按 partition 导出完整文件）；筛选后的总数放在 `member_total`，分页按筛选结果计数。下载不受筛选影响。
+
+变更记录：`openspec/changes/add-dataset-table-and-feature-choice`，模型版本 `research-lr-rf-v4`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)。

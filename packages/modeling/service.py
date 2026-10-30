@@ -106,13 +106,18 @@ def task_request(payload):
     return payload["request"]
 
 
-def root_request(run):
-    return {
+def root_request(run, request=None):
+    result = {
         "dataset_id": run.dataset_id,
         "plugin": run.plugin,
         "params": run.params_json,
         "seed": run.seed,
     }
+    # 特征选择只在训练请求里出现（不新增数据库列）；旧请求没有这两个键，保持原样。
+    if request is not None and "features" in request:
+        result["features"] = request["features"]
+        result["forms"] = request["forms"]
+    return result
 
 
 class ModelStopped(Exception):
@@ -129,7 +134,9 @@ class ModelService:
         key_valid(key)
         request = request | {
             "params": policy.parameters(request["plugin"], request["params"], request["seed"])
-        }
+        } | policy.feature_plan(
+            request["plugin"], request.get("features"), request.get("forms")
+        )
         scope = user.id + ":model.train"
 
         def replay(db):
@@ -249,7 +256,7 @@ class ModelService:
                 or output["attempt_id"] != token
                 or output["snapshot"] != run.snapshot_json
                 or report["request"] != task_request(task.payload)
-                or report["request"] != root_request(run)
+                or report["request"] != root_request(run, task_request(task.payload))
                 or report["provenance"] != run.snapshot_json["provenance"]
             ):
                 raise ModelError("MODEL_ARTIFACT_DRIFT", 409)
@@ -305,7 +312,7 @@ class ModelService:
                 frozen = run.snapshot_json
                 run_id = run.id
                 request = task_request(payload)
-                if request != root_request(run):
+                if request != root_request(run, request):
                     raise ModelError("MODEL_ARTIFACT_DRIFT")
             if frozen["provenance"] != policy.provenance():
                 raise ModelError("MODEL_VERSION_CONFLICT")

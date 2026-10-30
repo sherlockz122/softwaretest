@@ -1,20 +1,37 @@
 <script setup>
-import { onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
 import { labels, date, shortId } from "../task-tools";
-import { label, partitions } from "../terms";
+import { datasetFeatureHints, datasetFeatureNames, label, partitions } from "../terms";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const offset = ref(0);
+const hidden = ref(new Set());
+const filterPartition = ref("");
+const filterLabel = ref("");
 const downloadError = ref(null);
 const downloading = ref(false);
-const data = useLatest((id, signal) =>
-  client.request(
-    `/datasets/${encodeURIComponent(id)}?offset=${offset.value}&limit=20`,
+const data = useLatest((id, signal) => {
+  const filters = [
+    filterPartition.value && `filter_partition=${filterPartition.value}`,
+    filterLabel.value !== "" && `filter_label=${filterLabel.value}`,
+  ]
+    .filter(Boolean)
+    .join("&");
+  return client.request(
+    `/datasets/${encodeURIComponent(id)}?offset=${offset.value}&limit=20${
+      filters ? `&${filters}` : ""
+    }`,
     { signal },
-  ),
+  );
+});
+const featureColumns = computed(
+  () => data.data.value?.summary?.features || [],
+);
+const pageTotal = computed(
+  () => data.data.value?.member_total ?? data.data.value?.total ?? 0,
 );
 watch(
   () => route.params.id,
@@ -24,6 +41,10 @@ watch(
   },
   { immediate: true },
 );
+watch([filterPartition, filterLabel], () => {
+  offset.value = 0;
+  data.load(route.params.id);
+});
 const timer = setInterval(() => {
   if (
     !document.hidden &&
@@ -37,6 +58,18 @@ onUnmounted(() => clearInterval(timer));
 function paginate(delta) {
   offset.value += delta;
   data.load(route.params.id);
+}
+function toggleFeature(name) {
+  const next = new Set(hidden.value);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  hidden.value = next;
+}
+function featureValue(value) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return Math.abs(value) >= 100
+    ? String(Math.round(value))
+    : String(Number(value.toFixed(2)));
 }
 async function download(partition) {
   downloading.value = true;
@@ -211,7 +244,48 @@ async function download(partition) {
             >{{ shortId(data.data.value.manifest_hash) }}</span
           >
         </p>
-        <h3>数据样例</h3>
+        <h3>数据表</h3>
+        <p>
+          每行是一次提交，列是它的各项指标。想看清某项指标是什么意思，把鼠标停在表头上；没有勾选「显示哪些列」里的指标不会出现在表里。
+        </p>
+        <div class="filters">
+          <label
+            >只看分区<select v-model="filterPartition">
+              <option value="">全部分区</option>
+              <option
+                v-for="(name, key) in partitions"
+                :key="key"
+                :value="key"
+              >
+                {{ name }}
+              </option>
+            </select></label
+          >
+          <label
+            >只看标签<select v-model="filterLabel">
+              <option value="">全部标签</option>
+              <option value="1">有缺陷</option>
+              <option value="0">正常</option>
+            </select></label
+          >
+          <details class="column-toggles">
+            <summary>显示哪些列</summary>
+            <label
+              v-for="f in featureColumns"
+              :key="f"
+              :title="datasetFeatureHints[f]"
+            >
+              <input
+                type="checkbox"
+                :checked="!hidden.has(f)"
+                @change="toggleFeature(f)"
+              />{{ datasetFeatureNames[f] || f }}
+            </label>
+          </details>
+        </div>
+        <p v-if="filterPartition || filterLabel !== ''">
+          当前按筛选条件显示，共 {{ pageTotal }} 条；下载不受筛选影响，仍是该分区的完整数据。
+        </p>
         <div
           class="table-scroll"
           role="region"
@@ -225,6 +299,14 @@ async function download(partition) {
                 <th>提交</th>
                 <th>分区</th>
                 <th>标签</th>
+                <th
+                  v-for="f in featureColumns"
+                  v-show="!hidden.has(f)"
+                  :key="f"
+                  :title="datasetFeatureHints[f] || f"
+                >
+                  {{ datasetFeatureNames[f] || f }}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -235,6 +317,13 @@ async function download(partition) {
                 </td>
                 <td>{{ label(partitions, row.partition) }}</td>
                 <td>{{ row.label ? "有缺陷" : "正常" }}</td>
+                <td
+                  v-for="f in featureColumns"
+                  v-show="!hidden.has(f)"
+                  :key="f"
+                >
+                  {{ featureValue(row.numeric12?.[f]) }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -246,9 +335,7 @@ async function download(partition) {
           >
             上一页</button
           ><button
-            :disabled="
-              offset + 20 >= data.data.value.total || data.loading.value
-            "
+            :disabled="offset + 20 >= pageTotal || data.loading.value"
             @click="paginate(20)"
           >
             下一页
@@ -274,5 +361,24 @@ td {
   display: flex;
   gap: 12px;
   margin-top: 16px;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+}
+.column-toggles {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+.column-toggles summary {
+  cursor: pointer;
+}
+.column-toggles label {
+  display: inline-block;
+  margin-right: 10px;
+  white-space: nowrap;
 }
 </style>

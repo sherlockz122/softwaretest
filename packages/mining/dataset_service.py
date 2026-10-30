@@ -415,7 +415,7 @@ class DatasetService:
                 "assets": research.previews(self.store),
             }
 
-    def detail(self, dataset_id, offset=0, limit=100):
+    def detail(self, dataset_id, offset=0, limit=100, filter_partition=None, filter_label=None):
         with Session(self.engine) as db:
             dataset = db.get(DatasetVersion, dataset_id)
             if not dataset:
@@ -423,10 +423,16 @@ class DatasetService:
             task = db.get(AsyncTask, dataset.latest_task_id)
             result = self.visible(dataset, task)
             result["members"] = []
+            result["member_total"] = None
             if result["ready"]:
+                conditions = [DatasetMember.dataset_id == dataset_id]
+                if filter_partition is not None:
+                    conditions.append(DatasetMember.partition == filter_partition)
+                if filter_label is not None:
+                    conditions.append(DatasetMember.label == filter_label)
                 rows = db.scalars(
                     select(DatasetMember)
-                    .where(DatasetMember.dataset_id == dataset_id)
+                    .where(*conditions)
                     .order_by(DatasetMember.ordinal)
                     .offset(offset)
                     .limit(limit)
@@ -444,6 +450,9 @@ class DatasetService:
                     }
                     for r in rows
                 ]
+                result["member_total"] = db.scalar(
+                    select(func.count()).select_from(DatasetMember).where(*conditions)
+                )
                 result["exports"] = dataset.output_json["files"]
             result.update(offset=offset, limit=limit)
             return result

@@ -1,9 +1,15 @@
 <script setup>
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
 import { labels, operationKeys, shortId } from "../task-tools";
+import {
+  datasetFeatureHints,
+  datasetFeatureNames,
+  featureFormHints,
+  featureForms,
+} from "../terms";
 import RequestError from "../components/RequestError.vue";
 const router = useRouter();
 const page = ref(1);
@@ -26,9 +32,27 @@ const creating = ref(false);
 const error = ref(null);
 const keys = operationKeys();
 const modelNames = { lr: "逻辑回归", rf: "随机森林" };
+const featureList = Object.keys(datasetFeatureNames);
+const chosen = ref(new Set(featureList));
+const forms = reactive({});
+function defaultForm() {
+  return plugin.value === "lr" ? "standardize" : "raw";
+}
+function resetForms() {
+  for (const name of featureList) forms[name] = defaultForm();
+}
+resetForms();
+watch(plugin, resetForms);
+function toggleFeature(name) {
+  const next = new Set(chosen.value);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  chosen.value = next;
+}
 const canCreate = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
+const canSubmit = computed(() => chosen.value.size > 0);
 watch(page, (p) => list.load(p), { immediate: true });
 watch(
   datasetPage,
@@ -47,6 +71,7 @@ async function create() {
   if (creating.value) return;
   creating.value = true;
   error.value = null;
+  const selected = featureList.filter((name) => chosen.value.has(name));
   const body = {
     dataset_id: dataset.value,
     plugin: plugin.value,
@@ -59,6 +84,8 @@ async function create() {
             max_depth: Number(depth.value),
             min_samples_leaf: Number(leaf.value),
           },
+    features: selected,
+    forms: Object.fromEntries(selected.map((name) => [name, forms[name]])),
   };
   try {
     const ack = await client.request("/model-runs", {
@@ -194,10 +221,65 @@ async function create() {
             :disabled="creating"
         /></label>
       </template>
+      <fieldset class="feature-choice">
+        <legend>用哪些指标、以什么形式</legend>
+        <p>
+          默认全部指标、按模型推荐的形式；取消勾选的指标不参与训练。「取对数」适合偶尔出现超大值的指标，「标准化」的均值和标准差只在训练数据上计算，不会用到验证区和测试区。
+        </p>
+        <div
+          class="table-scroll"
+          role="region"
+          aria-label="训练指标选择"
+          tabindex="0"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>是否使用</th>
+                <th>指标</th>
+                <th>形式</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="name in featureList" :key="name">
+                <td>
+                  <input
+                    type="checkbox"
+                    :checked="chosen.has(name)"
+                    :disabled="creating"
+                    @change="toggleFeature(name)"
+                  />
+                </td>
+                <td :title="datasetFeatureHints[name]">
+                  {{ datasetFeatureNames[name] || name }}
+                </td>
+                <td>
+                  <select
+                    v-model="forms[name]"
+                    :disabled="creating || !chosen.has(name)"
+                  >
+                    <option
+                      v-for="(shown, key) in featureForms"
+                      :key="key"
+                      :value="key"
+                    >
+                      {{ shown }}
+                    </option>
+                  </select>
+                  <span class="hint">{{ featureFormHints[forms[name]] }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="!canSubmit" class="hint">
+          至少要勾选一个指标才能训练。
+        </p>
+      </fieldset>
       <p>
         三份数据各司其职：训练区用来训练模型，验证区用来调整概率、定判定门槛，测试区只做最后评价、不参与调整。任务中断后会用同样的输入重新训练。
       </p>
-      <button :disabled="creating || !dataset">
+      <button :disabled="creating || !dataset || !canSubmit">
         {{ creating ? "正在提交…" : "开始训练" }}
       </button>
     </form>
@@ -253,3 +335,15 @@ async function create() {
     </div>
   </section>
 </template>
+<style scoped>
+.feature-choice {
+  margin: 16px 0;
+}
+.feature-choice table {
+  table-layout: fixed;
+}
+.hint {
+  color: #666;
+  font-size: 12px;
+}
+</style>

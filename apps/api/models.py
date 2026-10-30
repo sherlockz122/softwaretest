@@ -17,6 +17,8 @@ class ModelBody(BaseModel):
     plugin: Literal["lr", "rf"]
     params: dict = Field(default_factory=dict)
     seed: int = Field(default=42, strict=True, ge=0, le=2**31 - 1)
+    features: list[str] | None = None
+    forms: dict[str, Literal["raw", "log1p", "standardize"]] | None = None
 
 
 def service(request):

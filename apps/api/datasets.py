@@ -63,6 +63,8 @@ def detail(
     limit: int = Query(default=100, ge=1, le=100),
     format: Literal["json", "csv"] = "json",
     partition: Literal["train", "validation", "test"] = "train",
+    filter_partition: Literal["train", "validation", "test"] | None = Query(default=None),
+    filter_label: int | None = Query(default=None, ge=0, le=1),
 ):
     if format == "csv":
         path = service(request).download(str(dataset_id), partition)
@@ -72,4 +74,6 @@ def detail(
             filename=f"{dataset_id}-{partition}.csv",
             headers={"Cache-Control": "no-store"},
         )
-    return service(request).detail(str(dataset_id), offset, limit)
+    return service(request).detail(
+        str(dataset_id), offset, limit, filter_partition, filter_label
+    )

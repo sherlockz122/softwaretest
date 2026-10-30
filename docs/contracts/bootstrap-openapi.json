@@ -305,6 +305,39 @@
             "title": "Dataset Id",
             "type": "string"
           },
+          "features": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features"
+          },
+          "forms": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "enum": [
+                    "raw",
+                    "log1p",
+                    "standardize"
+                  ],
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forms"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
@@ -722,6 +755,45 @@
               ],
               "title": "Partition",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_partition",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "train",
+                    "validation",
+                    "test"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Partition"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Label"
             }
           }
         ],

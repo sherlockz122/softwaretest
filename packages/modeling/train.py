@@ -14,14 +14,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
-from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from packages.mining import public_assets as assets
 from packages.mining import research_dataset as research
 from packages.mining.source_evidence import content_hash
 from packages.modeling import metrics
-from packages.modeling.policy import ModelError, provenance
+from packages.modeling.policy import DEFAULT_FORMS, ModelError, provenance
 
 
 def load_partition(path):
@@ -50,6 +49,42 @@ def load_partition(path):
     }
 
 
+def feature_matrix(partitions, features, forms):
+    """按所选特征与形式构造各分区矩阵；标准化统计只在训练分区拟合。
+
+    列序固定为数据集字段顺序；log1p 逐值变换；standardize 直接复用
+    StandardScaler（ddof=0、零方差列按方差 1），保证缺省配置与旧管线数值一致。
+    """
+    index = {name: i for i, name in enumerate(research.NUMERIC_FIELDS)}
+    scaler_names = [name for name in features if forms[name] == "standardize"]
+    scaler, stats = None, {}
+    if scaler_names:
+        scaler = StandardScaler().fit(
+            partitions["train"]["x"][:, [index[name] for name in scaler_names]]
+        )
+        stats = {
+            name: {"mean": float(scaler.mean_[i]), "scale": float(scaler.scale_[i])}
+            for i, name in enumerate(scaler_names)
+        }
+    matrices = {}
+    for p, d in partitions.items():
+        x = np.empty((d["x"].shape[0], len(features)), dtype=float)
+        scaled = None
+        if scaler is not None:
+            scaled = scaler.transform(d["x"][:, [index[n] for n in scaler_names]])
+        for j, name in enumerate(features):
+            form = forms[name]
+            column = d["x"][:, index[name]]
+            if form == "log1p":
+                x[:, j] = np.log1p(column)
+            elif form == "standardize":
+                x[:, j] = scaled[:, scaler_names.index(name)]
+            else:
+                x[:, j] = column
+        matrices[p] = x
+    return matrices, stats
+
+
 def calibration_split(events, labels):
     unique = np.unique(events)
     if len(unique) < 2:
@@ -76,10 +111,7 @@ def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
     train, validation = partitions["train"], partitions["validation"]
     first, second = calibration_split(validation["events"], validation["y"])
     estimator = (
-        make_pipeline(
-            StandardScaler(),
-            LogisticRegression(C=params["c"], max_iter=params["max_iter"], random_state=seed),
-        )
+        LogisticRegression(C=params["c"], max_iter=params["max_iter"], random_state=seed)
         if plugin == "lr"
         else RandomForestClassifier(**params, random_state=seed, n_jobs=1)
     )
@@ -101,6 +133,13 @@ def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
 def run(directory, request, stage=lambda _: None):
     started = time.monotonic()
     partitions = {p: load_partition(directory / (p + ".csv")) for p in research.PARTITIONS}
+    features = request.get("features", list(research.NUMERIC_FIELDS))
+    forms = request.get("forms") or {
+        name: policy.DEFAULT_FORMS[request["plugin"]] for name in features
+    }
+    matrices, stats = feature_matrix(partitions, features, forms)
+    for p, d in partitions.items():
+        d["x"] = matrices[p]
     model, calibrator, threshold, first, second = fit_model(
         partitions, request["plugin"], request["params"], request["seed"], stage
     )
@@ -108,7 +147,9 @@ def run(directory, request, stage=lambda _: None):
         "model": model,
         "calibrator": calibrator,
         "threshold": threshold,
-        "features": list(research.NUMERIC_FIELDS),
+        "features": features,
+        "forms": forms,
+        "standardization": stats,
     }
     stage("evaluating_test")
     probabilities = {
@@ -144,6 +185,9 @@ def run(directory, request, stage=lambda _: None):
     report = {
         "provenance": provenance(),
         "request": request,
+        "features": features,
+        "forms": forms,
+        "standardization": stats,
         "threshold": threshold,
         "calibration": {
             "method": "validation-chronological-sigmoid-logit-v1",

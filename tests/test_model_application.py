@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, inspect, select, text
+from sqlalchemy import event, func, inspect, select, text
 from sqlalchemy.orm import Session
 
 from apps.api.application import create_app
@@ -19,7 +19,7 @@ from packages.mining.dataset_service import DatasetService
 from packages.modeling import policy
 from packages.modeling.policy import ModelError
 from packages.modeling.service import ModelService
-from packages.persistence.models import AsyncTask, DatasetMember, ModelArtifact, User
+from packages.persistence.models import AsyncTask, DatasetMember, ModelArtifact, ModelRun, User
 from packages.platform.connections import Connections
 from packages.tasks.service import database_now
 from tests.auth_support import migrate, scratch_database
@@ -414,3 +414,55 @@ def test_backup_restore_keeps_ids_times_and_artifacts_without_retraining(environ
                 assert db.get(AsyncTask, ack["task_id"]).status == "succeeded"
         finally:
             connections.close()
+
+
+def test_feature_choice_contract_and_replay(environment):
+    service, body, users, *_ = environment
+    key = uuid4().hex
+    body = body | {
+        "features": ["age", "la", "ld"],
+        "forms": {"la": "log1p", "ld": "standardize"},
+    }
+    ack = service.create(users[1], key, body, str(uuid4()))
+    import json
+
+    # 重放与冲突必须在 claim 前断言：claim 会改任务状态，ack 里的 status 就变了
+    assert service.create(users[1], key, body, str(uuid4())) == ack
+    with pytest.raises(ModelError, match="TASK_IDEMPOTENCY_CONFLICT"):
+        service.create(
+            users[1], key, body | {"features": ["la"], "forms": {"la": "log1p"}}, str(uuid4())
+        )
+    token, payload = service.tasks.claim(ack["task_id"])
+    request = json.loads(payload["request_json"])
+    # 归一化：顺序固定为数据集字段顺序，缺省形式按插件补全
+    assert request["features"] == ["la", "ld", "age"]
+    assert request["forms"] == {"la": "log1p", "ld": "standardize", "age": "standardize"}
+    service.run(ack["task_id"], token, payload)
+    result = service.detail(ack["model_run_id"])
+    assert result["registered"], service.tasks.detail(ack["task_id"])
+    report = result["report"]
+    assert report["features"] == ["la", "ld", "age"]
+    assert report["forms"] == {"la": "log1p", "ld": "standardize", "age": "standardize"}
+    assert set(report["standardization"]) == {"ld", "age"}
+    assert report["request"]["features"] == report["features"]
+    assert report["metrics"]["test"]["support"] == {"clean": 6, "buggy": 6}
+
+
+def test_feature_choice_rejected_without_task(environment):
+    service, body, users, _, engine, _ = environment
+    # 共享库可能已有其他用例的模型行：比较前后计数，而不是断言全局为 0
+    with Session(engine) as db:
+        before = db.scalar(select(func.count()).select_from(ModelRun))
+    for bad in (
+        {"features": []},
+        {"features": ["la", "la"]},
+        {"features": ["bogus"]},
+        {"features": "la"},
+        {"forms": {"bogus": "raw"}},
+        {"forms": {"la": "square"}},
+        {"forms": []},
+    ):
+        with pytest.raises(ModelError, match="MODEL_FEATURE_INVALID"):
+            service.create(users[1], uuid4().hex, body | bad, str(uuid4()))
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(ModelRun)) == before

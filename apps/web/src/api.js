@@ -6,6 +6,8 @@ const messages = {
     "数据集用途或特征不兼容，请选择已发布的研究十二指标数据。",
   MODEL_DATA_DRIFT: "固定数据或分区摘要不符，已停止训练。",
   MODEL_INVALID_INPUT: "模型参数超出支持范围，请核对算法、种子和参数。",
+  MODEL_FEATURE_INVALID:
+    "特征选择不合法：至少勾选一个特征，形式只能是原始值、取对数或标准化，并且只对已勾选的特征指定形式。",
   MODEL_CALIBRATION_UNUSABLE:
     "验证区不能形成两类校准和阈值子集，请核对预声明数据分区。",
   MODEL_PURPOSE_INCOMPATIBLE: "研究模型尚不具备候选产品发布资格。",
