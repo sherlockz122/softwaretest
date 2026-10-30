@@ -3,7 +3,7 @@
 from datetime import timedelta
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -420,20 +420,51 @@ class FixService(ParsingService):
             ],
         }
 
-    def results(self, repository_id, run_id, page=1, page_size=20):
+    def results(self, repository_id, run_id, page=1, page_size=20, attention=False):
         with Session(self.engine) as db, db.begin():
             point = db.get(FixRun, run_id)
             if not point or point.repository_id != repository_id:
                 raise RepositoryError(404, "FIX_RUN_NOT_FOUND")
-            count = db.scalar(
+            # 待复核 = 还没人工复核、且值得人看一眼的行（候选与内容不完整的）。
+            needs_review = and_(
+                FixAssessment.review_status == "unreviewed",
+                FixAssessment.disposition.in_(("candidate", "unknown")),
+            )
+            total = db.scalar(
                 select(func.count())
                 .select_from(FixAssessment)
                 .where(FixAssessment.root_task_id == run_id)
             )
+            pending = db.scalar(
+                select(func.count())
+                .select_from(FixAssessment)
+                .where(FixAssessment.root_task_id == run_id, needs_review)
+            )
+            query = select(FixAssessment).where(FixAssessment.root_task_id == run_id)
+            if attention:
+                query = query.where(needs_review)
+            count = pending if attention else total
+            # 需要人工复核的排在最前：未复核的候选、未复核且读不出内容的行，
+            # 其余（已复核、按规则排除、非候选）按提交哈希排在后面。
+            priority = case(
+                (
+                    and_(
+                        FixAssessment.disposition == "candidate",
+                        FixAssessment.review_status == "unreviewed",
+                    ),
+                    0,
+                ),
+                (
+                    and_(
+                        FixAssessment.disposition == "unknown",
+                        FixAssessment.review_status == "unreviewed",
+                    ),
+                    1,
+                ),
+                else_=2,
+            )
             rows = db.scalars(
-                select(FixAssessment)
-                .where(FixAssessment.root_task_id == run_id)
-                .order_by(FixAssessment.sha)
+                query.order_by(priority, FixAssessment.sha)
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
@@ -441,6 +472,7 @@ class FixService(ParsingService):
                 "run": self.visible(point),
                 "items": [self.assessment(db, row) for row in rows],
                 "total": count,
+                "counts": {"needs_review": pending, "total": total},
                 "page": page,
                 "page_size": page_size,
             }

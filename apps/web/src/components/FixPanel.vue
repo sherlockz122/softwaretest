@@ -4,6 +4,7 @@ import { client } from "../api";
 import { useLatest } from "../latest";
 import { operationKeys, date, shortId } from "../task-tools";
 import {
+  changeType,
   confidenceNames,
   fixEvidenceType,
   fixExclusion,
@@ -27,6 +28,10 @@ const sending = ref(false);
 const reviewing = ref("");
 const failure = ref(null);
 const notes = ref({});
+// 列表默认只看「还需要人看」的行，避免在几百条排除项里翻页。
+const mode = ref("attention");
+const detail = ref(null);
+const dialog = ref(null);
 const keys = operationKeys();
 const runs = useLatest((input, signal) =>
   client.request(
@@ -36,10 +41,40 @@ const runs = useLatest((input, signal) =>
 );
 const evidence = useLatest((input, signal) =>
   client.request(
-    `/repositories/${input.id}/fix-runs/${input.run}/evidence?page=${input.page}&page_size=10`,
+    `/repositories/${input.id}/fix-runs/${input.run}/evidence?page=${input.page}&page_size=10&attention=${input.attention}`,
     { signal },
   ),
 );
+// 排除类证据没有「把握」可言：它说的是这条提交按规则不进入候选，
+// 不是「我们不确定」。所以判定和证据两处都要分开表述。
+function verdict(row) {
+  if (row.review_status === "confirmed") return "已确认是修复";
+  if (row.review_status === "rejected") return "已否定这条候选";
+  if (row.candidate) return "疑似是修复";
+  if (row.disposition === "excluded") return "已按规则排除，不算疑似修复";
+  if (row.disposition === "unknown") return "内容读不出来，无法判断";
+  return "看起来不是修复";
+}
+async function openDetail(row) {
+  detail.value = { sha: row.sha, loading: true, items: [], total: 0, error: null };
+  dialog.value?.showModal();
+  try {
+    const data = await client.request(
+      `/repositories/${props.repo.id}/commits/${row.sha}/files?page=1&page_size=50`,
+    );
+    if (detail.value?.sha !== row.sha) return;
+    detail.value.items = data.items;
+    detail.value.total = data.total;
+  } catch (error) {
+    if (detail.value?.sha === row.sha) detail.value.error = error;
+  } finally {
+    if (detail.value?.sha === row.sha) detail.value.loading = false;
+  }
+}
+function closeDetail() {
+  dialog.value?.close();
+  detail.value = null;
+}
 function evidenceText(item) {
   const value =
     item.type === "exclusion"
@@ -67,6 +102,7 @@ async function refresh() {
       id,
       run: selectedRun.value,
       page: evidencePage.value,
+      attention: mode.value === "attention",
     });
 }
 defineExpose({ refresh });
@@ -91,13 +127,14 @@ watch(
   { immediate: true },
 );
 watch(
-  () => [selectedRun.value, evidencePage.value],
+  () => [selectedRun.value, evidencePage.value, mode.value],
   () => {
     if (selectedRun.value)
       evidence.load({
         id: props.repo.id,
         run: selectedRun.value,
         page: evidencePage.value,
+        attention: mode.value === "attention",
       });
   },
 );
@@ -105,6 +142,11 @@ function select(run) {
   selectedRun.value = run.root_task_id;
   evidencePage.value = 1;
   failure.value = null;
+}
+function switchMode(value) {
+  if (mode.value === value) return;
+  mode.value = value;
+  evidencePage.value = 1;
 }
 async function start() {
   if (sending.value) return;
@@ -252,13 +294,33 @@ async function review(row, status) {
     >
       <p>
         规则版本 {{ evidence.data.value.run.rule_version }} · 这一轮判定了
-        {{ evidence.data.value.total }} 个提交；识别还在进行时，这里只显示已经判完的部分。
+        {{ evidence.data.value.counts?.total ?? evidence.data.value.total }}
+        个提交；识别还在进行时，这里只显示已经判完的部分。
       </p>
       <p
         v-if="evidence.data.value.run.history_coverage === 'recent_window'"
         class="hint"
       >
         这一轮只覆盖了最近一段历史，不代表整个仓库的完整历史。
+      </p>
+      <div class="filters">
+        <button
+          :class="['chip', { on: mode === 'attention' }]"
+          @click="switchMode('attention')"
+        >
+          待复核（{{ evidence.data.value.counts?.needs_review ?? 0 }}）
+        </button>
+        <button
+          :class="['chip', { on: mode === 'all' }]"
+          @click="switchMode('all')"
+        >
+          全部（{{ evidence.data.value.counts?.total ?? 0 }}）
+        </button>
+      </div>
+      <p class="hint">
+        {{ mode === "attention"
+          ? "这里只列还需要人工看一眼的提交；按规则排除的和已经复核过的在「全部」里。"
+          : "全部判定都在这里；待复核的排在最前面。" }}
       </p>
       <ul class="repository-list">
         <li
@@ -268,8 +330,10 @@ async function review(row, status) {
         >
           <code class="task-id" :title="row.sha">{{ shortId(row.sha) }}</code>
           <p>
-            {{ row.candidate ? "疑似是修复" : "看起来不是修复" }} ·
-            {{ label(fixReview, row.review_status) }}
+            {{ verdict(row) }}
+            <button class="link-button" @click="openDetail(row)">
+              查看这次提交改了什么
+            </button>
           </p>
           <p v-if="!row.content_complete" class="hint">
             这条提交里有内容没读到（文件太大或格式不支持），后面的追溯可能不完整。
@@ -279,8 +343,13 @@ async function review(row, status) {
           </p>
           <ul>
             <li v-for="(item, index) in row.evidence" :key="index">
-              {{ label(confidenceNames, item.confidence) }}把握 ·
-              {{ evidenceText(item) }}<small v-if="item.source.status"
+              <template v-if="item.type === 'exclusion'">{{
+                evidenceText(item)
+              }}</template>
+              <template v-else
+                >{{ label(confidenceNames, item.confidence) }}把握 ·
+                {{ evidenceText(item) }}</template
+              ><small v-if="item.source.status"
                 >缺陷单状态：{{ item.source.status }} · 记录时间
                 {{ item.source.observed_at }}</small
               >
@@ -296,31 +365,53 @@ async function review(row, status) {
             </p>
           </details>
           <div v-if="canWrite">
-            <label :for="'fix-note-' + row.id">复核理由</label>
-            <input
-              :id="'fix-note-' + row.id"
-              v-model="notes[row.id]"
-              maxlength="300"
-              :disabled="!!reviewing"
-            />
-            <div class="pagination">
-              <button :disabled="!!reviewing" @click="review(row, 'confirmed')">
-                确认是修复
-              </button>
-              <button :disabled="!!reviewing" @click="review(row, 'rejected')">
-                否定这条候选
-              </button>
-              <button
+            <p v-if="row.disposition === 'excluded'" class="hint">
+              这类提交按规则排除，通常不需要复核。规则判断错了才需要改。
+            </p>
+            <details :open="row.disposition !== 'excluded'">
+              <summary>
+                {{
+                  row.disposition === "excluded"
+                    ? "这条判断不对？手动纠正"
+                    : "人工复核"
+                }}
+              </summary>
+              <label :for="'fix-note-' + row.id">复核理由</label>
+              <input
+                :id="'fix-note-' + row.id"
+                v-model="notes[row.id]"
+                maxlength="300"
                 :disabled="!!reviewing"
-                @click="review(row, 'unreviewed')"
-              >
-                改回未复核
-              </button>
-            </div>
+              />
+              <div class="pagination">
+                <button :disabled="!!reviewing" @click="review(row, 'confirmed')">
+                  确认是修复
+                </button>
+                <button :disabled="!!reviewing" @click="review(row, 'rejected')">
+                  否定这条候选
+                </button>
+                <button
+                  :disabled="!!reviewing"
+                  @click="review(row, 'unreviewed')"
+                >
+                  改回未复核
+                </button>
+              </div>
+            </details>
           </div>
         </li>
       </ul>
-      <div class="pagination">
+      <p
+        v-if="!evidence.loading.value && !evidence.data.value.items.length"
+        class="hint"
+      >
+        {{
+          mode === "attention"
+            ? "没有待复核的提交了。"
+            : "这一轮没有可显示的提交。"
+        }}
+      </p>
+      <div v-if="evidence.data.value.total > 10" class="pagination">
         <button
           :disabled="evidencePage <= 1 || evidence.loading.value"
           @click="evidencePage--"
@@ -339,5 +430,35 @@ async function review(row, status) {
         </button>
       </div>
     </div>
+    <dialog ref="dialog" class="fix-detail" @close="detail = null">
+      <div v-if="detail">
+        <div class="dialog-head">
+          <strong>提交 {{ shortId(detail.sha) }} 改了什么</strong>
+          <button @click="closeDetail">关闭</button>
+        </div>
+        <p v-if="detail.loading" role="status">正在读取文件变更…</p>
+        <RequestError :error="detail.error" />
+        <ul v-if="detail.items.length" class="repository-list">
+          <li v-for="file in detail.items" :key="file.ordinal">
+            <p class="task-id">
+              {{ file.old_path ?? "（新增）" }} →
+              {{ file.new_path ?? "（删除）" }}
+            </p>
+            <small
+              >{{ label(changeType, file.change_type) }} · 新增
+              {{ file.insertions ?? "—" }} / 删除
+              {{ file.deletions ?? "—" }} · 改前文件行数
+              {{ file.old_loc ?? "—" }}</small
+            >
+          </li>
+        </ul>
+        <p v-else-if="!detail.loading && !detail.error">
+          这条提交没有可显示的文件变更，或者内容没有读进来。
+        </p>
+        <p v-if="detail.total > detail.items.length" class="hint">
+          共 {{ detail.total }} 个文件，这里只显示前 {{ detail.items.length }} 个。
+        </p>
+      </div>
+    </dialog>
   </section>
 </template>

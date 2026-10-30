@@ -303,3 +303,208 @@ footer {
   border: 1px solid #cbd5e1;
   text-align: left;
 }
+
+/* 仓库详情：顶部步骤条 + 单步面板 */
+.repo-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.step-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dce6ed;
+}
+.step-tab {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #f4f7f9;
+  color: #536978;
+  font-size: 15px;
+  cursor: pointer;
+}
+.step-tab:hover {
+  background: #e6eff1;
+}
+.step-tab.current {
+  border-color: #126a70;
+  background: #126a70;
+  color: white;
+}
+.step-tab.current .dot {
+  background: white;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b6c5cf;
+}
+.dot.done {
+  background: #2f8f5b;
+}
+.dot.active {
+  background: #c58a12;
+}
+.dot.failed {
+  background: #c0392b;
+}
+.tab-panel {
+  min-height: 240px;
+}
+.step-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.step-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid #dce6ed;
+  border-left: 4px solid #b6c5cf;
+  border-radius: 14px;
+  background: white;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.step-card:hover {
+  border-color: #126a70;
+}
+.step-card.done {
+  border-left-color: #2f8f5b;
+}
+.step-card.active {
+  border-left-color: #c58a12;
+}
+.step-card.failed {
+  border-left-color: #c0392b;
+}
+.step-card .step-no {
+  color: #126a70;
+  font-weight: 700;
+}
+.step-card .step-name {
+  font-size: 17px;
+  font-weight: 600;
+}
+.step-card .step-state {
+  color: #536978;
+  font-size: 13px;
+}
+.step-card small {
+  color: #6b7d89;
+}
+.step-intro {
+  margin: 12px 0 20px;
+  padding: 14px 18px;
+  border: 1px solid #dce6ed;
+  border-radius: 12px;
+  background: #f4f7f9;
+}
+.step-intro p {
+  margin: 6px 0;
+}
+@media (max-width: 640px) {
+  .step-tab {
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+}
+.commit-files {
+  margin: 12px 0 4px 16px;
+  padding: 12px 16px;
+  border-left: 3px solid #126a70;
+  background: #f7fafb;
+  border-radius: 0 10px 10px 0;
+}
+.commit-files h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.chip {
+  padding: 6px 14px;
+  border: 1px solid #dce6ed;
+  border-radius: 999px;
+  background: white;
+  color: #536978;
+  cursor: pointer;
+}
+.chip.on {
+  border-color: #126a70;
+  background: #126a70;
+  color: white;
+}
+.link-button {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid #dce6ed;
+  border-radius: 8px;
+  background: white;
+  color: #126a70;
+  font-size: 13px;
+  cursor: pointer;
+}
+.link-button:hover {
+  border-color: #126a70;
+}
+.fix-detail {
+  width: min(720px, 92vw);
+  max-height: 80vh;
+  padding: 20px;
+  border: 1px solid #dce6ed;
+  border-radius: 14px;
+}
+.fix-detail::backdrop {
+  background: rgb(23 44 57 / 45%);
+}
+.dialog-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.szz-skipped {
+  color: #7b8c98;
+  font-size: 14px;
+}
+.szz-skipped .task-id {
+  margin-right: 8px;
+}
+.szz-links-inline {
+  margin: 8px 0 4px 16px;
+  padding: 10px 14px;
+  border-left: 3px solid #126a70;
+  background: #f7fafb;
+  border-radius: 0 10px 10px 0;
+}
+.szz-links-inline ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.feature-groups p {
+  margin: 4px 0;
+}
+.feature-groups strong {
+  display: inline-block;
+  min-width: 8em;
+  color: #536978;
+  font-weight: 600;
+}
+.feature-groups .muted {
+  color: #7b8c98;
+}

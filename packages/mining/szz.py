@@ -458,23 +458,30 @@ class SZZService(FixService):
                 "page_size": page_size,
             }
 
-    def results(self, run_id, page=1, page_size=20):
+    def results(self, run_id, page=1, page_size=20, attention=False):
         with Session(self.engine) as db:
             point = db.get(SZZRun, run_id)
             if not point:
                 raise RepositoryError(404, "SZZ_RUN_NOT_FOUND")
-            count = db.scalar(
-                select(func.count()).select_from(SZZItem).where(SZZItem.root_task_id == run_id)
-            )
             rows = list(
                 db.scalars(
                     select(SZZItem)
                     .where(SZZItem.root_task_id == run_id)
                     .order_by(SZZItem.sha)
-                    .offset((page - 1) * page_size)
-                    .limit(page_size)
                 )
             )
+
+            # 不是疑似修复的提交没有可追溯的旧代码，记成“跳过”。
+            # 它们排到最后，列表默认只看真正追过的那些。
+            def skipped(row):
+                return (row.result_json or {}).get("status") == "not_candidate"
+
+            total = len(rows)
+            traced = sum(1 for row in rows if not skipped(row))
+            ordered = sorted(rows, key=lambda row: (skipped(row), row.sha))
+            if attention:
+                ordered = [row for row in ordered if not skipped(row)]
+            page_rows = ordered[(page - 1) * page_size : page * page_size]
             return {
                 "run": self.visible(point),
                 "items": [
@@ -489,19 +496,22 @@ class SZZService(FixService):
                             .where(SZZLink.item_id == row.id)
                         ),
                     }
-                    for row in rows
+                    for row in page_rows
                 ],
-                "total": count,
+                "total": len(ordered),
+                "counts": {"traced": traced, "total": total},
                 "page": page,
                 "page_size": page_size,
             }
 
-    def links(self, run_id, page=1, page_size=20):
+    def links(self, run_id, page=1, page_size=20, item_id=None):
         with Session(self.engine) as db:
             point = db.get(SZZRun, run_id)
             if not point:
                 raise RepositoryError(404, "SZZ_RUN_NOT_FOUND")
             condition = SZZItem.root_task_id == run_id
+            if item_id:
+                condition = condition & (SZZLink.item_id == item_id)
             count = db.scalar(
                 select(func.count())
                 .select_from(SZZLink)

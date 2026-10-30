@@ -1,50 +1,50 @@
 ## ADDED Requirements
 
-### Requirement: A pinned public CSV asset preserves original and derived inputs
-The offline system SHALL publish a bounded immutable ApacheJIT asset with original bytes, acquisition and license provenance, adapter version, a deterministic twelve-numeric derived view and independent capability deficits.
+### Requirement: 固定的公开 CSV 资产保留原始与派生输入
+离线系统 SHALL 发布一个有界的不可变 ApacheJIT 资产。该资产包含原始字节、取得来源与许可元数据、适配器版本、一个确定性的 12 数值派生视图，以及各自独立的能力缺口说明。
 
-#### Scenario: A saved asset is loaded again
-- **WHEN** an existing complete asset is loaded or the identical acquisition is imported again
-- **THEN** the system verifies content-addressed identity and all file hashes and preserves original acquisition and first storage metadata
-- **AND** unknown type/location, unverified per-row language and unavailable semantic/historical/product capabilities are not fabricated
+#### Scenario: 已保存的资产可以再次载入
+- **WHEN** 系统载入一个已经完整保存的资产，或者再次导入一次完全相同的取得过程
+- **THEN** 系统校验按内容寻址的身份和全部文件哈希，并保留原始的取得时间与首次保存元数据
+- **AND** 系统不会伪造未知的类型或位置、未逐行验证的语言，以及不可用的语义、历史或产品能力
 
-#### Scenario: The source or stored artifact drifts
-- **WHEN** input bytes, manifest, derived contents or inventory no longer match the expected asset identity
-- **THEN** the system refuses reuse or publication with a safe diagnostic
-- **AND** the prior complete asset and original source are not overwritten
+#### Scenario: 来源或已保存的产物发生漂移
+- **WHEN** 输入字节、清单、派生内容或目录清单不再匹配预期的资产身份
+- **THEN** 系统拒绝复用或发布，并给出安全的诊断信息
+- **AND** 系统不会覆盖此前完整的资产和原始来源
 
-### Requirement: Publication and reading obey explicit resource and path limits
-The offline system SHALL enforce runtime-only paths without links or reparse points, limits on bytes/rows/fields, supervised deadlines/cancellation and capacity checks, and complete publication before an asset becomes loadable.
+### Requirement: 发布与读取遵守明确的资源和路径限制
+离线系统 SHALL 把路径限定在 runtime 目录内，拒绝链接和重解析点；对字节数、行数和字段长度设限，对时限和取消做受监督的管理，并检查容量。只有完整发布之后，资产才可以被载入。
 
-#### Scenario: Concurrent imports target the same asset
-- **WHEN** two import attempts publish identical content
-- **THEN** only a verified complete asset is reused and its first storage timestamp is preserved
-- **AND** temporary files belonging to failed attempts do not replace an accepted asset
+#### Scenario: 并发导入指向同一个资产
+- **WHEN** 两次导入尝试发布完全相同的内容
+- **THEN** 系统只复用一个经过校验的完整资产，并保留它第一次保存的时间戳
+- **AND** 失败尝试留下的临时文件不会替换已经接受的资产
 
-#### Scenario: A limit or cancellation interrupts processing
-- **WHEN** an input exceeds limits or the operator cancels a supervised operation
-- **THEN** no partial asset is accepted and existing assets remain intact
+#### Scenario: 限制或取消中断了处理
+- **WHEN** 输入超出限制，或者操作者取消了一个受监督的操作
+- **THEN** 系统不会接受任何不完整的资产，已有的资产保持原样
 
-### Requirement: Review records bind evidence without certifying labels
-The offline system SHALL preserve an immutable review revision chain bound to a verified source report, asset, packet member and evidence hashes, with actual review time and unresolved status.
+### Requirement: 复核记录绑定证据，但不认证标签
+离线系统 SHALL 保存一条不可变的复核修订链。这条链绑定一份经过校验的源报告、资产、复核包成员和证据哈希，并记录实际复核时间和未决状态。
 
-#### Scenario: A review cannot establish label validity
-- **WHEN** native objects, filtering or negative coverage evidence is missing or conflicting
-- **THEN** the review retains pending or unresolved status and reasons
-- **AND** it does not rewrite original labels, historical availability, type labels, gold status or existing readiness flags
+#### Scenario: 复核无法确认标签是否有效
+- **WHEN** 原生对象、过滤结果或负例覆盖证据缺失或相互冲突
+- **THEN** 复核保留 pending（待处理）或 unresolved（未决）状态，并记录原因
+- **AND** 复核不会改写原始标签、历史可用性、类型标签、gold（金标）状态或已有的就绪标记
 
-#### Scenario: An evidence or review predecessor is altered
-- **WHEN** evidence contents, packet identity, revision or predecessor digest differs from the bound chain
-- **THEN** the system rejects the review update or reload rather than silently accepting a new interpretation
+#### Scenario: 证据或复核前序被改动
+- **WHEN** 证据内容、复核包身份、修订号或前序摘要与绑定的链不一致
+- **THEN** 系统拒绝这次复核更新或重载，不会静默接受一种新的解释
 
-#### Scenario: A reader overlaps an unpublished review revision
-- **WHEN** a writer has created its private atomic staging file but has not linked the next revision, and another reader or writer accesses the case
-- **THEN** the reader sees a verified committed prefix, only one competing revision is published and a losing writer receives a revision conflict
-- **AND** only regular staging files with exact revision/UUID names and valid revision range are excluded, with at most 100 staging files; malformed names, directories, links and excess staging still cause rejection
-- **AND** a private staging file removed between path existence and stat checks is treated as unpublished, while disappearance of a committed revision is not silently ignored
-- **AND** original labels, review wire format, prior records and capability deficits remain unchanged
+#### Scenario: 读取方与尚未发布的复核修订重叠
+- **WHEN** 写入方已经创建私有的原子暂存文件，但还没有链接下一个修订，另一个读取方或写入方访问同一个案件
+- **THEN** 读取方只能看到经过校验的已提交前缀，只有一个相互竞争的修订会被发布，落后的写入方收到修订冲突
+- **AND** 系统只排除命名精确匹配修订号和 UUID（通用唯一标识符）、并且修订范围有效的常规暂存文件，且暂存文件最多 100 个；命名不合法、目录、链接以及超量的暂存文件仍然导致拒绝
+- **AND** 私有暂存文件如果在路径存在性检查和 stat（文件状态）检查之间被删除，视为尚未发布；已提交修订消失则不会被静默忽略
+- **AND** 原始标签、复核的传输格式、此前的记录和能力缺口都保持不变
 
-#### Scenario: A non-shallow repository does not certify a negative ancestry result
-- **WHEN** both endpoint objects exist but merge-base returns 1 or 128 without independently verified graph completeness
-- **THEN** the probe records unknown graph evidence rather than a certified absence of ancestry
-- **AND** the evidence output cannot be written inside a preserved asset namespace
+#### Scenario: 非浅仓库不能认证负向的祖先结果
+- **WHEN** 两个端点对象都存在，但 merge-base（共同祖先查询）返回 1 或 128，而且图的完整性没有经过独立验证
+- **THEN** 探针记录 unknown（未知）的图证据，而不是认定祖先关系不存在
+- **AND** 证据输出不能写入被保留的资产命名空间
