@@ -22,7 +22,6 @@ const props = defineProps({
 const selected = ref("");
 const runsPage = ref(1);
 const page = ref(1);
-const linksPage = ref(1);
 const sending = ref(false);
 const failure = ref(null);
 const keys = operationKeys();
@@ -32,18 +31,43 @@ const runs = useLatest((input, signal) =>
     { signal },
   ),
 );
+// 默认只看真正追过的提交；不是疑似修复、按规则跳过的收在「全部」里。
+const mode = ref("traced");
 const results = useLatest((input, signal) =>
   client.request(
-    `/szz-runs/${input.run}/results?page=${input.page}&page_size=10`,
+    `/szz-runs/${input.run}/results?page=${input.page}&page_size=10&attention=${input.attention}`,
     { signal },
   ),
 );
-const links = useLatest((input, signal) =>
-  client.request(
-    `/szz-runs/${input.run}/links?page=${input.page}&page_size=10`,
-    { signal },
-  ),
-);
+function skippedItem(item) {
+  return item.result?.status === "not_candidate";
+}
+// 点开某条结果的代码行线索，就地问后端要这一条的链接，不再靠下面的总列表翻。
+const expanded = ref("");
+const itemLinks = ref({ loading: false, items: [], error: null });
+async function toggleLinks(item) {
+  if (expanded.value === item.id) {
+    expanded.value = "";
+    return;
+  }
+  expanded.value = item.id;
+  itemLinks.value = { loading: true, items: [], error: null };
+  try {
+    const data = await client.request(
+      `/szz-runs/${selected.value}/links?page=1&page_size=50&item_id=${item.id}`,
+    );
+    if (expanded.value === item.id) itemLinks.value.items = data.items;
+  } catch (error) {
+    if (expanded.value === item.id) itemLinks.value.error = error;
+  } finally {
+    if (expanded.value === item.id) itemLinks.value.loading = false;
+  }
+}
+function switchMode(value) {
+  if (mode.value === value) return;
+  mode.value = value;
+  page.value = 1;
+}
 const run = computed(() => results.data.value?.run);
 function reasons(list) {
   return (list || []).map((reason) => label(szzReason, reason)).join("；");
@@ -64,21 +88,21 @@ async function refresh() {
       runs.data.value?.items[0]?.root_task_id ||
       "";
   if (selected.value)
-    await Promise.all([
-      results.load({ run: selected.value, page: page.value }),
-      links.load({ run: selected.value, page: linksPage.value }),
-    ]);
+    await results.load({
+      run: selected.value,
+      page: page.value,
+      attention: mode.value === "traced",
+    });
 }
 defineExpose({ refresh });
 watch(
   () => props.repo.id,
   () => {
     selected.value = "";
-    runsPage.value = page.value = linksPage.value = 1;
+    runsPage.value = page.value = 1;
     failure.value = null;
     runs.clear();
     results.clear();
-    links.clear();
   },
   { immediate: true },
 );
@@ -93,17 +117,20 @@ watch(
   { immediate: true },
 );
 watch(
-  () => [selected.value, page.value, linksPage.value],
+  () => [selected.value, page.value, mode.value],
   () => {
     if (selected.value) {
-      results.load({ run: selected.value, page: page.value });
-      links.load({ run: selected.value, page: linksPage.value });
+      results.load({
+        run: selected.value,
+        page: page.value,
+        attention: mode.value === "traced",
+      });
     }
   },
 );
 function select(value) {
   selected.value = value;
-  page.value = linksPage.value = 1;
+  page.value = 1;
 }
 async function start() {
   if (sending.value) return;
@@ -170,12 +197,10 @@ async function start() {
       先完成第二步：当前最新提交的疑似修复识别还没做完。
     </p>
     <RequestError
-      :error="
-        failure || runs.error.value || results.error.value || links.error.value
-      "
+      :error="failure || runs.error.value || results.error.value"
     />
     <p
-      v-if="runs.loading.value || results.loading.value || links.loading.value"
+      v-if="runs.loading.value || results.loading.value"
       role="status"
     >
       正在读取追溯结果…
@@ -230,31 +255,94 @@ async function start() {
         <dt>结果版本</dt>
         <dd class="task-id">{{ shortId(run.label_version) }}</dd>
       </dl>
+      <div class="filters">
+        <button
+          :class="['chip', { on: mode === 'traced' }]"
+          @click="switchMode('traced')"
+        >
+          已追溯（{{ results.data.value?.counts?.traced ?? 0 }}）
+        </button>
+        <button
+          :class="['chip', { on: mode === 'all' }]"
+          @click="switchMode('all')"
+        >
+          全部（{{ results.data.value?.counts?.total ?? 0 }}）
+        </button>
+      </div>
+      <p class="hint">
+        {{
+          mode === "traced"
+            ? "这里只列传回来的结果；不是疑似修复、按规则跳过的提交收在「全部」里。"
+            : "全部提交都在这里；跳过的不展开，只显示一行。"
+        }}
+      </p>
       <ul class="task-list">
         <li
           v-for="item in results.data.value?.items"
           :key="item.id"
           data-testid="szz-result"
         >
-          <p class="task-id">{{ shortId(item.sha) }}</p>
-          <p>
-            提交当时的人工复核：{{
-              label(fixReview, item.input.review_status)
-            }}<span v-if="item.input.review_revision > 0"
-              >（第 {{ item.input.review_revision }} 次修改后）</span
-            >
+          <p v-if="skippedItem(item)" class="szz-skipped">
+            <span class="task-id">{{ shortId(item.sha) }}</span>
+            跳过：这条提交不是疑似修复，没有可往回翻的代码
           </p>
-          <p>
-            追溯结果：{{
-              item.result ? label(szzResult, item.result.status) : "待处理"
-            }}
-            · {{ item.links_count }} 条代码行线索
-          </p>
-          <p v-if="item.result?.reasons.length">
-            原因：{{ reasons(item.result.reasons) }}
-          </p>
+          <template v-else>
+            <p class="task-id">{{ shortId(item.sha) }}</p>
+            <p v-if="item.input.review_status !== 'unreviewed'">
+              追溯时的人工复核：{{
+                label(fixReview, item.input.review_status)
+              }}<span v-if="item.input.review_revision > 0"
+                >（第 {{ item.input.review_revision }} 次修改后）</span
+              >
+            </p>
+            <p>
+              追溯结果：{{
+                item.result ? label(szzResult, item.result.status) : "待处理"
+              }}
+              <button
+                v-if="item.links_count"
+                class="link-button"
+                @click="toggleLinks(item)"
+              >
+                {{
+                  expanded === item.id
+                    ? "收起代码行线索"
+                    : `查看 ${item.links_count} 条代码行线索`
+                }}
+              </button>
+            </p>
+            <div v-if="expanded === item.id" class="szz-links-inline">
+              <p v-if="itemLinks.loading">正在读取代码行线索…</p>
+              <RequestError :error="itemLinks.error" />
+              <ul v-if="itemLinks.items.length">
+                <li v-for="(link, i) in itemLinks.items" :key="i">
+                  {{ link.path }} 第 {{ link.fixed_line }} 行 ←
+                  {{ shortId(link.blamed_sha) }} 第 {{ link.blamed_line }} 行
+                  <span v-if="link.eligible"
+                    >（可用作「引入缺陷」的线索，把握：{{
+                      label(confidenceNames, link.confidence)
+                    }}）</span
+                  >
+                  <span v-else
+                    >（不能用作标签：{{ label(szzReason, link.reason) }}）</span
+                  >
+                </li>
+              </ul>
+            </div>
+            <p v-if="item.result?.reasons.length">
+              原因：{{ reasons(item.result.reasons) }}
+            </p>
+          </template>
         </li>
       </ul>
+      <p
+        v-if="!results.loading.value && !results.data.value?.items.length"
+        class="hint"
+      >
+        {{
+          mode === "traced" ? "这一轮没有追溯出结果。" : "这一轮没有可显示的提交。"
+        }}
+      </p>
       <div class="pagination">
         <button :disabled="page <= 1" @click="page--">上一页结果</button
         ><span>{{ page }}</span
@@ -263,43 +351,6 @@ async function start() {
           @click="page++"
         >
           下一页结果
-        </button>
-      </div>
-      <h3>代码行线索</h3>
-      <ul class="task-list" data-testid="szz-links">
-        <li v-for="(item, index) in links.data.value?.items" :key="index">
-          <p>文件 {{ item.path }} · 删掉了第 {{ item.fixed_line }} 行</p>
-          <p>
-            <span class="task-id">这次修复 {{ shortId(item.fix_sha) }}</span>
-            ·
-            <span class="task-id"
-              >最早来自提交 {{ shortId(item.blamed_sha) }} 的第
-              {{ item.blamed_line }} 行</span
-            >
-          </p>
-          <p v-if="item.origin_path">原文件：{{ item.origin_path }}</p>
-          <p>
-            {{ item.eligible ? "可能是引入缺陷的提交" : "无法确定" }} ·
-            {{
-              item.reason
-                ? label(szzReason, item.reason)
-                : `把握：${label(confidenceNames, item.confidence)}`
-            }} · 结果可用时间 {{ date(item.label_available_at) }}
-          </p>
-        </li>
-      </ul>
-      <p v-if="!links.data.value?.total">
-        这一轮没有可用的代码行线索；这种情况下不能把这些提交当成「没有问题」。
-      </p>
-      <div class="pagination">
-        <button :disabled="linksPage <= 1" @click="linksPage--">
-          上一页线索</button
-        ><span>{{ linksPage }}</span
-        ><button
-          :disabled="linksPage * 10 >= (links.data.value?.total || 0)"
-          @click="linksPage++"
-        >
-          下一页线索
         </button>
       </div>
     </div>

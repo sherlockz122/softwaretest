@@ -19,7 +19,7 @@ const run = {
   created_at: "2026-10-11T00:00:00Z",
 };
 afterEach(() => vi.restoreAllMocks());
-test("v2 default omits later Fix run; explicit v1 selection retains compatibility", async () => {
+test("always requests the latest feature version and omits the Fix run", async () => {
   const send = vi
     .spyOn(client, "request")
     .mockImplementation((_path, options) =>
@@ -47,7 +47,7 @@ test("v2 default omits later Fix run; explicit v1 selection retains compatibilit
   await flushPromises();
   await view.get("button.primary").trigger("click");
   await flushPromises();
-  let calls = send.mock.calls.filter(
+  const calls = send.mock.calls.filter(
     ([, options]) => options?.method === "POST",
   );
   expect(JSON.parse(calls[0][1].body)).toEqual({
@@ -55,14 +55,8 @@ test("v2 default omits later Fix run; explicit v1 selection retains compatibilit
     purpose: "historical",
     fix_run_id: null,
   });
-  await view.get("select").setValue("kamei14-dg-v1");
-  await view.get("button.primary").trigger("click");
-  await flushPromises();
-  calls = send.mock.calls.filter(([, options]) => options?.method === "POST");
-  expect(JSON.parse(calls[1][1].body).fix_run_id).toBe("fixed");
-  expect(calls[0][1].headers["Idempotency-Key"]).not.toBe(
-    calls[1][1].headers["Idempotency-Key"],
-  );
+  // 界面上不再提供指标版本选择，只剩“算哪些提交”。
+  expect(view.findAll("select")).toHaveLength(1);
   view.unmount();
 });
 

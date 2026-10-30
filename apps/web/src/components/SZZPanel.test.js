@@ -39,6 +39,7 @@ test("line evidence and paginated results retain unknown boundaries", async () =
                 },
               ],
               total: 11,
+              counts: { traced: 1, total: 11 },
             }
           : {
               run,
@@ -64,15 +65,17 @@ test("line evidence and paginated results retain unknown boundaries", async () =
   });
   await flushPromises();
   expect(view.text()).toContain("只有最近一段历史");
-  expect(view.text()).toContain("删掉了第 2 行");
+  expect(view.text()).toContain("追溯时的人工复核：已确认是修复");
+  const open = view
+    .findAll("button")
+    .find((button) => button.text().includes("查看 1 条代码行线索"));
+  expect(open).toBeTruthy();
+  await open.trigger("click");
+  await flushPromises();
+  expect(view.text()).toContain("source.py 第 2 行");
   expect(view.text()).toContain("第 3 行");
   expect(view.text()).toContain("来源提交不在已整理的提交记录里");
-  await view
-    .findAll("button")
-    .find((button) => button.text() === "下一页线索")
-    .trigger("click");
-  await flushPromises();
-  expect(send.mock.calls.some(([path]) => path.includes("links?page=2"))).toBe(
+  expect(send.mock.calls.some(([path]) => path.includes("item_id=one"))).toBe(
     true,
   );
   view.unmount();

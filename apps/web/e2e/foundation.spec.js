@@ -15,6 +15,10 @@ const config = Object.fromEntries(
       return [line.slice(0, split), line.slice(split + 1)];
     }),
 );
+// 仓库详情页一次只显示一步，操作前先切到对应标签。
+async function openStep(page, name) {
+  await page.getByRole("tab", { name, exact: true }).click();
+}
 async function login(page) {
   await page.goto("/login");
   await page
@@ -381,6 +385,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await page.getByRole("link", { name: "查看当前任务" }).click();
   await expect(page.getByTestId("task-status")).toHaveText("已完成");
   await page.getByRole("link", { name: "查看仓库详情" }).click();
+  await openStep(page, "① 提交记录");
   let firstParse = true;
   let parseTask;
   const parseKeys = [];
@@ -462,6 +467,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     fixTask = (await response.json()).task_id;
     await route.abort("failed");
   });
+  await openStep(page, "② 疑似修复");
   await page
     .getByRole("button", { name: "开始找出疑似修复的提交", exact: true })
     .click();
@@ -517,6 +523,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   await shot(page, info, "repository-fix-reviewed");
   await page.unroute("**/api/v1/repositories/*/fix-detection");
   await page.getByLabel("中等把握的提交也算作疑似修复").uncheck();
+  await openStep(page, "② 疑似修复");
   await page
     .getByRole("button", { name: "开始找出疑似修复的提交", exact: true })
     .click();
@@ -542,6 +549,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     szzTask = (await response.json()).task_id;
     await route.abort("failed");
   });
+  await openStep(page, "③ 缺陷追溯");
   await page
     .getByRole("button", { name: "开始追查缺陷引入", exact: true })
     .click();
@@ -561,6 +569,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
   );
   await shot(page, info, "repository-szz-complete");
   await page.unroute("**/api/v1/repositories/*/szz-runs");
+  await openStep(page, "③ 缺陷追溯");
   await page
     .getByRole("button", { name: "开始追查缺陷引入", exact: true })
     .click();
@@ -580,6 +589,7 @@ test("public repository lost-response replay, real Worker clone and persisted me
     featureTask = (await response.json()).task_id;
     await route.abort("failed");
   });
+  await openStep(page, "④ 统计指标");
   await page
     .getByRole("button", { name: "开始计算统计指标", exact: true })
     .click();
@@ -704,8 +714,11 @@ test("repository Viewer controls and mobile detail remain readable", async ({
   await expect(
     page.getByRole("button", { name: "同步最新提交", exact: true }),
   ).toHaveCount(0);
+  await openStep(page, "② 疑似修复");
   await expect(page.getByTestId("fix-panel")).toBeVisible();
+  await openStep(page, "③ 缺陷追溯");
   await expect(page.getByTestId("szz-panel")).toBeVisible();
+  await openStep(page, "④ 统计指标");
   await expect(page.getByTestId("feature-panel")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "开始计算统计指标", exact: true }),
@@ -783,6 +796,7 @@ test("history review UI preserves accepted HEAD and blocks another sync", async 
       exact: true,
     })
     .click();
+  await openStep(page, "① 提交记录");
   await expect(page.getByTestId("sync-status")).toHaveText("历史发生变化，需要人工确认");
   await expect(page.getByTestId("sync-window-error")).toBeVisible();
   queriesAvailable = true;
