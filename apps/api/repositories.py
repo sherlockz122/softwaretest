@@ -171,8 +171,11 @@ def szz_links(
     user=Depends(current_user),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    item_id: UUID | None = Query(default=None),
 ):
-    return szzing(request).links(str(run_id), page, page_size)
+    return szzing(request).links(
+        str(run_id), page, page_size, str(item_id) if item_id else None
+    )
 
 
 @szz_router.get("/{run_id:uuid}/results")
@@ -182,8 +185,9 @@ def szz_results(
     user=Depends(current_user),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    attention: bool = Query(default=False),
 ):
-    return szzing(request).results(str(run_id), page, page_size)
+    return szzing(request).results(str(run_id), page, page_size, attention)
 
 
 def service(request):
@@ -321,8 +325,11 @@ def fix_evidence(
     user=Depends(current_user),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    attention: bool = Query(default=False),
 ):
-    return fixing(request).results(str(repository_id), str(run_id), page, page_size)
+    return fixing(request).results(
+        str(repository_id), str(run_id), page, page_size, attention
+    )
 
 
 @router.patch("/{repository_id:uuid}/fix-evidence/{assessment_id:uuid}/review")
