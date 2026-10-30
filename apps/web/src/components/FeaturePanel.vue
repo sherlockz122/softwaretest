@@ -23,8 +23,8 @@ const page = ref(1);
 const feature = ref("");
 const mode = ref("all");
 const purpose = ref("historical");
-const version = ref("kamei14-dg-message-v2");
-const v2 = computed(() => version.value === "kamei14-dg-message-v2");
+// 只保留最新的指标规则；旧版结果仍然可以在历史轮次里查看，但不再提供选择。
+const FEATURE_VERSION = "kamei14-dg-message-v2";
 const sending = ref(false);
 const failure = ref(null);
 const keys = operationKeys();
@@ -81,14 +81,48 @@ function featureValue(name, value) {
   }
   return rounded(value);
 }
-function valueLine(item) {
-  return (feature.value ? [feature.value] : names)
-    .map((name) => {
-      const value = featureValue(name, item.result.values[name]);
-      const reason = item.result.reasons[name];
-      return `${featureLabel(name)}：${value}${reason ? `（${label(featureReason, reason)}）` : ""}`;
+// 14 个指标按含义分成几组，一行一组；算不出来的单独归到一句里，
+// 不再把“未知（只整理了部分历史）”重复六遍。
+const groups = [
+  { title: "改动规模", names: ["NF", "NS", "ND", "LA", "LD", "LT"] },
+  { title: "改动分散程度", names: ["Entropy"] },
+  { title: "历史背景", names: ["NUC", "AGE", "NDEV"] },
+  { title: "作者经验", names: ["EXP", "REXP", "SEXP"] },
+  { title: "是否疑似修复", names: ["FIX"] },
+];
+function itemGroups(item) {
+  return groups
+    .filter((group) => !feature.value || group.names.includes(feature.value))
+    .map((group) => {
+      const known = [];
+      const missing = new Map();
+      for (const name of group.names) {
+        const raw = item.result.values[name];
+        if (raw == null || raw === undefined) {
+          const reason = item.result.reasons[name] ?? "";
+          missing.set(reason, [...(missing.get(reason) ?? []), featureLabel(name)]);
+        } else {
+          // 只有一个指标的组，标题已经说清楚了，不再重复一遍指标名。
+          known.push(
+            group.names.length === 1
+              ? `${featureValue(name, raw)}`
+              : `${featureLabel(name)} ${featureValue(name, raw)}`,
+          );
+        }
+      }
+      const missingText = [...missing.entries()]
+        .map(
+          ([reason, list]) =>
+            `${list.join("、")} 未计算${reason ? `（${label(featureReason, reason)}）` : ""}`,
+        )
+        .join("；");
+      return {
+        title: group.title,
+        values: known.join(" · "),
+        missing: missingText,
+      };
     })
-    .join(" · ");
+    .filter((group) => group.values || group.missing);
 }
 const canStart = computed(
   () =>
@@ -160,14 +194,9 @@ async function start() {
   const id = props.repo.id;
   const previous = props.repo.feature_run?.root_task_id;
   const body = {
-    feature_version: version.value,
+    feature_version: FEATURE_VERSION,
     purpose: purpose.value,
-    fix_run_id:
-      !v2.value &&
-      props.repo.fix_run?.head_sha === props.repo.head_sha &&
-      props.repo.fix_run?.processed === props.repo.fix_run?.total
-        ? props.repo.fix_run.root_task_id
-        : null,
+    fix_run_id: null,
   };
   const input = JSON.stringify([id, props.repo.head_sha, previous, body]);
   sending.value = true;
@@ -210,30 +239,15 @@ async function start() {
       每个提交会算一组统计指标：改了多少行、涉及多少文件、作者对项目有多熟等。算不出来的指标会留空并写明原因，不会被填成 0；指标本身不含「是否有缺陷」的结论。
     </p>
     <div v-if="canStart">
-      <label
-        >指标版本
-        <select v-model="version" :disabled="busy || sending">
-          <option value="kamei14-dg-message-v2">
-            v2（推荐，按提交说明判断是否修复）
-          </option>
-          <option value="kamei14-dg-v1">v1（旧版，兼容以前的结果）</option>
-        </select>
-      </label>
-      <p v-if="v2" class="hint">
-        v2 会核对 Git 里的原始记录，历史提交和待预测提交用同一套规则。FIX=0
+      <p class="hint">
+        指标一律按最新规则计算：核对 Git 里的原始记录，历史提交和待预测提交用同一套规则。FIX=0
         只表示提交说明里没看到修复迹象，不代表这条提交不是修复，更不代表它没有问题；说明读不出内容时会留空。一次最多处理 1000 个提交。
-      </p>
-      <p v-else class="hint">
-        v1 固定使用当时那一轮修复识别结果，只看当时已经能拿到的证据；待预测的提交一律按
-        FIX=0 处理。
       </p>
       <label
         >算哪些提交
         <select v-model="purpose" :disabled="busy || sending">
           <option value="historical">历史提交</option>
-          <option value="candidate">
-            {{ v2 ? "待预测的提交（同样规则）" : "待预测的提交（FIX 默认 0）" }}
-          </option>
+          <option value="candidate">待预测的提交（同样规则）</option>
         </select></label
       >
       <button class="primary" :disabled="busy || sending" @click="start">
@@ -417,7 +431,15 @@ async function start() {
           <p v-if="!item.result">待处理</p>
           <template v-else>
             <p>{{ date(item.result.event_time) }}</p>
-            <p>{{ valueLine(item) }}</p>
+            <div class="feature-groups">
+              <p v-for="group in itemGroups(item)" :key="group.title">
+                <strong>{{ group.title }}</strong>
+                <span v-if="group.values">{{ group.values }}</span>
+                <span v-if="group.missing" class="muted">{{
+                  group.missing
+                }}</span>
+              </p>
+            </div>
           </template>
         </li>
       </ul>

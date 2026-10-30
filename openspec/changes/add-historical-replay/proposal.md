@@ -35,8 +35,22 @@
 
 ## Impact
 
-- **不新增**：接口、数据库迁移、在线任务、模型训练。
-- **保留**：生产用的 `time-labels-v1` 和 `kamei14-dg-v1` 及其哈希都不变。
-- **关联追踪**：User Story US-06、US-08；
-  测试 REPLAY-CAUSAL、REPLAY-TIME、REPLAY-SOURCE、REPLAY-RESOURCE；
-  用例见 `tests/test_historical_replay.py`。
+**数据库**
+
+不新增迁移，也不改表结构。生产用的 `time-labels-v1` 和 `kamei14-dg-v1` 及其哈希都不变。
+
+**后端**
+
+不新增接口，也不新增在线任务。回放能力以本地只读探针和离线内核的形式提供。
+
+**存储与资源**
+
+探针的容量和执行时间都有上界，不会因为仓库变大而无限跑下去。
+
+**不在本次范围内**
+
+不做模型训练，回放结果也不写回在线链路。
+
+**关联追踪**
+
+对应 User Story US-06、US-08；测试为 REPLAY-CAUSAL、REPLAY-TIME、REPLAY-SOURCE、REPLAY-RESOURCE，用例见 `tests/test_historical_replay.py`。

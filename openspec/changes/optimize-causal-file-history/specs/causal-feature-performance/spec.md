@@ -1,6 +1,6 @@
 ## ADDED Requirements
 
-### Requirement: 索引计算 SHALL 保持因果语义
+### Requirement: 索引计算与因果语义等价
 v2 内核 SHALL 只使用冻结的、已经绑定原生 Git 的输入，
 并在它的限制范围内保持全部旧版数值、缺失原因和基础来源摘要不变。
 
@@ -12,7 +12,7 @@ v2 内核 SHALL 只使用冻结的、已经绑定原生 Git 的输入，
 - **WHEN** 历史只是一个近端窗口、包含不支持的内容，或者调用方取消
 - **THEN** 保留旧版的缺失原因，并且取消会向上传播，不产生发布
 
-### Requirement: 实现出处 SHALL 保持显式可追溯
+### Requirement: 实现出处显式可追溯
 v2 的规则哈希 SHALL 绑定索引代码。v1 源码和已存储的轮次 SHALL 保持不可变。
 
 #### Scenario: 规则漂移后恢复
