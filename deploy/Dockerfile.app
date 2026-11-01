@@ -14,6 +14,7 @@ COPY apps/__init__.py apps/__init__.py
 COPY apps/api apps/api
 COPY apps/worker apps/worker
 COPY packages packages
+COPY scripts/semantic_source_supplement.py scripts/semantic_source_supplement.py
 COPY alembic.ini alembic.ini
 COPY migrations migrations
 COPY uv.lock uv.lock

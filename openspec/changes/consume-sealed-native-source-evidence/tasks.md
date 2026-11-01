@@ -13,10 +13,12 @@
 ## 3 Engineering and delivery
 
 - [x] 3.1 Complete full backend/CPU/frontend/new-volume/static/locks/contracts/authorized audit, normal model/data/semantic/review/user/A-B protection and independent restore, ordinary original storage8/600 and one lower-bound-aware meter; stop normal services preserving volumes.
-- [ ] 3.2 Synchronize guidance/plan/issues/report/tracking; only authorized ordinary wang delivery, both own-SHA complete CIs and fresh source/remote/stopped posterior, then actual HANDOFF. Historical/candidate/eight-model/semantic-language/governance/NFR/manual-demo objective remains incomplete until separately proven.
+- [x] 3.2 Synchronize guidance/plan/issues/report/tracking; only authorized ordinary wang delivery, both own-SHA complete CIs and fresh source/remote/stopped posterior, then actual HANDOFF. Historical/candidate/eight-model/semantic-language/governance/NFR/manual-demo objective remains incomplete until separately proven.
 
 Scope correction before pure-dialect creation: initial19files extended to20after actual import subprocess audit. The14-case v1 snapshot and actual old outcome hash are intermediate; no no-subprocess/Linux/Source6 or full engineering claim follows.
 
 Actual component evidence:56 new cases passed; fresh import/history audit zero subprocess; real v1 and Source6 complete1120/1971 outcome hashes equal; copied ROOT twice each equal; actual Linux image47 sources matched with no Git on PATH/network/tests/scripts/torch, missing/tampered and current-unavailable safely refused. Original55 sources unchanged. Engineering/own-SHA delivery still unchecked. Initial missing-feature collection is one expected collection error, not14 distinct red cases; later39-case run had one fixture-field failure, retained before corrected55-case run.
 
 3.2实际进度：实现c2cbbe7d40f19aafaf131db67b39c83190d987ae/CI41017036203自身SHA完整1251/12/49/20、Linux零跳过、审计0及八关键含清理已验证。最终文档自身SHA与fresh后验仍待，后续据实际stage34/final-delivery.json与HANDOFF-CLOSED.md同步勾选，不自引用尚未发生结果。
+
+第三十五批开工据实际stage34/final-delivery.json、HANDOFF-CLOSED.md、final-posterior-recovery-progress.json及两自身SHA完整CI同步关闭3.2；此前未勾选符合自引用规则。第三十四批工程交付不代表产品或专业复核完成。
