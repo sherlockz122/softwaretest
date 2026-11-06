@@ -1,0 +1,253 @@
+{
+  "generated_at": "2026-11-06T21:48:15",
+  "base_url": "http://127.0.0.1:18000",
+  "requests_per_target": 100,
+  "warmup_per_target": 5,
+  "minimum_valid": 100,
+  "environment": {
+    "platform": "Windows-10-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
+    "python": "3.11.17",
+    "cpu_count": 22,
+    "cpu_logical": 22,
+    "cpu_physical": 16,
+    "memory_gib": 31.5,
+    "git_commit": "f8edb62a825712438f3408ad95e008c5f9dd4060"
+  },
+  "model": {
+    "run_id": "e300d428-6577-44c4-991d-3359aaefb027",
+    "plugin": "rf",
+    "params": {
+      "max_depth": 16,
+      "min_samples_leaf": 1,
+      "n_estimators": 120
+    },
+    "seed": 42,
+    "manifest_hash": "5553ca757ddc3d5d5cb596e642a42b96315bdc0d88c02e273ca384539643881f",
+    "threshold": 0.95,
+    "registered": true,
+    "candidate_release": false
+  },
+  "data": {
+    "dataset_id": "b9712588-d18a-47c0-b609-b039e25597de",
+    "dataset_rows": 6000,
+    "processed": 6000,
+    "risk_items": 1800,
+    "risk_partitions": [
+      "validation",
+      "test"
+    ]
+  },
+  "groups": [
+    {
+      "target": "datasets.list",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 4.459,
+      "throughput_per_second": 22.43,
+      "p50_ms": 176.52,
+      "p95_ms": 241.78,
+      "p99_ms": 269.14,
+      "meets_minimum": true
+    },
+    {
+      "target": "datasets.list",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 7.217,
+      "throughput_per_second": 13.86,
+      "p50_ms": 72.97,
+      "p95_ms": 78.67,
+      "p99_ms": 80.86,
+      "meets_minimum": true
+    },
+    {
+      "target": "model-runs.detail",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.863,
+      "throughput_per_second": 115.94,
+      "p50_ms": 32.64,
+      "p95_ms": 46.49,
+      "p99_ms": 55.32,
+      "meets_minimum": true
+    },
+    {
+      "target": "model-runs.detail",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.984,
+      "throughput_per_second": 101.61,
+      "p50_ms": 9.38,
+      "p95_ms": 12.55,
+      "p99_ms": 13.91,
+      "meets_minimum": true
+    },
+    {
+      "target": "models.list",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.785,
+      "throughput_per_second": 127.32,
+      "p50_ms": 30.47,
+      "p95_ms": 45.53,
+      "p99_ms": 47.47,
+      "meets_minimum": true
+    },
+    {
+      "target": "models.list",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.921,
+      "throughput_per_second": 108.54,
+      "p50_ms": 9.16,
+      "p95_ms": 11.35,
+      "p99_ms": 11.72,
+      "meets_minimum": true
+    },
+    {
+      "target": "repositories.list",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.807,
+      "throughput_per_second": 123.88,
+      "p50_ms": 32.35,
+      "p95_ms": 42.26,
+      "p99_ms": 47.47,
+      "meets_minimum": true
+    },
+    {
+      "target": "repositories.list",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 1.11,
+      "throughput_per_second": 90.11,
+      "p50_ms": 10.42,
+      "p95_ms": 14.65,
+      "p99_ms": 15.09,
+      "meets_minimum": true
+    },
+    {
+      "target": "risk-items.max-page",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 5.618,
+      "throughput_per_second": 17.8,
+      "p50_ms": 224.13,
+      "p95_ms": 264.36,
+      "p99_ms": 307.38,
+      "meets_minimum": true
+    },
+    {
+      "target": "risk-items.max-page",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 7.561,
+      "throughput_per_second": 13.23,
+      "p50_ms": 75.7,
+      "p95_ms": 87.57,
+      "p99_ms": 90.92,
+      "meets_minimum": true
+    },
+    {
+      "target": "risk-items.page",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 5.321,
+      "throughput_per_second": 18.79,
+      "p50_ms": 213.69,
+      "p95_ms": 268.59,
+      "p99_ms": 315.81,
+      "meets_minimum": true
+    },
+    {
+      "target": "risk-items.page",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 7.159,
+      "throughput_per_second": 13.97,
+      "p50_ms": 71.42,
+      "p95_ms": 81.33,
+      "p99_ms": 86.23,
+      "meets_minimum": true
+    },
+    {
+      "target": "tasks.list",
+      "group": "concurrency-4",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.884,
+      "throughput_per_second": 113.06,
+      "p50_ms": 34.28,
+      "p95_ms": 43.24,
+      "p99_ms": 60.81,
+      "meets_minimum": true
+    },
+    {
+      "target": "tasks.list",
+      "group": "serial",
+      "requests": 100,
+      "valid": 100,
+      "invalid": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.933,
+      "throughput_per_second": 107.13,
+      "p50_ms": 9.09,
+      "p95_ms": 11.54,
+      "p99_ms": 12.86,
+      "meets_minimum": true
+    }
+  ],
+  "absent_targets": [
+    {
+      "target": "candidate-prediction.review",
+      "path": "/api/v1/review/predictions",
+      "status": 404
+    },
+    {
+      "target": "candidate-prediction.web-route",
+      "path": "/api/v1/predictions",
+      "status": 404
+    }
+  ],
+  "raw_csv": "probe\\out\\latency_nfr03_raw.csv"
+}
