@@ -38,15 +38,21 @@ const timer = setInterval(() => {
 }, 2000);
 onUnmounted(() => clearInterval(timer));
 const report = computed(() => data.data.value?.report);
-const summaries = computed(() =>
-  report.value
-    ? [
-        ["验证区（定好判定门槛后）", report.value.metrics.validation_threshold],
-        ["测试区（最终评价）", report.value.metrics.test],
-        ["对照：哪类多就全猜哪类（测试区）", report.value.baseline.metrics],
-      ]
-    : [],
-);
+const summaries = computed(() => {
+  const value = report.value;
+  if (!value) return [];
+  const rows = [];
+  if (value.metrics.validation_threshold)
+    rows.push(["验证区（定好判定门槛后）", value.metrics.validation_threshold]);
+  if (value.metrics.train_threshold)
+    rows.push([
+      "训练区后段（没有验证区，用训练区后段定门槛，属样本内）",
+      value.metrics.train_threshold,
+    ]);
+  rows.push(["测试区（最终评价）", value.metrics.test]);
+  rows.push(["对照：哪类多就全猜哪类（测试区）", value.baseline.metrics]);
+  return rows;
+});
 const modelNames = { lr: "逻辑回归", rf: "随机森林" };
 const artifactNames = {
   "report.json": "评估报告（report.json）",
@@ -142,7 +148,11 @@ async function download(kind) {
           >
         </p>
         <p>
-          判定门槛：{{ number(report.threshold) }}（模型给出的概率超过它，就算「可能引入缺陷」）。验证区前
+          判定门槛：{{ number(report.threshold) }}（模型给出的概率超过它，就算「可能引入缺陷」）。{{
+            report.calibration_partition === "train"
+              ? "这次没有验证区，用训练区的前后两段：前"
+              : "验证区前"
+          }}
           {{ report.calibration.calibration_rows }} 条用来校准概率（把分数调得更接近真实比例），后
           {{ report.calibration.threshold_rows }}
           条用来定判定门槛，同一时间段的提交不拆开。
@@ -206,7 +216,7 @@ async function download(kind) {
           </ul>
         </details>
         <p>
-          验证区的结果会受判定门槛高低影响，测试区只做最后评价。表格里的区间是把数据按时间段重新抽样算出来的，只能说明结果有多不稳定，不能证明标签就是对的。工作量按新增和删除的行数估算；风险高也不等于找到了缺陷的根因。
+          定门槛那部分的结果会受判定门槛高低影响（没有验证区时用的是训练区后段、属样本内），测试区只做最后评价。表格里的区间是把数据按时间段重新抽样算出来的，只能说明结果有多不稳定，不能证明标签就是对的。工作量按新增和删除的行数估算；风险高也不等于找到了缺陷的根因。
         </p>
         <div class="actions">
           <button

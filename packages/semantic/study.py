@@ -140,7 +140,7 @@ def train_round(parts, kind, seed):
         if plugin == "rf"
         else {"c": 1.0, "max_iter": 500}
     )
-    model, calibrator, threshold, first, second = fit_model(
+    model, calibrator, threshold, _partition, first, second = fit_model(
         parts, plugin, params, seed, lambda _: checkpoint()
     )
     return (

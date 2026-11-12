@@ -19,7 +19,7 @@ class DatasetBody(BaseModel):
     purpose: str = Field(default="published_binary_12_v1", max_length=40)
     split_strategy: Literal["time_ordered", "repository_holdout"] = "time_ordered"
     train_ratio: float = Field(default=0.70, strict=True, gt=0, lt=1)
-    validation_ratio: float = Field(default=0.15, strict=True, gt=0, lt=1)
+    validation_ratio: float = Field(default=0.15, strict=True, ge=0, lt=1)  # 验证集可选：0 表示不切验证分区
     test_ratio: float = Field(default=0.15, strict=True, gt=0, lt=1)
 
     @field_validator("name")

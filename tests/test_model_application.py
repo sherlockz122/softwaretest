@@ -136,6 +136,44 @@ def test_real_training_roundtrip_and_registration(environment, plugin):
     assert service.tasks.claim(ack["task_id"]) is None
 
 
+def test_training_without_validation_partition(environment):
+    service, _, users, settings, engine, dataset = environment
+    source, imported = fixture_asset(
+        research.STORE.parent / "two-way-source", rows=80, store=research.STORE
+    )
+    body = {
+        "name": "two-way model fixture",
+        "asset_id": source.name,
+        "source_hash": imported["manifest"]["content_hash"],
+        "purpose": research.PURPOSE,
+        "split_strategy": "time_ordered",
+        "train_ratio": 0.75,
+        "validation_ratio": 0.0,
+        "test_ratio": 0.25,
+    }
+    ack = dataset.create(users[1], uuid4().hex, body, str(uuid4()))
+    token, payload = dataset.tasks.claim(ack["task_id"])
+    dataset.run(ack["task_id"], token, payload)
+    detail = dataset.detail(ack["dataset_id"])
+    assert detail["ready"]
+    assert set(detail["summary"]["partitions"]) == {"train", "test"}
+    train_ack, train_token, train_payload = claim(
+        environment,
+        {"dataset_id": ack["dataset_id"], "plugin": "lr", "params": {}, "seed": 42},
+    )
+    service.run(train_ack["task_id"], train_token, train_payload)
+    result = service.detail(train_ack["model_run_id"])
+    assert result["registered"], service.tasks.detail(train_ack["task_id"])
+    report = result["report"]
+    assert report["calibration_partition"] == "train"
+    assert report["calibration"]["method"] == "train-chronological-sigmoid-logit-v1"
+    assert "train_threshold" in report["metrics"]
+    assert "validation_threshold" not in report["metrics"]
+    assert report["metrics"]["test"]["support"] == {"clean": 10, "buggy": 10}
+    assert "no_validation_partition_train_internal_calibration" in report["limitations"]
+    assert service.risk_items(train_ack["model_run_id"])["partitions"] == ["test"]
+
+
 def test_supervisor_cancels_child_and_does_not_register(environment):
     service, _, users, *_ = environment
     ack, token, payload = claim(environment)

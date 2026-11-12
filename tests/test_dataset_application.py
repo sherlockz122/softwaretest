@@ -98,9 +98,40 @@ def test_real_batches_ready_csv_and_member_identity(environment):
     assert result["ready"] and result["total"] == result["processed"] == 40
     assert result["summary"]["partitions"]["train"] == {"clean": 14, "buggy": 14}
     csv = service.download(ack["dataset_id"], "train").read_text()
-    assert len(csv.splitlines()) == 29 and ",fix," not in csv.splitlines()[0]
+    assert len(csv.splitlines()) == 29 and csv.splitlines()[0].endswith(",fix,lt")
     assert result["members"][0]["numeric12"] == {k: 1.0 for k in research.NUMERIC_FIELDS}
     assert not service.tasks.claim(ack["task_id"])
+
+
+def test_optional_validation_build_and_member_auxiliaries(environment):
+    service, body, users, _, _, _ = environment
+    ack = service.create(
+        users[1][0],
+        uuid4().hex,
+        body
+        | {
+            "name": "two-way acceptance",
+            "train_ratio": 0.8,
+            "validation_ratio": 0.0,
+            "test_ratio": 0.2,
+        },
+        str(uuid4()),
+    )
+    token, payload = service.tasks.claim(ack["task_id"])
+    service.run(ack["task_id"], token, payload)
+    result = service.detail(ack["dataset_id"])
+    assert result["ready"] and result["total"] == 40
+    assert set(result["summary"]["partitions"]) == {"train", "test"}
+    assert all(m["partition"] != "validation" for m in result["members"])
+    assert result["members"][0]["fix"] is False
+    assert result["members"][0]["lt"] is None
+    assert result["members"][0]["lt_missing_reason"] == "upstream_source_omits_lt"
+    assert result["summary"]["auxiliary_features"] == ["fix", "lt"]
+    csv = service.download(ack["dataset_id"], "train").read_text()
+    assert csv.splitlines()[0].endswith(",fix,lt")
+    assert len(csv.splitlines()) == 33
+    with pytest.raises(TaskError, match="DATA_PARTITION_ABSENT"):
+        service.download(ack["dataset_id"], "validation")
 
 
 def test_detail_member_filters_and_counts(environment):

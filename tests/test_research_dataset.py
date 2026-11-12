@@ -55,6 +55,85 @@ def test_same_time_group_never_crosses_partition(work):
     assert all(len(partitions) == 1 for partitions in mapping.values())
 
 
+def test_validation_partition_optional_two_way(work):
+    directory, source = fixture_asset(work)
+    policy = POLICY | {"train_ratio": 0.8, "validation_ratio": 0.0, "test_ratio": 0.2}
+    members, metadata, _ = research.prepare(
+        directory, source["manifest"]["content_hash"], policy
+    )
+    assert all(row["partition"] != "validation" for row in members)
+    assert [sum(r["partition"] == p for r in members) for p in ("train", "test")] == [32, 8]
+    assert "validation" not in metadata["partitions"]
+    assert metadata["partitions"] == {
+        "train": {"clean": 16, "buggy": 16},
+        "test": {"clean": 4, "buggy": 4},
+    }
+    assert metadata["policy"]["validation_ratio"] == 0
+
+
+def test_validation_optional_repository_holdout(work):
+    projects = (
+        "apache/activemq",
+        "apache/camel",
+        "apache/flink",
+        "apache/groovy",
+        "apache/hadoop-hdfs",
+        "apache/hadoop-mapreduce",
+        "apache/hive",
+        "apache/kafka",
+    )
+    directory, source = fixture_asset(work, projects=projects)
+    members, metadata, _ = research.prepare(
+        directory,
+        source["manifest"]["content_hash"],
+        POLICY
+        | {
+            "split_strategy": "repository_holdout",
+            "train_ratio": 0.75,
+            "validation_ratio": 0.0,
+            "test_ratio": 0.25,
+        },
+    )
+    assert all(row["partition"] != "validation" for row in members)
+    assert set(metadata["partitions"]) == {"train", "test"}
+    # 8 个项目里有 2 个合并为 apache/hadoop → 7 个仓库，75/25 切分为 5/2
+    assert sum(r["partition"] == "train" for r in members) == 5 * 40
+    assert sum(r["partition"] == "test" for r in members) == 2 * 40
+
+
+def test_fix_and_lt_auxiliary_features_per_member(work):
+    def mark_fix(row, i, _):
+        if i % 5 == 0:
+            row["fix"] = "True"
+
+    directory, source = fixture_asset(work, mutate=mark_fix)
+    members, metadata, _ = research.prepare(
+        directory, source["manifest"]["content_hash"], POLICY
+    )
+    assert {row["fix"] for row in members} == {True, False}
+    assert all(
+        row["lt"] is None and row["lt_missing_reason"] == "upstream_source_omits_lt"
+        for row in members
+    )
+    assert metadata["auxiliary_features"] == ["fix", "lt"]
+    assert metadata["lt_source"] == "missing_in_stored_upstream_source"
+    assert "lt_unavailable_in_stored_upstream_source" in metadata["limitations"]
+
+
+def test_policy_accepts_zero_validation_but_not_negatives():
+    research.policy_valid(
+        POLICY | {"train_ratio": 0.8, "validation_ratio": 0.0, "test_ratio": 0.2}
+    )
+    for bad in (
+        POLICY | {"validation_ratio": -0.01},
+        POLICY | {"validation_ratio": 0.0},  # 总和 0.85 ≠ 1
+        POLICY | {"validation_ratio": 1.0},
+        POLICY | {"train_ratio": 0.0, "validation_ratio": 0.8, "test_ratio": 0.2},
+    ):
+        with pytest.raises(research.ResearchError, match="DATA_POLICY_INVALID"):
+            research.policy_valid(bad)
+
+
 def test_canonical_duplicate_rows_merge_and_repository_holdout(work):
     projects = (
         "apache/activemq",

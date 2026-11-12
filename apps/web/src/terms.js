@@ -189,6 +189,16 @@ export const datasetFeatureHints = {
   arexp: "作者在最近一段时间内的提交次数（arexp）",
   asexp: "作者在这些子系统内的提交次数（asexp）",
 };
+// 十四维特征里的第 13、14 项：只展示，不参与模型训练
+export const datasetAuxiliaryFeatures = ["fix", "lt"];
+export const datasetAuxiliaryNames = {
+  fix: "修复标志",
+  lt: "改动前文件总行数",
+};
+export const datasetAuxiliaryHints = {
+  fix: "这个提交是否被原公开数据标注为修复（fix）；只展示，不参与模型计算，避免提前泄露答案",
+  lt: "改动前文件的总行数（lt）；上游源数据没提供这一项，所以显示为未提供",
+};
 export const featureForms = {
   raw: "原始值",
   log1p: "取对数",

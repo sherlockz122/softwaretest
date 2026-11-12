@@ -9,6 +9,8 @@ import {
   datasetFeatureNames,
   featureFormHints,
   featureForms,
+  label,
+  partitions,
 } from "../terms";
 import RequestError from "../components/RequestError.vue";
 const router = useRouter();
@@ -53,6 +55,12 @@ const canCreate = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
 const canSubmit = computed(() => chosen.value.size > 0);
+const chosenDataset = computed(
+  () => datasets.data.value?.items.find((row) => row.id === dataset.value) || null,
+);
+const chosenPartitions = computed(
+  () => chosenDataset.value?.summary?.partitions || {},
+);
 watch(page, (p) => list.load(p), { immediate: true });
 watch(
   datasetPage,
@@ -116,6 +124,10 @@ async function create() {
     <p>
       用选定的研究数据集训练一个二分类模型，判断「这次提交会不会引入缺陷」。标签来自原公开数据的规则判断，没有人工逐条确认，所以结果只适合研究对照，不能直接拿来预警。
     </p>
+    <p>
+      训练和预测是分开的两件事：这里只做训练；用训练好的模型对提交做批量预测，结果会进
+      <RouterLink to="/risk">历史风险列表</RouterLink>，不会出现在本页。这里的训练记录与历史风险列表里的预测记录是各自独立的，互不混用。
+    </p>
     <RequestError :error="error || list.error.value || datasets.error.value" />
     <form v-if="canCreate" @submit.prevent="create">
       <label
@@ -133,6 +145,23 @@ async function create() {
           </option>
         </select></label
       >
+      <p
+        v-if="
+          chosenDataset &&
+          chosenDataset.ready &&
+          Object.keys(chosenPartitions).length
+        "
+        class="hint"
+      >
+        这份数据集的样本划分：
+        <span v-for="(count, name) in chosenPartitions" :key="name">
+          {{ label(partitions, name) }}区 {{ count.clean + count.buggy }} 条样本（正常
+          {{ count.clean }} / 有缺陷 {{ count.buggy }}）·
+        </span>
+        <span v-if="!('validation' in chosenPartitions)"
+          >没有验证区，说明当时只分了训练和测试两份。</span
+        >
+      </p>
       <div class="actions">
         <button
           type="button"
@@ -277,7 +306,7 @@ async function create() {
         </p>
       </fieldset>
       <p>
-        三份数据各司其职：训练区用来训练模型，验证区用来调整概率、定判定门槛，测试区只做最后评价、不参与调整。任务中断后会用同样的输入重新训练。
+        分区各司其职：训练区用来训练模型，验证区（如果切了）用来调整概率、定判定门槛，测试区只做最后评价、不参与调整。验证区不是必须的，也可以只分训练和测试两份。任务中断后会用同样的输入重新训练。
       </p>
       <button :disabled="creating || !dataset || !canSubmit">
         {{ creating ? "正在提交…" : "开始训练" }}

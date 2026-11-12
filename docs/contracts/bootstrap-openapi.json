@@ -146,7 +146,7 @@
           "validation_ratio": {
             "default": 0.15,
             "exclusiveMaximum": 1.0,
-            "exclusiveMinimum": 0.0,
+            "minimum": 0.0,
             "title": "Validation Ratio",
             "type": "number"
           }

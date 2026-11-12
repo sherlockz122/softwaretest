@@ -13,12 +13,25 @@ const list = useLatest((p, signal) =>
 const name = ref("");
 const assetId = ref("");
 const strategy = ref("time_ordered");
+const trainRatio = ref(70);
+const validationRatio = ref(15);
+const testRatio = ref(15);
 const creating = ref(false);
 const error = ref(null);
 const keys = operationKeys();
 const canCreate = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
+const ratiosInvalid = computed(() => {
+  const ratios = [
+    Number(trainRatio.value),
+    Number(validationRatio.value),
+    Number(testRatio.value),
+  ];
+  if (ratios.some((r) => !Number.isFinite(r) || r < 0)) return true;
+  if (ratios[0] === 0 || ratios[2] === 0) return true;
+  return Math.abs(ratios.reduce((a, b) => a + b, 0) - 100) > 1e-6;
+});
 const assets = computed(() => list.data.value?.assets || []);
 watch(page, (p) => list.load(p), { immediate: true });
 const timer = setInterval(() => {
@@ -37,6 +50,9 @@ async function create() {
     source_hash: selected.source_hash,
     purpose: "published_binary_12_v1",
     split_strategy: strategy.value,
+    train_ratio: Number(trainRatio.value) / 100,
+    validation_ratio: Number(validationRatio.value) / 100,
+    test_ratio: Number(testRatio.value) / 100,
   };
   try {
     const result = await client.request("/datasets", {
@@ -84,7 +100,7 @@ async function create() {
             :key="asset.asset_id"
             :value="asset.asset_id"
           >
-            {{ asset.rows }} 行数据 · 编号 {{ asset.asset_id.slice(0, 8) }}
+            {{ asset.rows }} 条样本 · 编号 {{ asset.asset_id.slice(0, 8) }}
           </option>
         </select></label
       >
@@ -101,13 +117,51 @@ async function create() {
           </option>
         </select></label
       >
+      <label
+        >划分比例（训练 / 验证 / 测试，加起来要等于 100%）<span
+          class="ratio-row"
+        >
+          <input
+            v-model.number="trainRatio"
+            type="number"
+            min="1"
+            max="99"
+            required
+            aria-label="训练比例"
+            :disabled="creating"
+          />
+          <input
+            v-model.number="validationRatio"
+            type="number"
+            min="0"
+            max="99"
+            required
+            aria-label="验证比例"
+            :disabled="creating"
+          />
+          <input
+            v-model.number="testRatio"
+            type="number"
+            min="1"
+            max="99"
+            required
+            aria-label="测试比例"
+            :disabled="creating"
+          />
+        </span>
+        <span class="hint">验证比例填 0 表示不切验证集，只分训练和测试两份。</span>
+      </label>
       <p>
-        每个数据集用 12 项数值指标，默认按 70% / 15% / 15%
-        分成训练、验证、测试三份。后台会核对数据来源和两类的数量，全部完成后才能下载。
+        每个数据集有 14 项特征：12 项数值指标 + 修复标志 + 改动前文件总行数。后台会核对数据来源和两类的数量，全部完成后才能下载。
       </p>
-      <button :disabled="creating || !assetId || !name.trim()">
+      <button
+        :disabled="creating || !assetId || !name.trim() || ratiosInvalid"
+      >
         {{ creating ? "正在提交…" : "生成研究数据集" }}
       </button>
+      <p v-if="ratiosInvalid" class="hint">
+        训练和测试比例要大于 0，验证比例可以为 0，三者加起来等于 100。
+      </p>
       <p v-if="!assets.length && !list.loading.value">
         目前没有可用的公开数据，需要先把数据导入。
       </p>
@@ -180,6 +234,13 @@ input,
 select {
   width: 100%;
   max-width: 100%;
+}
+.ratio-row {
+  display: flex;
+  gap: 8px;
+}
+.ratio-row input {
+  width: 64px;
 }
 table {
   table-layout: fixed;

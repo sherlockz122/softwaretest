@@ -79,6 +79,97 @@ test("uncertain create retains request identity and binds preview source hash", 
   wrapper.unmount();
 });
 
+test("create sends user-chosen ratios and allows zero validation", async () => {
+  const posts = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    if (options?.method === "POST") {
+      posts.push(JSON.parse(options.body));
+      return { dataset_id: "created", task_id: "worker" };
+    }
+    return listing;
+  });
+  const { wrapper } = await view(DatasetsPage);
+  await wrapper.get("input").setValue("two-way");
+  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  const numbers = wrapper.findAll('input[type="number"]');
+  await numbers[0].setValue(80);
+  await numbers[1].setValue(0);
+  await numbers[2].setValue(20);
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  expect(posts[0]).toMatchObject({
+    train_ratio: 0.8,
+    validation_ratio: 0,
+    test_ratio: 0.2,
+    split_strategy: "time_ordered",
+  });
+  wrapper.unmount();
+});
+
+test("ratios that do not sum to 100 disable submission with a hint", async () => {
+  vi.spyOn(client, "request").mockResolvedValue(listing);
+  const { wrapper } = await view(DatasetsPage);
+  await wrapper.get("input").setValue("research");
+  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  const numbers = wrapper.findAll('input[type="number"]');
+  await numbers[2].setValue(10);
+  await flushPromises();
+  const submit = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("生成研究数据集"));
+  expect(submit.attributes("disabled")).toBeDefined();
+  expect(wrapper.text()).toContain("验证比例可以为 0");
+  wrapper.unmount();
+});
+
+test("two-way dataset hides validation rows and shows auxiliary features", async () => {
+  vi.spyOn(client, "request").mockResolvedValue({
+    id: "two-way",
+    name: "research",
+    ready: true,
+    processed: 40,
+    total: 40,
+    task_id: "work",
+    status: "succeeded",
+    asset_id: asset.asset_id,
+    policy: { split_strategy: "time_ordered" },
+    summary: {
+      features: ["la", "ld"],
+      partitions: {
+        train: { clean: 16, buggy: 16 },
+        test: { clean: 4, buggy: 4 },
+      },
+      source_acquisition: {},
+      repositories: {},
+    },
+    members: [
+      {
+        ordinal: 0,
+        canonical_repository: "apache/hadoop",
+        commit_id: "c".repeat(40),
+        partition: "train",
+        label: 0,
+        event_epoch: 1,
+        numeric12: { la: 5.0, ld: 1.0 },
+        fix: true,
+        lt: null,
+        lt_missing_reason: "upstream_source_omits_lt",
+      },
+    ],
+  });
+  const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/two-way");
+  expect(
+    wrapper.findAll("button").filter((b) => b.text().includes("下载")),
+  ).toHaveLength(2);
+  expect(wrapper.text()).toContain("是修复");
+  expect(wrapper.text()).toContain("未提供");
+  expect(wrapper.text()).toContain("原始记录数 / 去重后样本数");
+  expect(wrapper.findAll("tr").some((t) => t.text().includes("验证"))).toBe(
+    false,
+  );
+  wrapper.unmount();
+});
+
 test("unpublished dataset hides members and export with a task link", async () => {
   vi.spyOn(client, "request").mockResolvedValue({
     id: "pending",
@@ -123,7 +214,7 @@ test("ready research shows release limitations and both-class partition support"
   });
   const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/ready");
   expect(wrapper.text()).toContain("按历史时间点回放");
-  expect(wrapper.text()).toContain("原数据里的 fix 标志不参与计算");
+  expect(wrapper.text()).toContain("修复标志只展示、不参与模型计算");
   expect(
     wrapper.findAll("button").filter((b) => b.text().includes("下载")),
   ).toHaveLength(3);
@@ -173,6 +264,8 @@ test("ready dataset renders a 2D feature table with toggles and filters", async 
             la: 213.0, ld: 0.4235, nf: 3.0, nd: 1.0, ns: 1.0, ent: 0.9,
             ndev: 2.0, age: 30.0, nuc: 5.0, aexp: 10.0, arexp: 2.0, asexp: 1.0,
           },
+          fix: false,
+          lt: null,
         },
       ],
     };
@@ -181,8 +274,10 @@ test("ready dataset renders a 2D feature table with toggles and filters", async 
   expect(wrapper.text()).toContain("新增行数");
   expect(wrapper.text()).toContain("213");
   expect(wrapper.text()).toContain("0.42");
+  expect(wrapper.text()).toContain("非修复");
+  expect(wrapper.text()).toContain("未提供");
   const checkboxes = wrapper.findAll('input[type="checkbox"]');
-  expect(checkboxes).toHaveLength(12);
+  expect(checkboxes).toHaveLength(14);
   await checkboxes[0].setValue(false);
   expect(
     wrapper.findAll("th").some((t) => t.isVisible() && t.text().includes("新增行数")),

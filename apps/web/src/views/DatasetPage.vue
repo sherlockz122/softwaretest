@@ -4,7 +4,15 @@ import { useRoute } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
 import { labels, date, shortId } from "../task-tools";
-import { datasetFeatureHints, datasetFeatureNames, label, partitions } from "../terms";
+import {
+  datasetAuxiliaryFeatures,
+  datasetAuxiliaryHints,
+  datasetAuxiliaryNames,
+  datasetFeatureHints,
+  datasetFeatureNames,
+  label,
+  partitions,
+} from "../terms";
 import RequestError from "../components/RequestError.vue";
 const route = useRoute();
 const offset = ref(0);
@@ -27,9 +35,17 @@ const data = useLatest((id, signal) => {
     { signal },
   );
 });
-const featureColumns = computed(
-  () => data.data.value?.summary?.features || [],
-);
+// 十四维特征：12 项数值指标（summary.features）+ 修复标志 + 改动前文件总行数
+const featureColumns = computed(() => {
+  const features = data.data.value?.summary?.features;
+  return features ? [...features, ...datasetAuxiliaryFeatures] : [];
+});
+function featureName(name) {
+  return datasetFeatureNames[name] || datasetAuxiliaryNames[name] || name;
+}
+function featureHint(name) {
+  return datasetFeatureHints[name] || datasetAuxiliaryHints[name] || name;
+}
 const pageTotal = computed(
   () => data.data.value?.member_total ?? data.data.value?.total ?? 0,
 );
@@ -70,6 +86,19 @@ function featureValue(value) {
   return Math.abs(value) >= 100
     ? String(Math.round(value))
     : String(Number(value.toFixed(2)));
+}
+function featureCell(row, name) {
+  if (name === "fix") {
+    if (row.fix == null) return "—";
+    return row.fix ? "是修复" : "非修复";
+  }
+  if (name === "lt" && row.lt == null) return "未提供";
+  return featureValue(row[name] ?? row.numeric12?.[name]);
+}
+function featureTitle(row, name) {
+  if (name === "lt" && row.lt == null)
+    return `上游源数据没提供改动前文件总行数：${row.lt_missing_reason || "未提供"}`;
+  return undefined;
 }
 async function download(partition) {
   downloading.value = true;
@@ -139,7 +168,7 @@ async function download(partition) {
               ? "按时间先后（同一时间段的提交不拆开）"
               : "按仓库划分（留出独立仓库做测试）"
           }}
-          · 共 12 项数值指标；原数据里的 fix 标志不参与计算，避免提前泄露答案。
+          · 共 14 项特征：12 项数值指标 + 修复标志 + 改动前文件总行数；改动前总行数上游源数据没提供，按未提供展示；修复标志只展示、不参与模型计算，避免提前泄露答案。
         </p>
         <p class="hint">窄屏下可左右滚动表格，查看全部列与下载操作。</p>
         <div
@@ -192,7 +221,7 @@ async function download(partition) {
                 "待核验"
               }}
             </dd>
-            <dt>原始行数 / 去重后提交数</dt>
+            <dt>原始记录数 / 去重后样本数</dt>
             <dd>
               {{ data.data.value.summary.original_rows }} /
               {{ data.data.value.summary.rows }}
@@ -246,7 +275,7 @@ async function download(partition) {
         </p>
         <h3>数据表</h3>
         <p>
-          每行是一次提交，列是它的各项指标。想看清某项指标是什么意思，把鼠标停在表头上；没有勾选「显示哪些列」里的指标不会出现在表里。
+          每行是一个样本（一次提交），列是它的各项特征。想看清某项特征是什么意思，把鼠标停在表头上；没有勾选「显示哪些列」里的特征不会出现在表里。
         </p>
         <div class="filters">
           <label
@@ -273,13 +302,13 @@ async function download(partition) {
             <label
               v-for="f in featureColumns"
               :key="f"
-              :title="datasetFeatureHints[f]"
+              :title="featureHint(f)"
             >
               <input
                 type="checkbox"
                 :checked="!hidden.has(f)"
                 @change="toggleFeature(f)"
-              />{{ datasetFeatureNames[f] || f }}
+              />{{ featureName(f) }}
             </label>
           </details>
         </div>
@@ -303,9 +332,9 @@ async function download(partition) {
                   v-for="f in featureColumns"
                   v-show="!hidden.has(f)"
                   :key="f"
-                  :title="datasetFeatureHints[f] || f"
+                  :title="featureHint(f)"
                 >
-                  {{ datasetFeatureNames[f] || f }}
+                  {{ featureName(f) }}
                 </th>
               </tr>
             </thead>
@@ -321,8 +350,9 @@ async function download(partition) {
                   v-for="f in featureColumns"
                   v-show="!hidden.has(f)"
                   :key="f"
+                  :title="featureTitle(row, f)"
                 >
-                  {{ featureValue(row.numeric12?.[f]) }}
+                  {{ featureCell(row, f) }}
                 </td>
               </tr>
             </tbody>

@@ -52,7 +52,11 @@ def audit_dataset(engine, frozen, destination, check, *, source_root=None):
     )
     if assets.read_json(directory / "manifest.json", check) != output:
         raise ModelError("MODEL_DATA_DRIFT", 409)
-    for p in research.PARTITIONS:
+    # 验证集可选：没有验证分区的数据集只有 train/test 两个 CSV。
+    partitions = [p for p in research.PARTITIONS if p in output["files"]]
+    if "train" not in partitions or "test" not in partitions:
+        raise ModelError("MODEL_DATA_DRIFT", 409)
+    for p in partitions:
         check()
         source = assets.safe_path(directory / (p + ".csv"))
         if assets.file_digest(source, check) != output["files"][p]:
@@ -70,7 +74,7 @@ def audit_dataset(engine, frozen, destination, check, *, source_root=None):
             if assets.file_digest(target, check) != output["files"][p]:
                 raise ModelError("MODEL_DATA_DRIFT", 409)
     digest, count = hashlib.sha256(b"["), 0
-    counts = {p: [0, 0] for p in research.PARTITIONS}
+    counts = {p: [0, 0] for p in partitions}
     with ExitStack() as stack, Session(engine) as db:
         if reference(db, frozen["dataset_id"]) != frozen:
             raise ModelError("MODEL_DATA_DRIFT", 409)
@@ -87,7 +91,7 @@ def audit_dataset(engine, frozen, destination, check, *, source_root=None):
             p: csv.DictReader(
                 stack.enter_context((directory / (p + ".csv")).open(encoding="utf-8", newline=""))
             )
-            for p in research.PARTITIONS
+            for p in partitions
         }
         if any(tuple(r.fieldnames or ()) != research.CSV_FIELDS for r in readers.values()):
             raise ModelError("MODEL_DATA_DRIFT", 409)
@@ -129,6 +133,11 @@ def audit_dataset(engine, frozen, destination, check, *, source_root=None):
                     "source_rows": row.source_json["row_numbers"],
                     "cohorts": row.source_json["cohorts"],
                 }
+                # 十四维辅助字段参与构建时的 members_hash，审计重建必须带上；
+                # 旧数据集没有这些键，不补 None（否则与旧哈希不一致）。
+                for auxiliary in ("fix", "lt", "lt_missing_reason"):
+                    if auxiliary in row.source_json:
+                        member[auxiliary] = row.source_json[auxiliary]
                 digest.update((b"," if count else b"") + canonical(member))
                 counts[row.partition][row.label] += 1
                 count += 1

@@ -93,6 +93,31 @@ def test_test_partition_cannot_change_fit_calibration_or_threshold(plugin):
     assert np.isfinite(sigmoid_input([0, 1])).all()
 
 
+def test_train_internal_calibration_when_validation_absent():
+    rng = np.random.default_rng(17)
+    parts = {
+        "train": {
+            "x": rng.random((80, 12)),
+            "y": np.tile([0, 1], 40),
+            "events": np.arange(80),
+        },
+        "test": {
+            "x": rng.random((20, 12)),
+            "y": np.tile([0, 1], 10),
+            "events": np.arange(80, 100),
+        },
+    }
+    params = policy.parameters("lr", {}, 42)
+    model, calibrator, threshold, partition, first, second = fit_model(parts, "lr", params, 42)
+    assert partition == "train"
+    assert not np.any(first & second) and np.all(first | second)
+    repeat = fit_model(parts, "lr", params, 42)
+    assert repeat[2] == threshold
+    assert np.array_equal(repeat[0].coef_, model.coef_)
+    # 训练区前后两段都含两类，校准可用
+    assert {0, 1} <= set(np.asarray(parts["train"]["y"])[second])
+
+
 def test_feature_plan_normalization_and_defaults():
     plan = policy.feature_plan("lr", ["age", "la", "ld"], {"ld": "raw"})
     assert plan["features"] == ["la", "ld", "age"]

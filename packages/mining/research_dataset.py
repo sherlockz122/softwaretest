@@ -13,10 +13,18 @@ from packages.mining import public_assets as assets
 from packages.mining.public_dataset import NUMERIC_FIELDS, TOTAL_FIELDS, boolean, epoch, key
 from packages.mining.source_evidence import canonical, content_hash
 
-VERSION = "published-binary-12-v1"
+VERSION = "published-binary-12-v2"
 PURPOSE = "published_binary_12_v1"
 PARTITIONS = ("train", "validation", "test")
-CSV_FIELDS = ("canonical_repository", "commit_id", "event_epoch", "label", *NUMERIC_FIELDS)
+CSV_FIELDS = (
+    "canonical_repository",
+    "commit_id",
+    "event_epoch",
+    "label",
+    *NUMERIC_FIELDS,
+    "fix",
+    "lt",
+)
 STORE = assets.ROOT / "runtime/public-assets"
 OUTPUT = assets.ROOT / "runtime/datasets"
 RULE_HASH = content_hash(
@@ -101,7 +109,11 @@ def policy_valid(policy):
     if policy["split_strategy"] not in {"time_ordered", "repository_holdout"}:
         raise ResearchError("DATA_POLICY_INVALID")
     ratios = [policy[k + "_ratio"] for k in PARTITIONS]
-    if any(type(r) not in (int, float) or not math.isfinite(r) or not 0 < r < 1 for r in ratios):
+    if any(type(r) not in (int, float) or not math.isfinite(r) for r in ratios):
+        raise ResearchError("DATA_POLICY_INVALID")
+    # 验证集可选：validation_ratio 可以为 0（不切验证分区），训练/测试必须非空。
+    train_ratio, validation_ratio, test_ratio = ratios
+    if not 0 < train_ratio < 1 or not 0 < test_ratio < 1 or not 0 <= validation_ratio < 1:
         raise ResearchError("DATA_POLICY_INVALID")
     if not math.isclose(sum(ratios), 1, abs_tol=1e-12):
         raise ResearchError("DATA_POLICY_INVALID")
@@ -200,12 +212,17 @@ def prepare(directory, source_hash, policy, *, tick=None):
             "event_epoch": expected["event_epoch"],
             "label": int(expected["published_label"] == "buggy"),
             "numeric12": values,
+            "fix": boolean(original["fix"]),
+            "lt": None,
+            "lt_missing_reason": "upstream_source_omits_lt",
             "source_rows": [number],
             "cohorts": [cohort],
         }
         if identity in rows:
             previous = rows[identity]
-            if any(previous[k] != value[k] for k in ("event_epoch", "label", "numeric12")):
+            if any(
+                previous[k] != value[k] for k in ("event_epoch", "label", "numeric12", "fix")
+            ):
                 raise ResearchError("DATA_DUPLICATE_CONFLICT")
             previous["source_rows"].append(number)
             previous["cohorts"] = sorted(set(previous["cohorts"]) | {cohort})
@@ -223,29 +240,41 @@ def prepare(directory, source_hash, policy, *, tick=None):
         else (lambda r: r["canonical_repository"])
     )
     groups = sorted({group_key(r) for r in members})
+    has_validation = policy["validation_ratio"] > 0
     if policy["split_strategy"] == "repository_holdout":
-        cuts = (
-            math.floor(len(groups) * policy["train_ratio"]),
-            math.floor(len(groups) * (policy["train_ratio"] + policy["validation_ratio"])),
-        )
+        cuts = (math.floor(len(groups) * policy["train_ratio"]),)
+        if has_validation:
+            cuts = cuts + (
+                math.floor(len(groups) * (policy["train_ratio"] + policy["validation_ratio"])),
+            )
     else:
         ordered_groups = Counter(r["event_epoch"] for r in members)
-        targets = (
-            len(members) * policy["train_ratio"],
-            len(members) * (policy["train_ratio"] + policy["validation_ratio"]),
-        )
+        targets = (len(members) * policy["train_ratio"],)
+        if has_validation:
+            targets = targets + (
+                len(members) * (policy["train_ratio"] + policy["validation_ratio"]),
+            )
         cumulative, cuts_list = 0, []
         for i, group in enumerate(groups):
             cumulative += ordered_groups[group]
-            while len(cuts_list) < 2 and cumulative >= targets[len(cuts_list)]:
+            while len(cuts_list) < len(targets) and cumulative >= targets[len(cuts_list)]:
                 cuts_list.append(i + 1)
         cuts = tuple(cuts_list)
-    if len(cuts) != 2 or not 0 < cuts[0] < cuts[1] < len(groups):
+    if len(cuts) != (2 if has_validation else 1) or not 0 < cuts[0] < len(groups) or (
+        has_validation and not cuts[0] < cuts[1] < len(groups)
+    ):
         raise ResearchError("DATA_SPLIT_UNUSABLE")
-    assigned = {
-        g: PARTITIONS[0 if i < cuts[0] else 1 if i < cuts[1] else 2] for i, g in enumerate(groups)
-    }
-    counts = {p: Counter() for p in PARTITIONS}
+
+    def partition_of(index):
+        if index < cuts[0]:
+            return "train"
+        if has_validation and index < cuts[1]:
+            return "validation"
+        return "test"
+
+    assigned = {g: partition_of(i) for i, g in enumerate(groups)}
+    active = PARTITIONS if has_validation else ("train", "test")
+    counts = {p: Counter() for p in active}
     repositories, cohorts = defaultdict(Counter), defaultdict(Counter)
     for ordinal, member in enumerate(members):
         budget.check()
@@ -254,7 +283,7 @@ def prepare(directory, source_hash, policy, *, tick=None):
         repositories[member["canonical_repository"]][member["label"]] += 1
         for cohort in member["cohorts"]:
             cohorts[cohort][member["label"]] += 1
-    if any(not counts[p][0] or not counts[p][1] for p in PARTITIONS):
+    if any(not counts[p][0] or not counts[p][1] for p in active):
         raise ResearchError("DATA_SPLIT_SINGLE_CLASS")
 
     def summaries(groups):
@@ -280,6 +309,8 @@ def prepare(directory, source_hash, policy, *, tick=None):
         "repositories": summaries(repositories),
         "cohorts": summaries(cohorts),
         "features": list(NUMERIC_FIELDS),
+        "auxiliary_features": ["fix", "lt"],
+        "lt_source": "missing_in_stored_upstream_source",
         "target": "published_SZZ_binary_post_publication",
         "event_clock": "published_author_epoch_UTC",
         "capabilities": {
@@ -297,6 +328,7 @@ def prepare(directory, source_hash, policy, *, tick=None):
             "no_language_or_type_certification",
             "no_preprocessing_fitted_or_models_trained",
             "cross_source_and_code_content_overlap_unverified",
+            "lt_unavailable_in_stored_upstream_source",
         ],
     }
     budget.check()

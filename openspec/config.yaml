@@ -8,8 +8,7 @@ context: |
   User decision 2026-10-14: the current canonical specifications, latest roadmap and verified wang implementation are the development and team synchronization standard.
   External originals are isolated under archive/external/; do not read them or the retired softwarePrediction/docs/prototype entries to guide implementation. Use the canonical decisions and absorption checklist under docs/.
   Database is MySQL 8; architecture is FastAPI modular monolith plus Celery/Redis workers.
-  Branch wang is the only development and maintenance target. Team synchronization designation does not imply other branches have adopted it or independent review has occurred.
-  Push only to origin/wang. Do not modify main or other branches or initiate integration into main; that is the maintainer's responsibility.
+  Branch main is the current development and maintenance target. Branch wang is not maintained; do not modify or push it. Commits land on main locally only; pushing happens only after explicit user confirmation.
   Every change must trace to User Stories and planned tests in docs/07-需求设计测试追踪矩阵.md.
 
   写文档的文风要求（对下面每一个 artifact 都生效；完整说明见
@@ -35,9 +34,11 @@ rules:
   design:
     - Describe data constraints, failure recovery, security controls, and test strategy
     - 决策标题写成「决策 N：<一句话结论>」，正文讲清为什么这么选、放弃了什么
+    - 每个决策要有技术选型与备选路径：写明最终选的方案，以及考虑过但放弃的替代方案和放弃原因
   tasks:
     - Make each task independently verifiable and link implementation tasks to planned tests
     - 每条任务说清做什么、怎么算做完；不要把测试数量和流程状态写进任务
+    - 每条任务必须带验证环节（在哪个层面验证）与具体验证步骤（跑什么命令、断言什么），验证通过才勾选
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

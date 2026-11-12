@@ -108,8 +108,21 @@ def threshold_for(y, p):
 
 
 def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
-    train, validation = partitions["train"], partitions["validation"]
-    first, second = calibration_split(validation["events"], validation["y"])
+    """训练 + 校准/定门槛。
+
+    验证集可选：没有验证分区时，用训练分区按时间切成前后两段来做校准和
+    定门槛（样本内做法，报告里会显式标注 calibration_partition=train）。
+    """
+    train = partitions["train"]
+    if "validation" in partitions:
+        calibration_partition = "validation"
+        calibration_data = partitions["validation"]
+        stage_name = "calibrating_validation"
+    else:
+        calibration_partition = "train"
+        calibration_data = train
+        stage_name = "calibrating_train_split"
+    first, second = calibration_split(calibration_data["events"], calibration_data["y"])
     estimator = (
         LogisticRegression(C=params["c"], max_iter=params["max_iter"], random_state=seed)
         if plugin == "lr"
@@ -119,20 +132,28 @@ def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
     with warnings.catch_warnings():
         warnings.simplefilter("error", ConvergenceWarning)
         estimator.fit(train["x"], train["y"])
-    stage("calibrating_validation")
-    raw = estimator.predict_proba(validation["x"])[:, 1]
+    stage(stage_name)
+    raw = estimator.predict_proba(calibration_data["x"])[:, 1]
     calibrator = LogisticRegression(C=1e6, max_iter=200, random_state=seed)
     with warnings.catch_warnings():
         warnings.simplefilter("error", ConvergenceWarning)
-        calibrator.fit(sigmoid_input(raw[first]), validation["y"][first])
+        calibrator.fit(sigmoid_input(raw[first]), calibration_data["y"][first])
     calibrated = calibrator.predict_proba(sigmoid_input(raw[second]))[:, 1]
-    threshold = threshold_for(validation["y"][second], calibrated)
-    return estimator, calibrator, threshold, first, second
+    threshold = threshold_for(calibration_data["y"][second], calibrated)
+    return estimator, calibrator, threshold, calibration_partition, first, second
 
 
 def run(directory, request, stage=lambda _: None):
     started = time.monotonic()
-    partitions = {p: load_partition(directory / (p + ".csv")) for p in research.PARTITIONS}
+    # 验证集可选：validation.csv 不存在时跳过；训练与测试分区必须存在。
+    partitions = {}
+    for p in research.PARTITIONS:
+        path = directory / (p + ".csv")
+        if p == "validation" and not path.is_file():
+            continue
+        partitions[p] = load_partition(path)
+    if "train" not in partitions or "test" not in partitions:
+        raise ModelError("MODEL_DATA_LIMIT")
     features = request.get("features", list(research.NUMERIC_FIELDS))
     forms = request.get("forms") or {
         name: policy.DEFAULT_FORMS[request["plugin"]] for name in features
@@ -140,8 +161,12 @@ def run(directory, request, stage=lambda _: None):
     matrices, stats = feature_matrix(partitions, features, forms)
     for p, d in partitions.items():
         d["x"] = matrices[p]
-    model, calibrator, threshold, first, second = fit_model(
+    model, calibrator, threshold, calibration_partition, first, second = fit_model(
         partitions, request["plugin"], request["params"], request["seed"], stage
+    )
+    calibration_data = partitions[calibration_partition]
+    threshold_key = (
+        "validation_threshold" if calibration_partition == "validation" else "train_threshold"
     )
     bundle = {
         "model": model,
@@ -190,19 +215,20 @@ def run(directory, request, stage=lambda _: None):
         "standardization": stats,
         "threshold": threshold,
         "calibration": {
-            "method": "validation-chronological-sigmoid-logit-v1",
+            "method": f"{calibration_partition}-chronological-sigmoid-logit-v1",
             "calibration_rows": int(first.sum()),
             "threshold_rows": int(second.sum()),
-            "boundary_epoch": int(partitions["validation"]["events"][second][0]),
+            "boundary_epoch": int(calibration_data["events"][second][0]),
             "selection": "f1_grid_0.05_to_0.95_step_0.01_ties_higher",
             "calibration_members_hash": content_hash(
-                partitions["validation"]["identities"][first].tolist()
+                calibration_data["identities"][first].tolist()
             ),
             "threshold_members_hash": content_hash(
-                partitions["validation"]["identities"][second].tolist()
+                calibration_data["identities"][second].tolist()
             ),
         },
-        "metrics": {"validation_threshold": score("validation", second), "test": score("test")},
+        "calibration_partition": calibration_partition,
+        "metrics": {threshold_key: score(calibration_partition, second), "test": score("test")},
         "baseline": {
             "method": "constant_train_prior",
             "probability": prior,
@@ -229,7 +255,11 @@ def run(directory, request, stage=lambda _: None):
             "post_publication_weak_labels_not_gold",
             "not_historical_online_simulation",
             "negative_coverage_noise_language_overlap_unverified",
-            "validation_selected_metrics_not_unbiased",
+            (
+                "no_validation_partition_train_internal_calibration"
+                if calibration_partition == "train"
+                else "validation_selected_metrics_not_unbiased"
+            ),
             "no_candidate_release",
         ],
         "resources": {

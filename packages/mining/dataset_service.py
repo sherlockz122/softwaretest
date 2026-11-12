@@ -190,6 +190,9 @@ class DatasetService:
                         "source_json": {
                             "row_numbers": row["source_rows"],
                             "cohorts": row["cohorts"],
+                            "fix": row["fix"],
+                            "lt": row["lt"],
+                            "lt_missing_reason": row["lt_missing_reason"],
                         },
                     }
                     for row in members
@@ -215,6 +218,9 @@ class DatasetService:
         budget = assets.Budget(tick=check)
         records = {}
         for partition in research.PARTITIONS:
+            if not any(member["partition"] == partition for member in members):
+                # 验证集可选：validation_ratio=0 时不产出验证分区文件
+                continue
             path = assets.safe_path(directory / (partition + ".csv"))
             with path.open("x", encoding="utf-8", newline="") as stream:
                 writer = csv.DictWriter(stream, fieldnames=research.CSV_FIELDS)
@@ -223,7 +229,9 @@ class DatasetService:
                     budget.check()
                     if member["partition"] == partition:
                         writer.writerow(
-                            {k: member[k] for k in research.CSV_FIELDS[:4]} | member["numeric12"]
+                            {k: member[k] for k in research.CSV_FIELDS[:4]}
+                            | member["numeric12"]
+                            | {"fix": member["fix"], "lt": member["lt"]}
                         )
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -261,7 +269,13 @@ class DatasetService:
                         or row.event_epoch != item["event_epoch"]
                         or assets.canonical(row.numeric_json) != assets.canonical(item["numeric12"])
                         or row.source_json
-                        != {"row_numbers": item["source_rows"], "cohorts": item["cohorts"]}
+                        != {
+                            "row_numbers": item["source_rows"],
+                            "cohorts": item["cohorts"],
+                            "fix": item["fix"],
+                            "lt": item["lt"],
+                            "lt_missing_reason": item["lt_missing_reason"],
+                        }
                     ):
                         raise research.ResearchError("DATA_MEMBER_DRIFT")
 
@@ -446,6 +460,9 @@ class DatasetService:
                         "label": r.label,
                         "event_epoch": r.event_epoch,
                         "numeric12": r.numeric_json,
+                        "fix": r.source_json.get("fix"),
+                        "lt": r.source_json.get("lt"),
+                        "lt_missing_reason": r.source_json.get("lt_missing_reason"),
                         "source": r.source_json,
                     }
                     for r in rows
@@ -469,6 +486,9 @@ class DatasetService:
                 raise TaskError(409, "DATA_NOT_READY")
             output = dataset.output_json
         assets.verify_seal(output)
+        if partition not in output["files"]:
+            # 验证集可选：没切验证分区的数据集没有 validation.csv
+            raise TaskError(404, "DATA_PARTITION_ABSENT")
         directory = assets.safe_path(
             self.output / str(UUID(dataset_id)) / str(UUID(output["attempt_id"]))
         )

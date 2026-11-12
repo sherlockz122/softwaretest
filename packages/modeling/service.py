@@ -233,6 +233,7 @@ class ModelService:
                 "verifying_dataset": 5,
                 "fitting_train": 20,
                 "calibrating_validation": 55,
+                "calibrating_train_split": 55,
                 "evaluating_test": 70,
                 "artifacts_complete": 90,
                 "verifying_artifacts": 95,
@@ -370,6 +371,7 @@ class ModelService:
                         if value in {
                             "fitting_train",
                             "calibrating_validation",
+                            "calibrating_train_split",
                             "evaluating_test",
                             "artifacts_complete",
                         }:
@@ -521,15 +523,23 @@ class ModelService:
         return self.artifact(run_id, kind)[0]
 
     def risk_items(self, run_id, page=1, page_size=20, partitions=None):
-        """历史风险列表：默认只看验证与测试分区，训练分区要显式请求。"""
-        chosen = tuple(partitions) if partitions else RISK_EVAL_PARTITIONS
+        """历史风险列表：默认只看验证与测试分区，训练分区要显式请求。
+
+        没有验证分区的训练（验证集可选）默认只看测试分区。
+        """
+        path, record, report = self.artifact(run_id, "probabilities.csv")
+        if partitions:
+            chosen = tuple(partitions)
+        elif report.get("calibration_partition") == "train":
+            chosen = ("test",)
+        else:
+            chosen = RISK_EVAL_PARTITIONS
         if (
             not chosen
             or len(set(chosen)) != len(chosen)
             or any(item not in research.PARTITIONS for item in chosen)
         ):
             raise ModelError("MODEL_INVALID_INPUT")
-        path, record, report = self.artifact(run_id, "probabilities.csv")
         if record.size > RISK_BYTE_LIMIT:
             raise ModelError("MODEL_RISK_LIST_LIMIT", 413)
         with path.open(encoding="utf-8", newline="") as stream:

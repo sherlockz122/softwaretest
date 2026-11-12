@@ -112,6 +112,48 @@ test("uncertain training reuses operation key and immutable dataset ID", async (
   expect(router.currentRoute.value.path).toBe("/model-runs/new");
   wrapper.unmount();
 });
+test("training page separates itself from the historical risk list", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.startsWith("/datasets?")) return datasetList;
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  expect(wrapper.text()).toContain("训练和预测是分开的两件事");
+  expect(wrapper.find('a[href="/risk"]').exists()).toBe(true);
+  wrapper.unmount();
+});
+
+test("chosen dataset shows partition sample counts and two-way note", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.startsWith("/datasets?"))
+      return {
+        items: [
+          {
+            id: "two-way",
+            name: "two-way research",
+            ready: true,
+            total: 48,
+            summary: {
+              partitions: {
+                train: { clean: 20, buggy: 18 },
+                test: { clean: 5, buggy: 5 },
+              },
+            },
+          },
+        ],
+        total: 1,
+      };
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  await wrapper.findAll("select")[0].setValue("two-way");
+  await flushPromises();
+  expect(wrapper.text()).toContain("训练区 38 条样本");
+  expect(wrapper.text()).toContain("测试区 10 条样本");
+  expect(wrapper.text()).toContain("没有验证区，说明当时只分了训练和测试两份");
+  wrapper.unmount();
+});
+
 test("feature choice defaults all checked, plugin switch resets forms only", async () => {
   vi.spyOn(client, "request").mockImplementation(async (path) => {
     if (path.startsWith("/datasets?")) return datasetList;
@@ -241,7 +283,18 @@ test("failed model hides artifacts and links cancellation/retry task", async () 
   wrapper.unmount();
 });
 test("model detail shows the training feature contract", async () => {
-  vi.spyOn(client, "request").mockResolvedValue({
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.includes("/risk"))
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+        partitions: ["validation", "test"],
+        threshold: 0.5,
+        in_sample: false,
+      };
+    return {
     id: "ready",
     dataset_id: "fixed",
     plugin: "lr",
@@ -274,10 +327,65 @@ test("model detail shows the training feature contract", async () => {
         },
       },
     },
+    };
   });
   const { wrapper } = await view(ModelPage, "Viewer", "/model-runs/ready");
   expect(wrapper.text()).toContain("这次训练用了 2 个指标");
   expect(wrapper.text()).toContain("新增行数（取对数）");
   expect(wrapper.text()).toContain("文件平均年龄（天）（标准化）");
+  wrapper.unmount();
+});
+test("model without validation shows train-internal threshold summary", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.includes("/risk"))
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+        partitions: ["test"],
+        threshold: 0.5,
+        in_sample: false,
+      };
+    return {
+      id: "no-validation",
+      dataset_id: "fixed",
+      plugin: "lr",
+      seed: 42,
+      status: "succeeded",
+      registered: true,
+      task_id: "worker",
+      snapshot: {},
+      report: {
+        provenance: { version: "research-lr-rf-v4", code_sha: "f".repeat(64) },
+        threshold: 0.5,
+        calibration_partition: "train",
+        calibration: { calibration_rows: 20, threshold_rows: 20 },
+        features: ["la"],
+        forms: { la: "standardize" },
+        request: { features: ["la"] },
+        metrics: {
+          train_threshold: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+          test: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+        },
+        baseline: {
+          metrics: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+        },
+      },
+    };
+  });
+  const { wrapper } = await view(ModelPage, "Viewer", "/model-runs/no-validation");
+  expect(wrapper.text()).toContain("没有验证区，用训练区的前后两段");
+  expect(wrapper.text()).toContain("训练区后段（没有验证区，用训练区后段定门槛，属样本内）");
+  expect(wrapper.text()).toContain("测试区（最终评价）");
   wrapper.unmount();
 });

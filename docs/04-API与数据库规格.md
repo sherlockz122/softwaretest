@@ -497,3 +497,13 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 `GET /datasets/{id}` 新增可选查询参数 `filter_partition`（train/validation/test）与 `filter_label`（0/1），仅对 JSON 详情生效（format=csv 不变，仍按 partition 导出完整文件）；筛选后的总数放在 `member_total`，分页按筛选结果计数。下载不受筛选影响。
 
 变更记录：`openspec/changes/add-dataset-table-and-feature-choice`，模型版本 `research-lr-rf-v4`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)。
+
+## 第二十六阶段十四维行级与比例自选增量（2026-11-12）
+
+无数据库迁移。数据集版本升为 `published-binary-12-v2`：每个 `dataset_member` 的 source_json 新增 `fix`（布尔，来自上游已发布修复元数据，不进训练特征）与 `lt`（改动前文件总行数；存储的上游源没有 lt，恒为 null 并带 `lt_missing_reason="upstream_source_omits_lt"`），成员一致性校验（重试续跑）把这两个字段一并比较；摘要新增 `auxiliary_features`/`lt_source` 并把 lt 缺失列入 limitations。CSV 工件表头以 `...,fix,lt` 结尾，fix 写布尔字面量、lt 缺失留空。
+
+`POST /datasets` 的 `validation_ratio` 下限由大于 0 放宽为大于等于 0（0 表示不切验证分区）；三比例总和必须为 1、train/test 必须大于 0，不合法 422 不落任务。两分区数据集的摘要与 CSV 工件只有 train/test；下载不存在的分区（如 validation）返回 404 `DATA_PARTITION_ABSENT`，而不是空文件。
+
+无验证分区的训练（模型版本仍为 `research-lr-rf-v4`）：在训练分区内按事件时间切前后两段，前段拟合校准器、后段定门槛，流程与有验证分区同构；报告 `calibration.method` 记为 train-chronological-sigmoid-logit-v1、`calibration_partition="train"`，门槛指标键为 `train_threshold`（有验证分区时仍为 `validation_threshold`），limitations 记录 `no_validation_partition_train_internal_calibration`；此类模型的风险列表默认分区为 `("test",)`。审计仍按实际存在的分区过滤。
+
+变更记录：`openspec/changes/add-dataset-14dim-and-split-choice`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（validation_ratio 下限已重导出）。
