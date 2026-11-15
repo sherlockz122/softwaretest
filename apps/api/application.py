@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
+from apps.api.assets import router as assets_router
 from apps.api.auth import router
 from apps.api.datasets import router as datasets_router
 from apps.api.models import router as models_router
@@ -17,6 +18,7 @@ from apps.api.repositories import szz_router
 from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
+from packages.mining.asset_import import UploadError
 from packages.mining.public_assets import AssetError
 from packages.mining.research_dataset import ResearchError
 from packages.modeling.policy import ModelError
@@ -116,6 +118,20 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def model_error(request: Request, exc: ModelError):
         return error(request, exc.status, exc.code, "模型请求未通过，请检查数据、参数或当前用途")
 
+    @app.exception_handler(UploadError)
+    async def upload_error(request: Request, exc: UploadError):
+        request_id = getattr(request.state, "request_id", str(uuid4()))
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": exc.code,
+                "message": "导入未通过体检，请检查列映射与数据格式",
+                "detail": exc.detail,
+                "request_id": request_id,
+            },
+            headers={"X-Request-ID": request_id},
+        )
+
     @app.exception_handler(AssetError)
     async def asset_error(request: Request, exc: AssetError):
         return error(
@@ -145,6 +161,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     app.include_router(repositories_router)
     app.include_router(szz_router)
     app.include_router(datasets_router)
+    app.include_router(assets_router)
     app.include_router(models_router)
     if settings.environment != "production":
         app.include_router(diagnostic_router)

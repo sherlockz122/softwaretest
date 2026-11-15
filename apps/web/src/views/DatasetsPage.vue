@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { client } from "../api";
 import { useLatest } from "../latest";
 import { date, labels, operationKeys } from "../task-tools";
+import AssetImportPanel from "../components/AssetImportPanel.vue";
 import RequestError from "../components/RequestError.vue";
 const router = useRouter();
 const page = ref(1);
@@ -68,6 +69,7 @@ async function create() {
       保存可复现的研究数据版本，按来源、用途和固定分区追溯。研究使用原发布的弱监督标签，尚未具备历史回放、模型发布或缺陷类型认证。
     </p>
     <RequestError :error="list.error.value || error" />
+    <AssetImportPanel v-if="canCreate" @imported="list.load(page)" />
     <form v-if="canCreate" @submit.prevent="create">
       <label
         >数据集名称<input

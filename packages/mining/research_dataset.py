@@ -130,15 +130,21 @@ def prepare(directory, source_hash, policy, *, tick=None):
     manifest, quality = loaded["manifest"], loaded["quality"]
     if manifest["content_hash"] != source_hash:
         raise ResearchError("DATA_SOURCE_DRIFT")
+    kind = assets.kind_of(manifest)
+    if kind is None:
+        raise ResearchError("DATA_ASSET_KIND_INVALID")
     acquisition = manifest["identity"]["source_acquisition"]
-    if (
+    if kind == "upload":
+        if acquisition.get("license") not in assets.UPLOAD_LICENSES:
+            raise ResearchError("DATA_LICENSE_UNVERIFIED")
+    elif (
         acquisition.get("apachejit_license") != "CC-BY-4.0"
         or acquisition.get("upstream_code_executed") is not False
     ):
         raise ResearchError("DATA_LICENSE_UNVERIFIED")
     budget = assets.Budget(tick=tick)
     inventory = manifest["identity"]["files"]
-    raw = snapshot_bytes(directory, "source/apachejit_total.csv", inventory, budget.check)
+    raw = snapshot_bytes(directory, "source/" + assets.KINDS[kind]["main"], inventory, budget.check)
     normalized = snapshot_bytes(directory, "normalized.jsonl", inventory, budget.check)
     reader = csv.DictReader(io.StringIO(raw.decode("utf-8"), newline=""))
     if tuple(reader.fieldnames or ()) != TOTAL_FIELDS:

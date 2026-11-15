@@ -42,6 +42,44 @@ CAPABILITIES = {
     "localization": False,
 }
 
+# 上传来源与下载来源分开版本与文件清单：清单不增字段，读取时由适配器版本反推种类。
+UPLOAD_VERSION = "upload-asset-12-v1"
+UPLOAD_NAMES = {"upload.csv", "acquisition.json"}
+UPLOAD_LICENSES = ("CC-BY-4.0", "Apache-2.0", "MIT", "BSD-3-Clause")
+UPLOAD_CAPABILITIES = {
+    "raw_archived": True,
+    "normalized": True,
+    "research_dataset_ready": False,
+    "research_semantic": False,
+    "historical_replay": False,
+    "candidate_release": False,
+    "type_prediction": False,
+    "localization": False,
+}
+KINDS = {
+    "apachejit": {
+        "version": VERSION,
+        "names": SOURCE_NAMES,
+        "capabilities": CAPABILITIES,
+        "main": "apachejit_total.csv",
+    },
+    "upload": {
+        "version": UPLOAD_VERSION,
+        "names": UPLOAD_NAMES,
+        "capabilities": UPLOAD_CAPABILITIES,
+        "main": "upload.csv",
+    },
+}
+KIND_BY_VERSION = {spec["version"]: name for name, spec in KINDS.items()}
+
+
+def kind_of(manifest):
+    """按清单里的适配器版本反推资产种类；未知版本返回 None。"""
+    identity = manifest.get("identity") if isinstance(manifest, dict) else None
+    if not isinstance(identity, dict):
+        return None
+    return KIND_BY_VERSION.get(identity.get("adapter_version"))
+
 
 class AssetError(ValueError):
     """Safe offline diagnostic, without source row contents or account details."""
@@ -170,10 +208,10 @@ def atomic_json(path, value, *, check):
         part.unlink(missing_ok=True)
 
 
-def source_inventory(directory, check):
+def source_inventory(directory, check, names=SOURCE_NAMES):
     records = []
     total = 0
-    for name in sorted(SOURCE_NAMES):
+    for name in sorted(names):
         record = file_digest(directory / name, check)
         total += record["bytes"]
         if total > 100 * 1024**2:
@@ -238,8 +276,13 @@ def normalized_rows(path, check):
         raise AssetError("ASSET_ROW_INVALID") from exc
 
 
-def import_asset(published, store, *, verify_source, tick=None, seconds=MAX_SECONDS):
-    """The explicit pinned-source verifier is supplied by the local ApacheJIT CLI."""
+def import_asset(
+    published, store, *, verify_source, tick=None, seconds=MAX_SECONDS, kind="apachejit"
+):
+    """The explicit pinned-source verifier is supplied by the caller."""
+    if kind not in KINDS:
+        raise AssetError("ASSET_KIND_INVALID")
+    spec = KINDS[kind]
     published, store = safe_path(published), safe_path(store)
     if store.is_relative_to(published) or published.is_relative_to(store):
         raise AssetError("ASSET_INPUT_OUTPUT_COLLISION")
@@ -247,11 +290,14 @@ def import_asset(published, store, *, verify_source, tick=None, seconds=MAX_SECO
     budget.check()
     acquisition = verify_source(published)
     utc_time(acquisition["acquired_at"])
-    before = source_inventory(published, budget.check)
-    audit = public_dataset.audit_paths(
-        published / "apachejit_total.csv", published / "apachejit_date.csv"
-    )
-    budget.check()  # Existing audit has its own bounded 60-second cooperative supervision.
+    before = source_inventory(published, budget.check, spec["names"])
+    if kind == "apachejit":
+        audit = public_dataset.audit_paths(
+            published / "apachejit_total.csv", published / "apachejit_date.csv"
+        )
+        budget.check()  # Existing audit has its own bounded 60-second cooperative supervision.
+    else:
+        audit = {}
     rule = content_hash(
         {
             p.name: p.read_text(encoding="utf-8")
@@ -279,31 +325,48 @@ def import_asset(published, store, *, verify_source, tick=None, seconds=MAX_SECO
             if file_digest(target, budget.check) != {k: record[k] for k in ("bytes", "sha256")}:
                 raise AssetError("ASSET_SOURCE_CHANGED")
         labels, count, size = Counter(), 0, sum(r["bytes"] for r in before)
+        cohort_labels = {}
         with (attempt / "normalized.jsonl").open("xb") as dst:
-            for row in normalized_rows(attempt / "source/apachejit_total.csv", budget.check):
+            for row in normalized_rows(attempt / "source" / spec["main"], budget.check):
                 raw = canonical(row) + b"\n"
                 size += len(raw)
                 if len(raw) > 16384 or size > MAX_BYTES:
                     raise AssetError("ASSET_BYTE_LIMIT")
                 dst.write(raw)
                 labels[row["published_label"]] += 1
+                cohort_labels.setdefault(row["cohort"], set()).add(row["published_label"])
                 count += 1
             dst.flush()
             os.fsync(dst.fileno())
-        if count != audit["rows"] or dict(labels) != audit["labels"]:
-            raise AssetError("ASSET_DERIVATION_CONFLICT")
+        eligible = sorted(name for name, seen in cohort_labels.items() if len(seen) == 2)
+        if kind == "apachejit":
+            if count != audit["rows"] or dict(labels) != audit["labels"]:
+                raise AssetError("ASSET_DERIVATION_CONFLICT")
+        else:
+            audit = {
+                "rows": count,
+                "labels": dict(labels),
+                "structurally_eligible_projects": eligible,
+                "structurally_ready": len(eligible) == len(cohort_labels),
+                "product_training_ready": False,
+                "historical_replay_ready": False,
+            }
         quality = sealed(
             {
-                "version": VERSION,
+                "version": spec["version"],
                 "rows": count,
                 "labels": dict(labels),
                 "public_audit": audit,
                 "numeric_features": list(NUMERIC_FIELDS),
                 "fix_is_metadata_not_product_FIX": True,
                 "LT_synthesized": False,
-                "capabilities": CAPABILITIES,
+                "capabilities": spec["capabilities"],
                 "research_input_eligible_cohorts": audit["structurally_eligible_projects"],
-                "language_scope": "Java_dominated_source_not_verified_per_row",
+                "language_scope": (
+                    "Java_dominated_source_not_verified_per_row"
+                    if kind == "apachejit"
+                    else "user_supplied_not_verified"
+                ),
                 "unknown_types": count,
                 "missing_semantic_rows": count,
                 "negative_coverage": "unknown",
@@ -321,12 +384,12 @@ def import_asset(published, store, *, verify_source, tick=None, seconds=MAX_SECO
         if sum(r["bytes"] for r in inventory) > MAX_BYTES:
             raise AssetError("ASSET_BYTE_LIMIT")
         if (
-            before != source_inventory(published, budget.check)
+            before != source_inventory(published, budget.check, spec["names"])
             or verify_source(published) != acquisition
         ):
             raise AssetError("ASSET_SOURCE_CHANGED")
         identity = {
-            "adapter_version": VERSION,
+            "adapter_version": spec["version"],
             "adapter_rule_hash": rule,
             "source_acquisition": acquisition,
             "files": inventory,
@@ -372,17 +435,20 @@ def load_asset(directory, *, tick=None, seconds=MAX_SECONDS):
         "files",
     }:
         raise AssetError("ASSET_MANIFEST_INVALID")
-    if identity["adapter_version"] != VERSION or not re.fullmatch(
-        "[0-9a-f]{64}", str(identity["adapter_rule_hash"])
-    ):
+    kind = KIND_BY_VERSION.get(identity["adapter_version"])
+    if kind is None or not re.fullmatch("[0-9a-f]{64}", str(identity["adapter_rule_hash"])):
         raise AssetError("ASSET_VERSION_INVALID")
+    spec = KINDS[kind]
     if content_hash(identity) != manifest["asset_id"] or directory.name != manifest["asset_id"]:
         raise AssetError("ASSET_ID_INVALID")
     stored = datetime.fromisoformat(utc_time(manifest["first_stored_at"]))
     acquired = datetime.fromisoformat(utc_time(identity["source_acquisition"]["acquired_at"]))
     if stored < acquired:
         raise AssetError("ASSET_TIME_CONFLICT")
-    expected_names = {"source/" + n for n in SOURCE_NAMES} | {"normalized.jsonl", "quality.json"}
+    expected_names = {"source/" + n for n in spec["names"]} | {
+        "normalized.jsonl",
+        "quality.json",
+    }
     records = identity["files"]
     if (
         not isinstance(records, list)
@@ -418,7 +484,7 @@ def load_asset(directory, *, tick=None, seconds=MAX_SECONDS):
     quality = read_json(directory / "quality.json", budget.check)
     verify_seal(quality)
     if (
-        quality.get("capabilities") != CAPABILITIES
+        quality.get("capabilities") != spec["capabilities"]
         or type(quality.get("rows")) is not int
         or not 1 <= quality["rows"] <= MAX_ROWS
     ):

@@ -1,4 +1,4 @@
-import { mount, flushPromises } from "@vue/test-utils";
+﻿import { mount, flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, expect, test, vi } from "vitest";
 import { ApiError, client } from "../api";
@@ -56,8 +56,8 @@ test("uncertain create retains request identity and binds preview source hash", 
       return { dataset_id: "created", task_id: "worker" };
     });
   const { wrapper, router } = await view(DatasetsPage);
-  await wrapper.get("input").setValue("research");
-  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  await wrapper.get('input[maxlength="80"]').setValue("research");
+  await wrapper.get("form select").setValue(asset.asset_id);
   await wrapper.get("form").trigger("submit");
   await flushPromises();
   await wrapper.get("form").trigger("submit");

@@ -69,6 +69,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 | A34 | `GET /health` | 最小存活状态 | Public |
 | A35 | `POST /tasks/diagnostic` | 开发环境受限诊断任务 | Member，仅 development/test |
 | A36 | `GET /model-runs/{id}/risk-items` | 历史风险列表：按模型运行返回逐提交概率与风险等级，默认只列验证与测试分区，不返回真实标签 | Viewer |
+| A37 | `POST /public-assets` | 导入公开数据资产：接收提交级 CSV 文本、十六列显式映射与许可声明，体检通过后封装成不可变资产；缺列、标签非法、数值非法、超行数或超体积一律拒绝 | Member、Admin |
 
 ## 4 关键请求与响应
 

@@ -1,4 +1,4 @@
-"""Check documented links/API inventory and the generated bootstrap OpenAPI contract."""
+﻿"""Check documented links/API inventory and the generated bootstrap OpenAPI contract."""
 
 import argparse
 import json
@@ -87,8 +87,8 @@ def main():
     api = (ROOT / "docs/04-API与数据库规格.md").read_text(encoding="utf-8")
     ids = re.findall(r"^\| (A\d+) \|", api, flags=re.M)
     # 计数刻意固定：新增或删减接口必须在这里改一次，避免文档清单悄悄变化。
-    if len(ids) != 36 or len(set(ids)) != 36:
-        raise RuntimeError("Documented API inventory must contain 36 unique IDs")
+    if len(ids) != 37 or len(set(ids)) != 37:
+        raise RuntimeError("Documented API inventory must contain 37 unique IDs")
     application = create_app(load_settings(environment="test"))
     generated = (
         json.dumps(application.openapi(), ensure_ascii=False, sort_keys=True, indent=2) + "\n"

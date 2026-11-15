@@ -1,6 +1,18 @@
 import { reactive } from "vue";
 
 const messages = {
+  PUBLIC_MAPPING_INCOMPLETE: "列映射缺少必填字段，请为每个字段选一列。",
+  PUBLIC_MAPPING_DUPLICATE:
+    "同一列被映射到了多个字段，请改成一列只对一个字段。",
+  PUBLIC_MAPPING_UNKNOWN: "映射的列在文件表头里找不到，请重新选择。",
+  PUBLIC_LABEL_INVALID: "标签列只能是 True/False 或 1/0。",
+  PUBLIC_NUMERIC_INVALID: "数值列必须为有限非负数。",
+  PUBLIC_TIME_INVALID: "作者时间必须是秒级时间戳。",
+  PUBLIC_DUPLICATE_SAMPLE: "同一份文件里出现了重复的项目与提交编号。",
+  PUBLIC_ROW_LIMIT: "行数超出上限，请拆分后再导入。",
+  PUBLIC_BYTE_LIMIT: "文件体积超出上限，请缩减后再导入。",
+  PUBLIC_SCHEMA_INVALID: "文件缺少表头，请确认是一份带列名的逗号分隔值文件。",
+  PUBLIC_FIELD_INVALID: "提交编号或项目为空，请核对数据。",
   MODEL_DATASET_NOT_READY: "数据集尚未发布，请等待其完成后训练。",
   MODEL_DATASET_INCOMPATIBLE:
     "数据集用途或特征不兼容，请选择已发布的研究十二指标数据。",
@@ -73,11 +85,12 @@ const messages = {
   SESSION_CHANGED: "会话已变化，请重新登录。",
 };
 export class ApiError extends Error {
-  constructor(status, code, requestId = "") {
+  constructor(status, code, requestId = "", detail = "") {
     super(messages[code] || "请求未完成，请刷新或稍后重试。");
     this.status = status;
     this.code = code;
     this.requestId = requestId;
+    this.detail = detail;
   }
 }
 // Credentials stay in this closure; nothing is written to browser storage.
@@ -115,6 +128,7 @@ export function createClient(fetcher = (...args) => fetch(...args)) {
           response.status,
           data?.code || "SYSTEM_DEPENDENCY_UNAVAILABLE",
           data?.request_id || response.headers.get("X-Request-ID") || "",
+          data?.detail || "",
         );
       return data;
     } catch (error) {
