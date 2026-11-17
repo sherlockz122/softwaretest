@@ -147,6 +147,20 @@ async function download(kind) {
             >{{ shortId(report.provenance.code_sha) }}</span
           >
         </p>
+        <p v-if="report.reused_from" class="hint">
+          模型参数复用自模型池：{{
+            report.reused_from.source_kind === "preset" ? "预置基线" : "训练运行"
+          }}（池条目 {{ shortId(report.reused_from.pool_entry_id) }}）。只跳过训练这一步：
+          标准化统计、概率校准和判定门槛都在本次数据集上重新计算，评估口径与从零训练一致。
+          <RouterLink
+            v-if="report.reused_from.source_run_id"
+            :to="`/model-runs/${report.reused_from.source_run_id}`"
+            >查看来源运行</RouterLink
+          >
+        </p>
+        <p v-if="report.request?.reuse_auto_miss" class="hint">
+          这次训练请求了自动匹配，但池中没有匹配的条目，已从零训练。
+        </p>
         <p>
           判定门槛：{{ number(report.threshold) }}（模型给出的概率超过它，就算「可能引入缺陷」）。{{
             report.calibration_partition === "train"

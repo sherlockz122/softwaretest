@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from packages.persistence.canonical_json import CanonicalJSON
 
-SCHEMA_HEAD = "0012_prediction"
+SCHEMA_HEAD = "0013_model_pool"
 
 
 class Base(DeclarativeBase):
@@ -801,3 +801,37 @@ class ModelArtifact(Base):
     uri: Mapped[str] = mapped_column(VARCHAR(256))
     sha256: Mapped[str] = mapped_column(hash_column())
     size: Mapped[int] = mapped_column(BIGINT())
+
+class ModelPoolEntry(Base):
+    __tablename__ = "model_pool"
+    __table_args__ = (
+        Index("ix_model_pool_kind_created", "source_kind", "created_at", "id"),
+        CheckConstraint(
+            "source_kind IN ('preset','run') AND status IN ('active','removed')",
+            name="ck_model_pool_kind_status",
+        ),
+        CheckConstraint("artifact_size >= 0", name="ck_model_pool_artifact_size"),
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    name: Mapped[str] = mapped_column(VARCHAR(128))
+    source_kind: Mapped[str] = mapped_column(VARCHAR(16, charset="ascii", collation="ascii_bin"))
+    source_run_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("model_run.id", ondelete="SET NULL"), nullable=True
+    )
+    owner_id: Mapped[str | None] = mapped_column(
+        uuid_column(), ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    plugin: Mapped[str] = mapped_column(VARCHAR(16))
+    params_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    features_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    forms_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    code_sha: Mapped[str] = mapped_column(hash_column())
+    artifact_uri: Mapped[str] = mapped_column(VARCHAR(256))
+    artifact_sha256: Mapped[str] = mapped_column(hash_column())
+    artifact_size: Mapped[int] = mapped_column(BIGINT())
+    status: Mapped[str] = mapped_column(
+        VARCHAR(16, charset="ascii", collation="ascii_bin"), default="active"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), nullable=False, server_default=func.utc_timestamp(6)
+    )

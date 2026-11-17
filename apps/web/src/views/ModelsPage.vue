@@ -22,6 +22,9 @@ const list = useLatest((p, signal) =>
 const datasets = useLatest((p, signal) =>
   client.request(`/datasets?page=${p}&page_size=20`, { signal }),
 );
+const poolList = useLatest((signal) =>
+  client.request("/model-pool?page=1&page_size=100", { signal }),
+);
 const dataset = ref("");
 const plugin = ref("lr");
 const seed = ref(42);
@@ -32,6 +35,41 @@ const depth = ref(16);
 const leaf = ref(2);
 const creating = ref(false);
 const error = ref(null);
+const reuseMode = ref("none");
+const reuseEntry = ref("");
+const reuseBody = computed(() => {
+  const selected = featureList.filter((name) => chosen.value.has(name));
+  return {
+    plugin: plugin.value,
+    params:
+      plugin.value === "lr"
+        ? { c: Number(c.value), max_iter: Number(iterations.value) }
+        : {
+            n_estimators: Number(trees.value),
+            max_depth: Number(depth.value),
+            min_samples_leaf: Number(leaf.value),
+          },
+    features: selected,
+    forms: Object.fromEntries(selected.map((name) => [name, forms[name]])),
+  };
+});
+const sameMap = (a, b) => {
+  const ka = Object.keys(a || {}).sort();
+  const kb = Object.keys(b || {}).sort();
+  return (
+    JSON.stringify(ka) === JSON.stringify(kb) &&
+    ka.every((k) => String(a[k]) === String(b[k]))
+  );
+};
+const matchingPool = computed(() =>
+  (poolList.data.value?.items || []).filter(
+    (entry) =>
+      entry.plugin === reuseBody.value.plugin &&
+      sameMap(entry.params, reuseBody.value.params) &&
+      JSON.stringify(entry.features) === JSON.stringify(reuseBody.value.features) &&
+      sameMap(entry.forms, reuseBody.value.forms),
+  ),
+);
 const keys = operationKeys();
 const modelNames = { lr: "逻辑回归", rf: "随机森林" };
 const featureList = Object.keys(datasetFeatureNames);
@@ -54,7 +92,11 @@ function toggleFeature(name) {
 const canCreate = computed(() =>
   ["Member", "Admin"].includes(client.state.user?.role),
 );
-const canSubmit = computed(() => chosen.value.size > 0);
+const canSubmit = computed(
+  () =>
+    chosen.value.size > 0 &&
+    (reuseMode.value !== "entry" || Boolean(reuseEntry.value)),
+);
 const chosenDataset = computed(
   () => datasets.data.value?.items.find((row) => row.id === dataset.value) || null,
 );
@@ -62,6 +104,7 @@ const chosenPartitions = computed(
   () => chosenDataset.value?.summary?.partitions || {},
 );
 watch(page, (p) => list.load(p), { immediate: true });
+poolList.load();
 watch(
   datasetPage,
   (p) => {
@@ -95,6 +138,9 @@ async function create() {
     features: selected,
     forms: Object.fromEntries(selected.map((name) => [name, forms[name]])),
   };
+  if (reuseMode.value === "entry" && reuseEntry.value)
+    body.reuse_from = reuseEntry.value;
+  if (reuseMode.value === "auto") body.reuse_policy = "auto";
   try {
     const ack = await client.request("/model-runs", {
       method: "POST",
@@ -128,7 +174,9 @@ async function create() {
       训练和预测是分开的两件事：这里只做训练；用训练好的模型对提交做批量预测，结果会进
       <RouterLink to="/risk">历史风险列表</RouterLink>，不会出现在本页。这里的训练记录与历史风险列表里的预测记录是各自独立的，互不混用。
     </p>
-    <RequestError :error="error || list.error.value || datasets.error.value" />
+    <RequestError
+      :error="error || list.error.value || datasets.error.value || poolList.error.value"
+    />
     <form v-if="canCreate" @submit.prevent="create">
       <label
         >用哪个数据集<select v-model="dataset" required :disabled="creating">
@@ -305,6 +353,59 @@ async function create() {
           至少要勾选一个指标才能训练。
         </p>
       </fieldset>
+      <fieldset class="reuse-choice">
+        <legend>模型参数从哪里来</legend>
+        <p>
+          模型池里放的是已经训练好的模型参数（预置基线，或把某次训练结果加入池）。复用只跳过训练这一步：标准化统计、概率校准、判定门槛都会在这次的训练数据上重新计算，评估口径与从零训练完全一致。
+        </p>
+        <label
+          ><input
+            type="radio"
+            value="none"
+            v-model="reuseMode"
+            :disabled="creating"
+          />从零训练（每次重新拟合模型参数）</label
+        >
+        <label
+          ><input
+            type="radio"
+            value="entry"
+            v-model="reuseMode"
+            :disabled="creating"
+          />复用池中模型（当前插件、参数、指标与形式下有
+          {{ matchingPool.length }} 个匹配条目，换配置会重新匹配）</label
+        >
+        <template v-if="reuseMode === 'entry'">
+          <label v-if="matchingPool.length"
+            >选择池条目<select v-model="reuseEntry" :disabled="creating">
+              <option
+                v-for="entry in matchingPool"
+                :key="entry.id"
+                :value="entry.id"
+              >
+                {{
+                  entry.source_kind === "preset"
+                    ? "预置基线"
+                    : `训练运行 ${shortId(entry.source_run_id)} 的模型`
+                }}
+                · {{ modelNames[entry.plugin] }} ·
+                {{ entry.created_at.slice(0, 10) }}
+              </option>
+            </select></label
+          >
+          <p v-if="!matchingPool.length" class="hint">
+            当前配置下池中没有匹配条目：要么改回从零训练，要么改用自动匹配，让系统按同样规则找一次。
+          </p>
+        </template>
+        <label
+          ><input
+            type="radio"
+            value="auto"
+            v-model="reuseMode"
+            :disabled="creating"
+          />自动匹配（按插件、参数、指标与形式在池里找；找不到就从零训练，训练记录里会注明）</label
+        >
+      </fieldset>
       <p>
         分区各司其职：训练区用来训练模型，验证区（如果切了）用来调整概率、定判定门槛，测试区只做最后评价、不参与调整。验证区不是必须的，也可以只分训练和测试两份。任务中断后会用同样的输入重新训练。
       </p>
@@ -370,6 +471,13 @@ async function create() {
 }
 .feature-choice table {
   table-layout: fixed;
+}
+.reuse-choice {
+  margin: 16px 0;
+}
+.reuse-choice label {
+  display: block;
+  margin: 8px 0;
 }
 .hint {
   color: #666;

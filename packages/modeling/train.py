@@ -19,8 +19,8 @@ from sklearn.preprocessing import StandardScaler
 from packages.mining import public_assets as assets
 from packages.mining import research_dataset as research
 from packages.mining.source_evidence import content_hash
-from packages.modeling import metrics
-from packages.modeling.policy import DEFAULT_FORMS, ModelError, provenance
+from packages.modeling import metrics, policy, pool
+from packages.modeling.policy import ModelError, provenance
 
 
 def load_partition(path):
@@ -107,11 +107,13 @@ def threshold_for(y, p):
     return max(candidates, key=lambda t: (f1_score(y, p >= t, zero_division=0), t))
 
 
-def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
+def fit_model(partitions, plugin, params, seed, stage=lambda _: None, *, reuse_estimator=None):
     """训练 + 校准/定门槛。
 
     验证集可选：没有验证分区时，用训练分区按时间切成前后两段来做校准和
     定门槛（样本内做法，报告里会显式标注 calibration_partition=train）。
+    reuse_estimator 非空时跳过估计器拟合（复用池估计器参数），标准化统计、
+    校准器与门槛仍全部在新数据集上重做。
     """
     train = partitions["train"]
     if "validation" in partitions:
@@ -123,15 +125,18 @@ def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
         calibration_data = train
         stage_name = "calibrating_train_split"
     first, second = calibration_split(calibration_data["events"], calibration_data["y"])
-    estimator = (
-        LogisticRegression(C=params["c"], max_iter=params["max_iter"], random_state=seed)
-        if plugin == "lr"
-        else RandomForestClassifier(**params, random_state=seed, n_jobs=1)
-    )
-    stage("fitting_train")
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", ConvergenceWarning)
-        estimator.fit(train["x"], train["y"])
+    if reuse_estimator is not None:
+        estimator = reuse_estimator
+    else:
+        estimator = (
+            LogisticRegression(C=params["c"], max_iter=params["max_iter"], random_state=seed)
+            if plugin == "lr"
+            else RandomForestClassifier(**params, random_state=seed, n_jobs=1)
+        )
+        stage("fitting_train")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", ConvergenceWarning)
+            estimator.fit(train["x"], train["y"])
     stage(stage_name)
     raw = estimator.predict_proba(calibration_data["x"])[:, 1]
     calibrator = LogisticRegression(C=1e6, max_iter=200, random_state=seed)
@@ -141,6 +146,25 @@ def fit_model(partitions, plugin, params, seed, stage=lambda _: None):
     calibrated = calibrator.predict_proba(sigmoid_input(raw[second]))[:, 1]
     threshold = threshold_for(calibration_data["y"][second], calibrated)
     return estimator, calibrator, threshold, calibration_partition, first, second
+
+
+def load_reuse_estimator(directory, request):
+    """加载服务层落好的池估计器，并核对复用契约与训练请求一致。"""
+    reuse = request.get("reuse")
+    if reuse is None:
+        return None
+    path = directory / "pool-estimator.skops"
+    if not path.is_file():
+        raise ModelError("MODEL_POOL_ARTIFACT_MISSING")
+    estimator = sio.load(path, trusted=[])
+    if sio.get_untrusted_types(file=path):
+        raise ModelError("MODEL_POOL_ARTIFACT_UNTRUSTED")
+    expected = pool.contract(
+        request["plugin"], request["params"], request["features"], request["forms"]
+    )
+    if reuse.get("contract") != expected:
+        raise ModelError("MODEL_POOL_CONTRACT_MISMATCH")
+    return estimator
 
 
 def run(directory, request, stage=lambda _: None):
@@ -161,8 +185,14 @@ def run(directory, request, stage=lambda _: None):
     matrices, stats = feature_matrix(partitions, features, forms)
     for p, d in partitions.items():
         d["x"] = matrices[p]
+    reuse_estimator = load_reuse_estimator(directory, request)
     model, calibrator, threshold, calibration_partition, first, second = fit_model(
-        partitions, request["plugin"], request["params"], request["seed"], stage
+        partitions,
+        request["plugin"],
+        request["params"],
+        request["seed"],
+        stage,
+        reuse_estimator=reuse_estimator,
     )
     calibration_data = partitions[calibration_partition]
     threshold_key = (
@@ -207,6 +237,23 @@ def run(directory, request, stage=lambda _: None):
 
     test = partitions["test"]
     prior = float(partitions["train"]["y"].mean())
+    limitations = [
+        "post_publication_weak_labels_not_gold",
+        "not_historical_online_simulation",
+        "negative_coverage_noise_language_overlap_unverified",
+        (
+            "no_validation_partition_train_internal_calibration"
+            if calibration_partition == "train"
+            else "validation_selected_metrics_not_unbiased"
+        ),
+        "no_candidate_release",
+    ]
+    if reuse_estimator is not None:
+        limitations.append(
+            "estimator_parameters_reused_from_pool_calibration_threshold_refit"
+        )
+    if request.get("reuse_auto_miss"):
+        limitations.append("pool_auto_match_none_trained_from_scratch")
     report = {
         "provenance": provenance(),
         "request": request,
@@ -251,17 +298,12 @@ def run(directory, request, stage=lambda _: None):
             request["seed"],
         ),
         "capabilities": {"research_binary": True, "candidate_release": False},
-        "limitations": [
-            "post_publication_weak_labels_not_gold",
-            "not_historical_online_simulation",
-            "negative_coverage_noise_language_overlap_unverified",
-            (
-                "no_validation_partition_train_internal_calibration"
-                if calibration_partition == "train"
-                else "validation_selected_metrics_not_unbiased"
-            ),
-            "no_candidate_release",
-        ],
+        "limitations": limitations,
+        **(
+            {"reused_from": request["reuse"]}
+            if reuse_estimator is not None
+            else {}
+        ),
         "resources": {
             "elapsed_seconds": time.monotonic() - started,
             "threads": 1,

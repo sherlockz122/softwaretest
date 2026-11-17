@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     scheduler_interval_seconds: float = Field(default=1, ge=0.1, le=30)
     coordinator_interval_seconds: float = Field(default=15, ge=0.1, le=60)
     repository_storage_root: Path = Path("runtime/repositories")
+    preset_registration_mode: str = "manual"
     repository_max_bytes: int = Field(default=2 * 1024**3, ge=1024**2, le=100 * 1024**3)
     repository_timeout_seconds: int = Field(default=900, ge=10, le=3600)
     repository_parse_timeout_seconds: int = Field(default=1800, ge=10, le=86400)
@@ -48,6 +49,13 @@ class Settings(BaseSettings):
         if self.task_heartbeat_seconds >= self.task_lease_seconds:
             raise ValueError("heartbeat must be shorter than lease")
         return self
+
+    @field_validator("preset_registration_mode")
+    @classmethod
+    def preset_mode_known(cls, value: str) -> str:
+        if value not in {"manual", "startup"}:
+            raise ValueError("unsupported preset registration mode")
+        return value
 
     @field_validator("environment")
     @classmethod

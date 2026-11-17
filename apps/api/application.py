@@ -9,8 +9,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
-from apps.api.auth import router
 from apps.api.assets import router as assets_router
+from apps.api.auth import router
 from apps.api.datasets import router as datasets_router
 from apps.api.models import router as models_router
 from apps.api.predictions import router as predictions_router
@@ -23,9 +23,9 @@ from packages.mining.dataset_import import ImportError as DatasetImportError
 from packages.mining.public_assets import AssetError
 from packages.mining.research_dataset import ResearchError
 from packages.modeling.policy import ModelError
-from packages.prediction.policy import PredictionError
 from packages.platform.config import Settings
 from packages.platform.connections import Connections
+from packages.prediction.policy import PredictionError
 from packages.repositories.safety import RepositoryError
 from packages.tasks.service import TaskError
 
@@ -40,6 +40,17 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
         try:
             if hasattr(app.state.connections, "require_schema"):
                 app.state.connections.require_schema()
+            if settings.preset_registration_mode == "startup":
+                from packages.modeling import presets
+
+                try:
+                    presets.ensure_presets(app.state.connections.engine)
+                except ModelError as exc:
+                    # 内置资产尚未导入等情况下注册推迟，不阻塞启动；导入后重跑脚本
+                    # scripts/register_presets.py 或重启即可补注册。
+                    logging.getLogger("defectguard.api").warning(
+                        "PRESET_REGISTRATION_DEFERRED code=%s", exc.code
+                    )
             yield
         finally:
             app.state.connections.close()

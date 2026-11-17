@@ -389,3 +389,185 @@ test("model without validation shows train-internal threshold summary", async ()
   expect(wrapper.text()).toContain("测试区（最终评价）");
   wrapper.unmount();
 });
+const poolFeatures = [
+  "la",
+  "ld",
+  "nf",
+  "nd",
+  "ns",
+  "ent",
+  "ndev",
+  "age",
+  "nuc",
+  "aexp",
+  "arexp",
+  "asexp",
+];
+const poolForms = Object.fromEntries(
+  poolFeatures.map((name) => [name, "standardize"]),
+);
+const poolList = {
+  items: [
+    {
+      id: "pool-a",
+      name: "run-aaaa",
+      source_kind: "run",
+      source_run_id: "source-run",
+      owner_id: "member",
+      plugin: "lr",
+      params: { c: 1, max_iter: 500 },
+      features: poolFeatures,
+      forms: poolForms,
+      created_at: "2026-11-17T00:00:00Z",
+    },
+    {
+      id: "pool-b",
+      name: "preset-rf",
+      source_kind: "preset",
+      source_run_id: null,
+      owner_id: null,
+      plugin: "rf",
+      params: { n_estimators: 100, max_depth: 16, min_samples_leaf: 2 },
+      features: poolFeatures,
+      forms: Object.fromEntries(poolFeatures.map((name) => [name, "raw"])),
+      created_at: "2026-11-17T00:00:00Z",
+    },
+    {
+      id: "pool-c",
+      name: "run-cccc",
+      source_kind: "run",
+      source_run_id: "source-run-2",
+      owner_id: "member",
+      plugin: "lr",
+      params: { c: 2, max_iter: 500 },
+      features: poolFeatures,
+      forms: poolForms,
+      created_at: "2026-11-17T00:00:00Z",
+    },
+  ],
+  total: 3,
+};
+test("pool entries filter by current contract and entry mode sends reuse_from", async () => {
+  const posts = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    if (options?.method === "POST") {
+      posts.push(JSON.parse(options.body));
+      return { model_run_id: "new" };
+    }
+    if (path.startsWith("/datasets?")) return datasetList;
+    if (path.startsWith("/model-pool")) return poolList;
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  await wrapper.findAll("select")[0].setValue("fixed");
+  const radios = wrapper.findAll('input[type="radio"]');
+  expect(radios).toHaveLength(3);
+  expect(wrapper.text()).toContain("有 1 个匹配条目");
+  const entryRadio = wrapper.find('input[type="radio"][value="entry"]');
+  entryRadio.element.checked = true;
+  await entryRadio.trigger("change");
+  await flushPromises();
+  const poolOption = wrapper.find('option[value="pool-a"]');
+  expect(poolOption.exists()).toBe(true);
+  const poolSelect = poolOption.element.closest("select");
+  expect(poolSelect.options).toHaveLength(1);
+  await poolOption.setValue();
+  await flushPromises();
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  expect(posts[0].reuse_from).toBe("pool-a");
+  expect(posts[0].reuse_policy).toBeUndefined();
+  wrapper.unmount();
+});
+test("auto mode sends reuse_policy and empty pool shows the no-match hint", async () => {
+  const posts = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    if (options?.method === "POST") {
+      posts.push(JSON.parse(options.body));
+      return { model_run_id: "new" };
+    }
+    if (path.startsWith("/datasets?")) return datasetList;
+    if (path.startsWith("/model-pool")) return { items: [], total: 0 };
+    return modelList;
+  });
+  const { wrapper } = await view(ModelsPage);
+  await wrapper.findAll("select")[0].setValue("fixed");
+  const entryRadio = wrapper.find('input[type="radio"][value="entry"]');
+  entryRadio.element.checked = true;
+  await entryRadio.trigger("change");
+  await flushPromises();
+  expect(wrapper.text()).toContain("池中没有匹配条目");
+  const submit = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("开始训练"));
+  expect(submit.attributes("disabled")).toBeDefined();
+  const autoRadio = wrapper.find('input[type="radio"][value="auto"]');
+  autoRadio.element.checked = true;
+  await autoRadio.trigger("change");
+  await flushPromises();
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  expect(posts[0].reuse_policy).toBe("auto");
+  expect(posts[0].reuse_from).toBeUndefined();
+  wrapper.unmount();
+});
+test("model detail shows pool reuse source and auto-miss note", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.includes("/risk"))
+      return {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+        partitions: ["validation", "test"],
+        threshold: 0.5,
+        in_sample: false,
+      };
+    return {
+      id: "reused",
+      dataset_id: "fixed",
+      plugin: "lr",
+      seed: 42,
+      status: "succeeded",
+      registered: true,
+      task_id: "worker",
+      snapshot: {},
+      report: {
+        provenance: { version: "research-lr-rf-v4", code_sha: "f".repeat(64) },
+        threshold: 0.5,
+        calibration: { calibration_rows: 4, threshold_rows: 4 },
+        features: ["la", "age"],
+        forms: { la: "log1p", age: "standardize" },
+        request: { features: ["la", "age"], reuse_auto_miss: true },
+        reused_from: {
+          pool_entry_id: "pool-a",
+          source_kind: "run",
+          source_run_id: "source-run",
+        },
+        metrics: {
+          validation_threshold: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+          test: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+        },
+        baseline: {
+          metrics: {
+            support: { clean: 1, buggy: 1 },
+            effort: { pofb20: 0.5, ifa: 0, popt: 0.75 },
+          },
+        },
+      },
+    };
+  });
+  const { wrapper } = await view(ModelPage, "Viewer", "/model-runs/reused");
+  expect(wrapper.text()).toContain("模型参数复用自模型池");
+  expect(wrapper.text()).toContain("训练运行");
+  expect(wrapper.find('a[href="/model-runs/source-run"]').exists()).toBe(true);
+  expect(wrapper.text()).toContain("这次训练请求了自动匹配");
+  expect(wrapper.text()).toContain("已从零训练");
+  wrapper.unmount();
+});

@@ -693,3 +693,192 @@ def test_feature_choice_rejected_without_task(environment):
             service.create(users[1], uuid4().hex, body | bad, str(uuid4()))
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(ModelRun)) == before
+
+
+def test_pool_add_and_reuse_full_chain(environment):
+    service, body, users, settings, engine, dataset = environment
+    import numpy as np
+    import skops.io as sio
+
+    from packages.auth.security import AuthError
+    from packages.modeling import pool
+    from packages.persistence.models import ModelPoolEntry
+
+    # 1. 从零训练一份 LR 运行并加入池
+    ack, token, payload = claim(environment)
+    service.run(ack["task_id"], token, payload)
+    source_run = service.detail(ack["model_run_id"])
+    assert source_run["registered"]
+    with pytest.raises(AuthError, match="AUTH_FORBIDDEN"):
+        service.pool_add(users[0], ack["model_run_id"])
+    entry = service.pool_add(users[1], ack["model_run_id"])
+    entry_id = entry["id"]
+    assert entry["source_kind"] == "run" and entry["owner_id"] == users[1].id
+    assert service.pool_add(users[1], ack["model_run_id"])["id"] == entry_id
+    assert any(item["id"] == entry_id for item in service.pool_list()["items"])
+
+    # 2. 同一存储里再建一份数据集，供复用训练使用
+    with TemporaryDirectory(dir=assets.ROOT / "runtime/temp", prefix="pool-second-") as name:
+        _, second_source = fixture_asset(
+            Path(name),
+            rows=100,
+            projects=("apache/commons-io",),
+            store=research.STORE,
+        )
+        asset_b = second_source["manifest"]["asset_id"]
+        hash_b = second_source["manifest"]["content_hash"]
+    body_b = {
+        "name": "pool reuse fixture",
+        "asset_id": asset_b,
+        "source_hash": hash_b,
+        "purpose": research.PURPOSE,
+        "split_strategy": "time_ordered",
+        "train_ratio": 0.7,
+        "validation_ratio": 0.15,
+        "test_ratio": 0.15,
+    }
+    ack_b = dataset.create(users[1], uuid4().hex, body_b, str(uuid4()))
+    token_b, payload_b = dataset.tasks.claim(ack_b["task_id"])
+    dataset.run(ack_b["task_id"], token_b, payload_b)
+    assert dataset.detail(ack_b["dataset_id"])["ready"]
+
+    # 3. 显式复用：估计器参数一致，校准在新数据集重做，报告标注来源
+    reuse_body = {
+        "dataset_id": ack_b["dataset_id"],
+        "plugin": "lr",
+        "params": {},
+        "seed": 7,
+        "reuse_from": entry_id,
+    }
+    ack2 = service.create(users[1], uuid4().hex, reuse_body, str(uuid4()))
+    token2, payload2 = service.tasks.claim(ack2["task_id"])
+    service.run(ack2["task_id"], token2, payload2)
+    reused = service.detail(ack2["model_run_id"])
+    assert reused["registered"]
+    report = reused["report"]
+    assert report["reused_from"]["pool_entry_id"] == entry_id
+    assert report["reused_from"]["source_kind"] == "run"
+    assert (
+        "estimator_parameters_reused_from_pool_calibration_threshold_refit"
+        in report["limitations"]
+    )
+    path_a, _, _ = service.artifact(ack["model_run_id"], "model.skops")
+    path_b, _, _ = service.artifact(ack2["model_run_id"], "model.skops")
+    bundle_a = sio.load(path_a, trusted=[])
+    bundle_b = sio.load(path_b, trusted=[])
+    assert np.array_equal(bundle_a["model"].coef_, bundle_b["model"].coef_)
+    assert report["calibration"]["calibration_rows"] != source_run["report"]["calibration"][
+        "calibration_rows"
+    ]
+    risk = service.risk_items(ack2["model_run_id"], 1, 10)
+    assert set(risk) >= {"items", "total", "threshold"}
+
+    # 4. 显式指定契约不一致的池条目被拒绝（create 会弹出 reuse_from，用显式副本）
+    with pytest.raises(ModelError, match="MODEL_POOL_CONTRACT_MISMATCH"):
+        service.create(
+            users[1],
+            uuid4().hex,
+            dict(reuse_body, params={"c": 2.0}, reuse_from=entry_id),
+            str(uuid4()),
+        )
+    with pytest.raises(ModelError, match="MODEL_POOL_NOT_FOUND"):
+        service.create(
+            users[1],
+            uuid4().hex,
+            dict(reuse_body, reuse_from=str(uuid4())),
+            str(uuid4()),
+        )
+
+    # 5. 自动匹配：零命中回退从零训练并如实标注
+    rf_auto = {
+        "dataset_id": ack_b["dataset_id"],
+        "plugin": "rf",
+        "params": {},
+        "seed": 7,
+        "reuse_policy": "auto",
+    }
+    ack3 = service.create(users[1], uuid4().hex, rf_auto, str(uuid4()))
+    token3, payload3 = service.tasks.claim(ack3["task_id"])
+    service.run(ack3["task_id"], token3, payload3)
+    report3 = service.detail(ack3["model_run_id"])["report"]
+    assert "reused_from" not in report3
+    assert "pool_auto_match_none_trained_from_scratch" in report3["limitations"]
+
+    # 6. 自动匹配：命中池条目直接复用
+    lr_auto = {
+        "dataset_id": ack_b["dataset_id"],
+        "plugin": "lr",
+        "params": {},
+        "seed": 9,
+        "reuse_policy": "auto",
+    }
+    ack4 = service.create(users[1], uuid4().hex, lr_auto, str(uuid4()))
+    token4, payload4 = service.tasks.claim(ack4["task_id"])
+    service.run(ack4["task_id"], token4, payload4)
+    report4 = service.detail(ack4["model_run_id"])["report"]
+    assert report4["reused_from"]["pool_entry_id"] == entry_id
+
+    # 7. 移除：非本人 Member 被拒，Admin 可移除；移除后不再可复用
+    with pytest.raises(ModelError, match="MODEL_POOL_FORBIDDEN"):
+        service.pool_remove(users[3], entry_id)
+    service.pool_remove(users[2], entry_id)
+    with Session(engine) as db:
+        assert db.get(ModelPoolEntry, entry_id).status == "removed"
+    with pytest.raises(ModelError, match="MODEL_POOL_NOT_FOUND"):
+        service.create(
+            users[1], uuid4().hex, dict(reuse_body, reuse_from=entry_id), str(uuid4())
+        )
+
+    # 8. 池工件目录与数据库行一一对应
+    with Session(engine) as db:
+        row = db.get(ModelPoolEntry, entry_id)
+    assert (pool.POOL_ROOT / row.id / "estimator.skops").is_file()
+
+
+def test_preset_registration_and_auto_match(environment):
+    service, body, users, settings, engine, dataset = environment
+    from sqlalchemy import delete
+
+    from packages.modeling import presets
+    from packages.persistence.models import ModelPoolEntry
+
+    with Session(engine) as db, db.begin():
+        db.execute(delete(ModelPoolEntry))
+
+    # 1. 首次注册两个预置基线；重复调用幂等
+    registered = presets.ensure_presets(engine)
+    assert set(registered) == {
+        f"preset-lr-{policy.VERSION}",
+        f"preset-rf-{policy.VERSION}",
+    }
+    assert presets.ensure_presets(engine) == []
+    listing = service.pool_list()
+    presets_rows = [e for e in listing["items"] if e["source_kind"] == "preset"]
+    assert len(presets_rows) == 2
+    assert all(e["owner_id"] is None for e in presets_rows)
+    assert {e["plugin"] for e in presets_rows} == {"lr", "rf"}
+
+    # 2. 自动匹配命中预置 LR 条目：报告标注 preset 来源
+    auto = {
+        "dataset_id": body["dataset_id"],
+        "plugin": "lr",
+        "params": {},
+        "seed": 11,
+        "reuse_policy": "auto",
+    }
+    ack = service.create(users[1], uuid4().hex, auto, str(uuid4()))
+    token, payload = service.tasks.claim(ack["task_id"])
+    service.run(ack["task_id"], token, payload)
+    report = service.detail(ack["model_run_id"])["report"]
+    assert report["reused_from"]["source_kind"] == "preset"
+    assert "estimator_parameters_reused_from_pool_calibration_threshold_refit" in report[
+        "limitations"
+    ]
+
+    # 3. 预置条目只有管理员能移除
+    preset_id = next(e["id"] for e in presets_rows if e["plugin"] == "lr")
+    with pytest.raises(ModelError, match="MODEL_POOL_FORBIDDEN"):
+        service.pool_remove(users[1], preset_id)
+    service.pool_remove(users[2], preset_id)
+    with Session(engine) as db:
+        assert db.get(ModelPoolEntry, preset_id).status == "removed"

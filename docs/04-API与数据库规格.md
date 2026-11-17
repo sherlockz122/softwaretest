@@ -524,3 +524,20 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 导入语义（prepare 消费导入资产时生效）：成员身份键为任意 ≤64 字符提交号 + ≤128 字符仓库名（不要求 apache/ 前缀与 40 位十六进制）；摘要与成员标记 `event_clock="user_declared_event_epoch_UTC"`、`label_confidence="user_declared_import_label"`、`target="user_declared_import_label"`；fix 列已映射时成员 fix 为布尔，未映射时 fix 为 null 且带 `fix_missing_reason="import_source_omits_fix"`、limitations 增加 `fix_unavailable_in_imported_source`；时间窗口类合并（hadoop 同月同仓库去重）只对内置资产生效。资产预览返回 `source_kind`（user_import / builtin_asset），列表与详情据此区分「导入/内置」。
 
 变更记录：`openspec/changes/add-public-dataset-import`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。
+
+## 第二十八阶段模型池复用（2026-11-17）
+
+新增 `model_pool` 表（迁移 0013）：池条目保存插件、超参、特征合同（features/forms）与估计器参数的密封工件引用（artifact_uri / artifact_sha256 / artifact_size）；`source_kind` 区分 preset（预置基线）与 run（用户把成功运行加入池），用户条目带 `source_run_id` 与 `owner_id`；`status` 为 active/removed（移除只标记，不删工件）；`code_sha` 记录训练时代码指纹，跨代码版本的条目不能复用（防静默混用旧参数）。预置基线用内置 apachejit 资产按默认配置训练、随代码版本注册（名称 `preset-{lr|rf}-{VERSION}`，幂等），无所有者，只能由管理员移除。
+
+端点（前缀 `/api/v1`）：
+
+- `GET /model-pool?page=&page_size=`：活跃池条目列表，含插件、参数、特征与形式的契约摘要。
+- `POST /model-runs/{run_id}/pool`（Member，201）：把一次成功运行的估计器参数抽入池（只取参数，丢弃校准器与门槛）；同一运行重复加入幂等返回原条目。
+- `DELETE /model-pool/{entry_id}`（Member）：条目所有者或 Admin 移除（预置条目仅 Admin）。
+- `POST /model-runs` 请求体扩展 `reuse_from`（显式池条目 id）与 `reuse_policy: "auto"`（按插件 + 超参 + 特征集 + 特征形式四元组精确匹配，命中多个取最新）。
+
+复用语义：绑定发生在训练任务创建时，把 `reuse`（池条目 id、来源、契约）写进请求；执行时子进程跳过估计器拟合，标准化统计、校准器与门槛全部在新数据集上重做。显式指定的条目契约不一致 → 422 `MODEL_POOL_CONTRACT_MISMATCH`（不回退、不创建训练）；旧代码版本条目 → 409 `MODEL_POOL_VERSION_CONFLICT`；自动匹配零命中 → 从零训练，报告 limitations 记录 `pool_auto_match_none_trained_from_scratch`。复用训练报告新增 `reused_from` 与 limitation `estimator_parameters_reused_from_pool_calibration_threshold_refit`，评估指标、风险列表与从零训练同构；复用不改变发布资格。子进程启动前二次校验池条目（active、契约、工件摘要），条目被移除或工件被篡改会让训练失败，而不是静默复用。
+
+错误码：`MODEL_POOL_NOT_FOUND`（404）、`MODEL_POOL_CONTRACT_MISMATCH`（422）、`MODEL_POOL_VERSION_CONFLICT`（409）、`MODEL_POOL_FORBIDDEN`（403）、`MODEL_POOL_INVALID`、`MODEL_POOL_SOURCE_INVALID`（409）、`MODEL_POOL_ARTIFACT_DRIFT`、`MODEL_POOL_ARTIFACT_UNTRUSTED`、`MODEL_POOL_ARTIFACT_MISSING`、`MODEL_POOL_ARTIFACT_LIMIT`、`MODEL_POOL_PRESET_ASSET_MISSING`（409）。
+
+变更记录：`openspec/changes/add-model-pool-reuse`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。

@@ -11,6 +11,7 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 import psutil
+import skops.io as sio
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,9 +19,9 @@ from sqlalchemy.orm import Session
 from packages.auth.security import require_role
 from packages.mining import public_assets as assets
 from packages.mining import research_dataset as research
-from packages.modeling import data, policy
+from packages.modeling import data, policy, pool
 from packages.modeling.policy import ModelError
-from packages.persistence.models import AsyncTask, ModelArtifact, ModelRun
+from packages.persistence.models import AsyncTask, ModelArtifact, ModelPoolEntry, ModelRun
 from packages.tasks.service import TaskService, audit, database_now, key_valid
 
 # 风险列表直接读训练已写出的 probabilities.csv，不另存一份分数。读取必须有界：
@@ -113,10 +114,14 @@ def root_request(run, request=None):
         "params": run.params_json,
         "seed": run.seed,
     }
-    # 特征选择只在训练请求里出现（不新增数据库列）；旧请求没有这两个键，保持原样。
+    # 特征选择与复用语义只在训练请求里出现（不新增数据库列）；旧请求没有这些键，
+    # 保持原样。
     if request is not None and "features" in request:
         result["features"] = request["features"]
         result["forms"] = request["forms"]
+    for name in ("reuse", "reuse_auto_miss"):
+        if request is not None and name in request:
+            result[name] = request[name]
     return result
 
 
@@ -132,6 +137,10 @@ class ModelService:
 
     def create(self, user, key, request, request_id):
         key_valid(key)
+        reuse_from = request.pop("reuse_from", None)
+        reuse_policy = request.pop("reuse_policy", None)
+        if reuse_policy not in (None, "auto"):
+            raise ModelError("MODEL_POOL_INVALID")
         request = request | {
             "params": policy.parameters(request["plugin"], request["params"], request["seed"])
         } | policy.feature_plan(
@@ -158,6 +167,8 @@ class ModelService:
         try:
             with Session(self.engine) as db, db.begin():
                 self.tasks.actor(db, user)
+                if reuse_from is not None or reuse_policy == "auto":
+                    request = self.bind_reuse(db, request, reuse_from)
                 if result := replay(db):
                     return result
                 snapshot = {
@@ -198,6 +209,163 @@ class ModelService:
                 if result := replay(db):
                     return result
             raise
+
+    def bind_reuse(self, db, request, reuse_from):
+        """把复用语义解析进请求；显式指定契约不符报错，自动匹配零命中回退从零训练。"""
+        if reuse_from is not None:
+            entry = db.get(ModelPoolEntry, reuse_from)
+            if not entry or entry.status != "active":
+                raise ModelError("MODEL_POOL_NOT_FOUND", 404)
+            return self.bound(db, entry, request)
+        rows = db.execute(
+            select(ModelPoolEntry)
+            .where(ModelPoolEntry.status == "active", ModelPoolEntry.plugin == request["plugin"])
+            .order_by(ModelPoolEntry.created_at.desc(), ModelPoolEntry.id)
+            .limit(100)
+        ).scalars().all()
+        code_sha = policy.provenance()["code_sha"]
+        for entry in rows:
+            if pool.matches(
+                entry, request["plugin"], request["params"], request["features"], request["forms"]
+            ) and entry.code_sha == code_sha:
+                return self.bound(db, entry, request)
+        request["reuse_auto_miss"] = True
+        return request
+
+    @staticmethod
+    def bound(db, entry, request):
+        if not pool.matches(
+            entry, request["plugin"], request["params"], request["features"], request["forms"]
+        ):
+            raise ModelError("MODEL_POOL_CONTRACT_MISMATCH")
+        if entry.code_sha != policy.provenance()["code_sha"]:
+            raise ModelError("MODEL_POOL_VERSION_CONFLICT", 409)
+        request["reuse"] = {
+            "pool_entry_id": entry.id,
+            "source_kind": entry.source_kind,
+            "source_run_id": entry.source_run_id,
+            "contract": pool.contract(
+                entry.plugin, entry.params_json, entry.features_json, entry.forms_json
+            ),
+        }
+        return request
+
+    @staticmethod
+    def pool_visible(entry):
+        return {
+            "id": entry.id,
+            "name": entry.name,
+            "source_kind": entry.source_kind,
+            "source_run_id": entry.source_run_id,
+            "owner_id": entry.owner_id,
+            "plugin": entry.plugin,
+            "params": entry.params_json,
+            "features": entry.features_json,
+            "forms": entry.forms_json,
+            "created_at": entry.created_at.isoformat() + "Z",
+        }
+
+    def pool_list(self, page=1, page_size=20):
+        with Session(self.engine) as db:
+            total = db.scalar(
+                select(func.count())
+                .select_from(ModelPoolEntry)
+                .where(ModelPoolEntry.status == "active")
+            )
+            rows = db.execute(
+                select(ModelPoolEntry)
+                .where(ModelPoolEntry.status == "active")
+                .order_by(ModelPoolEntry.created_at.desc(), ModelPoolEntry.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            ).scalars().all()
+            return {
+                "items": [self.pool_visible(entry) for entry in rows],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
+
+    def pool_add(self, user, run_id):
+        require_role(user, "Member")
+        path, _record, report = self.artifact(run_id, "model.skops")
+        request = report["request"]
+        if not all(name in request for name in ("plugin", "params", "features", "forms")):
+            raise ModelError("MODEL_POOL_SOURCE_INVALID", 409)
+        estimator = pool.extract_run_estimator(path.parent)
+        contract_value = pool.contract(
+            request["plugin"], request["params"], request["features"], request["forms"]
+        )
+        with Session(self.engine) as db, db.begin():
+            existing = db.scalar(
+                select(ModelPoolEntry).where(
+                    ModelPoolEntry.source_run_id == run_id,
+                    ModelPoolEntry.status == "active",
+                )
+            )
+            if existing:
+                return self.pool_visible(existing)
+            entry_id = pool.new_entry_id()
+            record = pool.seal_estimator(pool.POOL_ROOT, entry_id, estimator, contract_value)
+            row = ModelPoolEntry(
+                id=entry_id,
+                name=f"run-{run_id[:8]}",
+                source_kind="run",
+                source_run_id=run_id,
+                owner_id=user.id,
+                plugin=request["plugin"],
+                params_json=request["params"],
+                features_json=request["features"],
+                forms_json=request["forms"],
+                code_sha=report["provenance"]["code_sha"],
+                artifact_uri=record["uri"],
+                artifact_sha256=record["sha256"],
+                artifact_size=record["bytes"],
+                status="active",
+            )
+            db.add(row)
+            db.flush()
+            return self.pool_visible(row)
+
+    def pool_remove(self, user, entry_id):
+        require_role(user, "Member")
+        with Session(self.engine) as db, db.begin():
+            entry = db.get(ModelPoolEntry, entry_id)
+            if not entry or entry.status != "active":
+                raise ModelError("MODEL_POOL_NOT_FOUND", 404)
+            if user.role != "Admin" and (entry.owner_id is None or entry.owner_id != user.id):
+                raise ModelError("MODEL_POOL_FORBIDDEN", 403)
+            entry.status = "removed"
+            return self.pool_visible(entry)
+
+    def stage_reuse(self, directory, request, check):
+        """把池估计器落到工作目录供训练子进程加载；先重验契约与工件摘要。
+
+        复用绑定在创建训练时已经解析，这里在子进程启动前再验一遍：
+        池条目被移除、契约被改或工件摘要不符都会让训练失败而不是静默复用。
+        """
+        reuse = request["reuse"]
+        with Session(self.engine) as db:
+            entry = db.get(ModelPoolEntry, reuse["pool_entry_id"])
+            if not entry or entry.status != "active":
+                raise ModelError("MODEL_POOL_NOT_FOUND", 404)
+            if not pool.matches(
+                entry,
+                request["plugin"],
+                request["params"],
+                request["features"],
+                request["forms"],
+            ):
+                raise ModelError("MODEL_POOL_CONTRACT_MISMATCH")
+            record = {
+                "id": entry.id,
+                "artifact_sha256": entry.artifact_sha256,
+                "artifact_size": entry.artifact_size,
+            }
+            estimator, _manifest = pool.load_estimator(pool.POOL_ROOT, record, tick=check)
+        check()
+        sio.dump(estimator, directory / "pool-estimator.skops")
+        check()
 
     def fenced(self, db, task_id, token):
         task = self.tasks.locked(db, task_id)
@@ -323,6 +491,8 @@ class ModelService:
                 self.engine, frozen["data"], directory, check, source_root=self.datasets
             )
             assets.write_json(directory / "request.json", request)
+            if request.get("reuse"):
+                self.stage_reuse(directory, request, check)
             environment = {k: v for k, v in os.environ.items() if not k.startswith("DG_")}
             environment.update(
                 {

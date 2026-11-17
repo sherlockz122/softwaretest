@@ -19,6 +19,8 @@ class ModelBody(BaseModel):
     seed: int = Field(default=42, strict=True, ge=0, le=2**31 - 1)
     features: list[str] | None = None
     forms: dict[str, Literal["raw", "log1p", "standardize"]] | None = None
+    reuse_from: UUID | None = None
+    reuse_policy: Literal["auto"] | None = None
 
 
 def service(request):
@@ -33,7 +35,29 @@ def create(
     key: str = Header(alias="Idempotency-Key"),
 ):
     payload = body.model_dump() | {"dataset_id": str(body.dataset_id)}
+    if payload.get("reuse_from") is not None:
+        payload["reuse_from"] = str(payload["reuse_from"])
     return service(request).create(user, key, payload, request.state.request_id)
+
+
+@router.get("/model-pool")
+def pool_listing(
+    request: Request,
+    user=Depends(current_user),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+):
+    return service(request).pool_list(page, page_size)
+
+
+@router.post("/model-runs/{run_id:uuid}/pool", status_code=201)
+def pool_add(run_id: UUID, request: Request, user=Depends(current_user)):
+    return service(request).pool_add(user, str(run_id))
+
+
+@router.delete("/model-pool/{entry_id:uuid}")
+def pool_remove(entry_id: UUID, request: Request, user=Depends(current_user)):
+    return service(request).pool_remove(user, str(entry_id))
 
 
 @router.get("/model-runs/{run_id:uuid}")
