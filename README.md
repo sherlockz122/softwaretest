@@ -26,7 +26,7 @@ DefectGuard 是面向代码评审场景的提交级即时软件缺陷预测系�
 
 ## Python 开发环境
 
-项目使用 Python 3.11 和根目录 `.venv`，版本要求记录在 `.python-version`。虚拟环境不进入 Git；系统默认 Python 可以继续使用其他版本。激活、退出及编辑器解释器选择见 [Python 环境使用](docs/development/Python环境使用.md)。
+项目使用 Python 3.11 和根目录 `.venv`，版本要求记录在 `.python-version`。虚拟环境不进入 Git；系统默认 Python 可以继续使用其他版本。激活、退出及编辑器解释器选择见 [项目介绍与使用指导](docs/development/项目介绍与使用指导.md)（环境准备、启动、页面地图、演示链路、测试命令）。
 
 按 [存储安排与命令使用](docs/development/存储预算与命令使用.md) 执行：D 盘扩容后取消旧严格预算，常规容量检查改为提示，保留磁盘极低余量时的写入保护；缓存与临时文件继续位于 D 盘 runtime。
 
