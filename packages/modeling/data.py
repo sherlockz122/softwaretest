@@ -135,7 +135,7 @@ def audit_dataset(engine, frozen, destination, check, *, source_root=None):
                 }
                 # 十四维辅助字段参与构建时的 members_hash，审计重建必须带上；
                 # 旧数据集没有这些键，不补 None（否则与旧哈希不一致）。
-                for auxiliary in ("fix", "lt", "lt_missing_reason"):
+                for auxiliary in ("fix", "lt", "lt_missing_reason", "fix_missing_reason"):
                     if auxiliary in row.source_json:
                         member[auxiliary] = row.source_json[auxiliary]
                 digest.update((b"," if count else b"") + canonical(member))

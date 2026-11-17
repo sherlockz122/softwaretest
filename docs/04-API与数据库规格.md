@@ -232,6 +232,7 @@ schema0010_dataset_numbers：dataset_version冻结根/最新任务、政策、�
 | `AUTH_*` | 认证和权限 | token 失效、角色不足、用户禁用 |
 | `REPO_*` | 仓库输入和状态 | URL 被拒绝、克隆失败、强推待确认 |
 | `DATA_*` | 标签、特征和数据集 | 成熟样本不足、版本不一致、泄漏审计失败 |
+| `DATASET_IMPORT_*` | 公开数据导入 | 列映射缺失/重复、行内容非法、文件格式或编码错误、行数/字节超限、许可或路径非法 |
 | `MODEL_*` | 训练和模型 | 参数非法、工件校验失败、特征 schema 不兼容 |
 | `PRED_*` | 预测 | ref 不存在、diff 超限、base 不可达 |
 | `TASK_*` | 异步任务 | 状态不允许、任务 stale、取消冲突 |
@@ -507,3 +508,19 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 无验证分区的训练（模型版本仍为 `research-lr-rf-v4`）：在训练分区内按事件时间切前后两段，前段拟合校准器、后段定门槛，流程与有验证分区同构；报告 `calibration.method` 记为 train-chronological-sigmoid-logit-v1、`calibration_partition="train"`，门槛指标键为 `train_threshold`（有验证分区时仍为 `validation_threshold`），limitations 记录 `no_validation_partition_train_internal_calibration`；此类模型的风险列表默认分区为 `("test",)`。审计仍按实际存在的分区过滤。
 
 变更记录：`openspec/changes/add-dataset-14dim-and-split-choice`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（validation_ratio 下限已重导出）。
+
+## 第二十七阶段公开数据集导入（2026-11-13）
+
+无数据库迁移、无新表。导入文件被归一化为与内置 apachejit 资产同构的密封资产目录（source 下三个 CSV + acquisition.json、normalized.jsonl、quality.json、manifest.json），资产编号 `asset_id = content_hash(identity)`，identity 含列映射、许可声明与全部文件摘要：同文件同映射同许可 → 同一资产（幂等），不同映射或许可 → 新资产。导入 acquisition 记录 `source_kind="user_import"`、`upstream_code_executed=false`、`import_license_declaration`、`import_columns`、`fix_column_mapped`，不落获取时间戳（导入的获取时间即 first_stored_at；时间戳进 identity 会破坏幂等键）。
+
+三个端点（前缀 `/api/v1/assets`）：
+
+- `GET /assets/import-columns?path=`（Admin）：读服务器本地文件首行，返回列名列表。
+- `POST /assets/import`（Member）：请求体为原始文件字节（CSV 或 JSONL、UTF-8，容忍 BOM），查询参数 `columns`（JSON 对象：canonical_repository / commit_id / event_epoch / label 四个身份列与 la～asexp 十二个数值特征列必填，fix 可选）与 `license`（CC-BY-4.0 / CC0-1.0 / Apache-2.0 / MIT / OTHER）。上限 20,000 行、32 MB。
+- `POST /assets/import-from-path`（Admin）：JSON `{"path", "columns", "license"}`，走同一密封管线。
+
+导入错误码（422）：`DATASET_IMPORT_COLUMNS_INVALID`（未知字段、缺必填列并列出缺口、同一列映射多个字段、列名不合法）、`DATASET_IMPORT_ROW_INVALID`（标签只接受 0/1/True/False、时间必须是 0～4102444800 整数、数值特征必须是非负有限数、fix 只接受 True/False）、`DATASET_IMPORT_FILE_INVALID`（空文件、非 UTF-8、非法 JSON 行、CSV 表头缺失或重复、无数据行）、`DATASET_IMPORT_LIMIT`（行数或字节超限）、`DATASET_IMPORT_LICENSE_INVALID`、`DATASET_IMPORT_PATH_INVALID`（路径通道）。
+
+导入语义（prepare 消费导入资产时生效）：成员身份键为任意 ≤64 字符提交号 + ≤128 字符仓库名（不要求 apache/ 前缀与 40 位十六进制）；摘要与成员标记 `event_clock="user_declared_event_epoch_UTC"`、`label_confidence="user_declared_import_label"`、`target="user_declared_import_label"`；fix 列已映射时成员 fix 为布尔，未映射时 fix 为 null 且带 `fix_missing_reason="import_source_omits_fix"`、limitations 增加 `fix_unavailable_in_imported_source`；时间窗口类合并（hadoop 同月同仓库去重）只对内置资产生效。资产预览返回 `source_kind`（user_import / builtin_asset），列表与详情据此区分「导入/内置」。
+
+变更记录：`openspec/changes/add-public-dataset-import`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。

@@ -193,6 +193,11 @@ class DatasetService:
                             "fix": row["fix"],
                             "lt": row["lt"],
                             "lt_missing_reason": row["lt_missing_reason"],
+                            **(
+                                {"fix_missing_reason": row["fix_missing_reason"]}
+                                if "fix_missing_reason" in row
+                                else {}
+                            ),
                         },
                     }
                     for row in members
@@ -275,6 +280,11 @@ class DatasetService:
                             "fix": item["fix"],
                             "lt": item["lt"],
                             "lt_missing_reason": item["lt_missing_reason"],
+                            **(
+                                {"fix_missing_reason": item["fix_missing_reason"]}
+                                if "fix_missing_reason" in item
+                                else {}
+                            ),
                         }
                     ):
                         raise research.ResearchError("DATA_MEMBER_DRIFT")
@@ -463,6 +473,7 @@ class DatasetService:
                         "fix": r.source_json.get("fix"),
                         "lt": r.source_json.get("lt"),
                         "lt_missing_reason": r.source_json.get("lt_missing_reason"),
+                        "fix_missing_reason": r.source_json.get("fix_missing_reason"),
                         "source": r.source_json,
                     }
                     for r in rows

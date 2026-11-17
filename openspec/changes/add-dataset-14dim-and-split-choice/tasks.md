@@ -64,10 +64,10 @@
   - 验证环节：全量内核电池。
   - 具体验证步骤：`pytest tests/test_research_dataset.py tests/test_model_kernel.py -q` 49/49。
   - 证据：49 passed（含本批 +5 数据集、+1 模型测试）。
-- [ ] 5.2 应用测试（真实 MySQL）：两分区构建与下载 404、无验证分区训练、成员辅助字段
+- [x] 5.2 应用测试（真实 MySQL）：两分区构建与下载 404、无验证分区训练、成员辅助字段
   - 验证环节：Docker 起栈后 test_dataset_application.py + test_model_application.py。
   - 具体验证步骤：启动 Docker Desktop → `docker compose --profile full up -d --build` → 上述两个文件全绿。
-  - 证据：已跑过一次（数据集 14/14 全绿；模型 12 个训练用例因审计重建缺 fix/lt 报 MODEL_DATA_DRIFT）。已在 data.py 补齐辅助字段并单独验证审计通过，全量复跑留待下一批。
+  - 证据：32/32 通过（2026-11-13，真实 MySQL）。含 test_optional_validation_build_and_member_auxiliaries（CSV 头 fix,lt、下载 validation 抛 DATA_PARTITION_ABSENT）与 test_training_without_validation_partition（calibration_partition=="train"、train_threshold、risk_items 只看 test）。首轮暴露审计重建缺 fix/lt 的漂移误报，已修复并复跑通过。
 - [ ] 5.3 契约导出与全量验收电池
   - 验证环节：契约检查 + 前端全量。
   - 具体验证步骤：`scripts/check_contracts.py --export` 后 `scripts/check_contracts.py` PASS（已跑，PASS）；`cd apps/web && npx vitest --run` 全绿（已跑，25/25 相关文件）；`openspec validate --all --strict` 全绿（已跑，25 passed）。全量前端与后端电池随 5.2 复跑一起收口。

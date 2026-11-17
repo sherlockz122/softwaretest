@@ -1,5 +1,6 @@
 """Real isolated MySQL, supervised CPU jobs, RBAC and artifact fences."""
 
+import json
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from apps.api.application import create_app
 from packages.auth.security import PASSWORD_HASHER, CurrentUser
 from packages.mining import public_assets as assets
+from packages.mining import public_dataset
 from packages.mining import research_dataset as research
 from packages.mining.dataset_service import DatasetService
 from packages.modeling import policy
@@ -21,7 +23,7 @@ from packages.modeling.policy import ModelError
 from packages.modeling.service import ModelService
 from packages.persistence.models import AsyncTask, DatasetMember, ModelArtifact, ModelRun, User
 from packages.platform.connections import Connections
-from packages.tasks.service import database_now
+from packages.tasks.service import TaskError, database_now
 from tests.auth_support import migrate, scratch_database
 from tests.dataset_support import fixture_asset
 
@@ -172,6 +174,193 @@ def test_training_without_validation_partition(environment):
     assert report["metrics"]["test"]["support"] == {"clean": 10, "buggy": 10}
     assert "no_validation_partition_train_internal_calibration" in report["limitations"]
     assert service.risk_items(train_ack["model_run_id"])["partitions"] == ["test"]
+
+
+def test_imported_csv_full_chain_build_download_train(database, monkeypatch):
+    """Import a small CSV through the API, build a two-partition dataset on
+    real MySQL, download its CSV artifacts and train a model on it."""
+    settings, engine, users = database
+    parent = assets.ROOT / "runtime/temp"
+    parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(dir=parent, prefix="import-chain-") as name:
+        root = Path(name)
+        monkeypatch.setattr(research, "STORE", root / "assets")
+        monkeypatch.setattr(research, "OUTPUT", root / "datasets")
+        monkeypatch.setattr(policy, "OUTPUT", root / "models")
+        connections = Connections(settings)
+        try:
+            numeric = list(public_dataset.NUMERIC_FIELDS)
+            header = ["repo", "sha", "time", "bug", *numeric, "fix"]
+            lines = [",".join(header)]
+            for i in range(60):
+                # 标签 0/1 交替；事件时间各不相同（i*10），保证 time_ordered
+                # 切出的测试分区同时包含两类。
+                lines.append(
+                    ",".join(
+                        [
+                            "user/imported",
+                            f"import-{i:04d}",
+                            str(i * 10),
+                            "1" if i % 2 else "0",
+                            *[str((i % 7) + 1) for _ in numeric],
+                            "True" if i % 4 == 0 else "False",
+                        ]
+                    )
+                )
+            payload = ("\n".join(lines) + "\n").encode("utf-8")
+            mapping = {
+                "canonical_repository": "repo",
+                "commit_id": "sha",
+                "event_epoch": "time",
+                "label": "bug",
+                **{field: field for field in numeric},
+                "fix": "fix",
+            }
+            with TestClient(create_app(settings), base_url="http://127.0.0.1") as client:
+                def login(index):
+                    response = client.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "username": users[index].username,
+                            "password": "model-test-only-password",
+                        },
+                    )
+                    assert response.status_code == 201
+                    return {
+                        "Authorization": "Bearer " + response.json()["access_token"]
+                    }
+
+                params = {"columns": json.dumps(mapping), "license": "CC0-1.0"}
+                assert (
+                    client.post(
+                        "/api/v1/assets/import",
+                        params=params,
+                        headers=login(0),
+                        content=payload,
+                    ).status_code
+                    == 403
+                )
+                response = client.post(
+                    "/api/v1/assets/import",
+                    params=params,
+                    headers=login(1),
+                    content=payload,
+                )
+                assert response.status_code == 201
+                asset = response.json()
+                assert asset["rows"] == 60 and asset["source_kind"] == "user_import"
+                assert asset["acquired_at"] is None
+                # 缺数值特征列 → 422 并列出缺口
+                bad_columns = json.dumps(
+                    {
+                        "canonical_repository": "repo",
+                        "commit_id": "sha",
+                        "event_epoch": "time",
+                        "label": "bug",
+                        "fix": "fix",
+                    }
+                )
+                bad = client.post(
+                    "/api/v1/assets/import",
+                    params={"columns": bad_columns, "license": "CC0-1.0"},
+                    headers=login(1),
+                    content=payload,
+                )
+                assert bad.status_code == 422
+                assert bad.json()["code"] == "DATASET_IMPORT_COLUMNS_INVALID"
+                assert "la" in bad.json()["message"]
+                # Admin 路径通道：先读列再导入；同内容同映射同许可 → 同一资产
+                local = root / "server-local.csv"
+                local.write_text("\n".join(lines), encoding="utf-8")
+                assert (
+                    client.post(
+                        "/api/v1/assets/import-from-path",
+                        headers=login(1),
+                        json={
+                            "path": str(local),
+                            "columns": mapping,
+                            "license": "CC0-1.0",
+                        },
+                    ).status_code
+                    == 403
+                )
+                admin = login(2)
+                listed = client.get(
+                    "/api/v1/assets/import-columns",
+                    params={"path": str(local)},
+                    headers=admin,
+                )
+                assert listed.status_code == 200
+                assert listed.json()["columns"] == header
+                pathed = client.post(
+                    "/api/v1/assets/import-from-path",
+                    headers=admin,
+                    json={
+                        "path": str(local),
+                        "columns": mapping,
+                        "license": "CC0-1.0",
+                    },
+                )
+                assert pathed.status_code == 201
+                assert pathed.json()["asset_id"] == asset["asset_id"]
+
+            dataset = DatasetService(settings, connections)
+            body = {
+                "name": "imported chain",
+                "asset_id": asset["asset_id"],
+                "source_hash": asset["source_hash"],
+                "purpose": research.PURPOSE,
+                "split_strategy": "time_ordered",
+                "train_ratio": 0.75,
+                "validation_ratio": 0.0,
+                "test_ratio": 0.25,
+            }
+            ack = dataset.create(users[1], uuid4().hex, body, str(uuid4()))
+            token, run_payload = dataset.tasks.claim(ack["task_id"])
+            dataset.run(ack["task_id"], token, run_payload)
+            detail = dataset.detail(ack["dataset_id"])
+            assert detail["ready"] and detail["total"] == 60
+            assert set(detail["summary"]["partitions"]) == {"train", "test"}
+            acquisition = detail["summary"]["source_acquisition"]
+            assert acquisition["source_kind"] == "user_import"
+            assert acquisition["import_license_declaration"] == "CC0-1.0"
+            assert acquisition["import_columns"] == mapping
+            assert acquisition["fix_column_mapped"] is True
+            assert detail["summary"]["target"] == "user_declared_import_label"
+            assert detail["summary"]["event_clock"] == "user_declared_event_epoch_UTC"
+            assert detail["summary"]["auxiliary_features"] == ["fix", "lt"]
+            member = detail["members"][0]
+            assert member["fix"] in (True, False)
+            assert member["fix_missing_reason"] is None
+            assert member["lt"] is None
+            with pytest.raises(TaskError, match="DATA_PARTITION_ABSENT"):
+                dataset.download(ack["dataset_id"], "validation")
+            csv = dataset.download(ack["dataset_id"], "train").read_text()
+            rows = csv.splitlines()
+            assert rows[0].endswith(",fix,lt")
+            assert len(rows) == 46
+            for line in rows[1:]:
+                cells = line.split(",")
+                assert cells[-2] in ("True", "False") and cells[-1] == ""
+
+            service = ModelService(settings, connections)
+            request = {
+                "dataset_id": ack["dataset_id"],
+                "plugin": "lr",
+                "params": {},
+                "seed": 42,
+            }
+            model_ack = service.create(users[1], uuid4().hex, request, str(uuid4()))
+            model_token, model_payload = service.tasks.claim(model_ack["task_id"])
+            service.run(model_ack["task_id"], model_token, model_payload)
+            result = service.detail(model_ack["model_run_id"])
+            assert result["registered"], service.tasks.detail(model_ack["task_id"])
+            report = result["report"]
+            assert report["calibration_partition"] == "train"
+            assert report["metrics"]["test"]["support"] == {"clean": 7, "buggy": 8}
+            assert service.download(model_ack["model_run_id"], "report.json").is_file()
+        finally:
+            connections.close()
 
 
 def test_supervisor_cancels_child_and_does_not_register(environment):

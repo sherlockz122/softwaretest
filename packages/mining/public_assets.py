@@ -31,6 +31,15 @@ SOURCE_NAMES = {
     "neurojit-LICENSE.txt",
     "neurojit-data_utils.py.txt",
 }
+# 导入资产的源文件集合：同样复用 apachejit_total/date 的列形状，但没有上游
+# zenodo/neurojit 伴生文件，acquisition.json 里是导入许可声明与列映射。
+IMPORT_SOURCE_NAMES = ("apachejit_total.csv", "apachejit_date.csv", "acquisition.json")
+
+
+def source_names_for(acquisition):
+    if acquisition.get("source_kind") == "user_import":
+        return IMPORT_SOURCE_NAMES
+    return SOURCE_NAMES
 CAPABILITIES = {
     "raw_archived": True,
     "normalized": True,
@@ -379,10 +388,15 @@ def load_asset(directory, *, tick=None, seconds=MAX_SECONDS):
     if content_hash(identity) != manifest["asset_id"] or directory.name != manifest["asset_id"]:
         raise AssetError("ASSET_ID_INVALID")
     stored = datetime.fromisoformat(utc_time(manifest["first_stored_at"]))
-    acquired = datetime.fromisoformat(utc_time(identity["source_acquisition"]["acquired_at"]))
-    if stored < acquired:
+    # 导入资产不落 acquired_at（获取时间即 first_stored_at，且时间戳不能进幂等键）；
+    # 内置资产保持 acquired_at 必须不晚于入库时间的约束。
+    acquired = identity["source_acquisition"].get("acquired_at")
+    if acquired is not None and stored < datetime.fromisoformat(utc_time(acquired)):
         raise AssetError("ASSET_TIME_CONFLICT")
-    expected_names = {"source/" + n for n in SOURCE_NAMES} | {"normalized.jsonl", "quality.json"}
+    expected_names = {"source/" + n for n in source_names_for(identity["source_acquisition"])} | {
+        "normalized.jsonl",
+        "quality.json",
+    }
     records = identity["files"]
     if (
         not isinstance(records, list)

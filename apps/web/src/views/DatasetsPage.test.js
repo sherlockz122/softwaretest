@@ -221,6 +221,173 @@ test("ready research shows release limitations and both-class partition support"
   wrapper.unmount();
 });
 
+const numericColumns = [
+  "la", "ld", "nf", "nd", "ns", "ent",
+  "ndev", "age", "nuc", "aexp", "arexp", "asexp",
+];
+
+test("import form auto-matches header columns and uploads raw bytes with license", async () => {
+  const header = ["repo", "sha", "time", "bug", ...numericColumns, "fix"].join(",");
+  const file = {
+    name: "public.csv",
+    slice: () => ({
+      text: async () =>
+        `${header}\nuser/a,abc,1000,1,${Array(12).fill("1").join(",")},False\n`,
+    }),
+    arrayBuffer: async () => new TextEncoder().encode("csv-bytes").buffer,
+  };
+  const sends = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    sends.push([path, options]);
+    if (options?.method === "POST" && path.startsWith("/assets/import"))
+      return { asset_id: "f".repeat(64), source_hash: "e".repeat(64), rows: 1 };
+    return listing;
+  });
+  const { wrapper } = await view(DatasetsPage);
+  const input = wrapper.find('input[type="file"]');
+  Object.defineProperty(input.element, "files", {
+    value: [file],
+    configurable: true,
+  });
+  await input.trigger("change");
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("还缺映射");
+  const submit = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("导入为可用数据"));
+  expect(submit.attributes("disabled")).toBeUndefined();
+  await wrapper.findAll("form")[1].trigger("submit");
+  await flushPromises();
+  const call = sends.find(
+    ([, o]) =>
+      o?.method === "POST" &&
+      o?.headers?.["Content-Type"] === "application/octet-stream",
+  );
+  expect(call).toBeTruthy();
+  const [path, options] = call;
+  const url = new URL(path, "http://test");
+  expect(url.pathname).toBe("/assets/import");
+  expect(url.searchParams.get("license")).toBe("CC-BY-4.0");
+  expect(JSON.parse(url.searchParams.get("columns"))).toMatchObject({
+    canonical_repository: "repo",
+    commit_id: "sha",
+    event_epoch: "time",
+    label: "bug",
+    la: "la",
+    fix: "fix",
+  });
+  expect(new TextDecoder().decode(options.body)).toBe("csv-bytes");
+  expect(wrapper.text()).toContain("导入成功");
+  wrapper.unmount();
+});
+
+test("import form lists missing mappings and disables submit until complete", async () => {
+  const file = {
+    name: "partial.csv",
+    slice: () => ({ text: async () => "repo,sha,time\nuser/a,abc,1000\n" }),
+    arrayBuffer: async () => new ArrayBuffer(0),
+  };
+  vi.spyOn(client, "request").mockResolvedValue(listing);
+  const { wrapper } = await view(DatasetsPage);
+  const input = wrapper.find('input[type="file"]');
+  Object.defineProperty(input.element, "files", {
+    value: [file],
+    configurable: true,
+  });
+  await input.trigger("change");
+  await flushPromises();
+  expect(wrapper.text()).toContain("还缺映射");
+  const submit = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("导入为可用数据"));
+  expect(submit.attributes("disabled")).toBeDefined();
+  wrapper.unmount();
+});
+
+test("admin imports from server path after reading its columns", async () => {
+  const sends = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    sends.push([path, options]);
+    if (path.startsWith("/assets/import-columns"))
+      return { columns: ["repo", "sha", "time", "bug", ...numericColumns, "fix"] };
+    if (path.startsWith("/assets/import-from-path"))
+      return { asset_id: "f".repeat(64), rows: 2 };
+    return listing;
+  });
+  const { wrapper } = await view(DatasetsPage, "Admin");
+  const pathInput = wrapper
+    .findAll("input")
+    .find((i) => i.attributes("placeholder")?.includes("public.csv"));
+  await pathInput.setValue("D:\\data\\public.csv");
+  const read = wrapper
+    .findAll("button")
+    .find((b) => b.text().includes("读取文件列"));
+  await read.trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("还缺映射");
+  await wrapper.findAll("form")[1].trigger("submit");
+  await flushPromises();
+  const call = sends.find(([p]) => p.startsWith("/assets/import-from-path"));
+  expect(call).toBeTruthy();
+  expect(JSON.parse(call[1].body)).toMatchObject({
+    path: "D:\\data\\public.csv",
+    license: "CC-BY-4.0",
+    columns: { label: "bug", fix: "fix" },
+  });
+  wrapper.unmount();
+});
+
+test("imported dataset detail shows source kind, license and column mapping", async () => {
+  vi.spyOn(client, "request").mockResolvedValue({
+    id: "imported",
+    name: "imported",
+    ready: true,
+    processed: 40,
+    total: 40,
+    task_id: "work",
+    status: "succeeded",
+    asset_id: asset.asset_id,
+    policy: { split_strategy: "time_ordered" },
+    summary: {
+      features: numericColumns,
+      partitions: {
+        train: { clean: 14, buggy: 14 },
+        test: { clean: 3, buggy: 3 },
+      },
+      source_acquisition: {
+        source_kind: "user_import",
+        import_license_declaration: "CC0-1.0",
+        import_columns: { canonical_repository: "repo", label: "bug" },
+      },
+      repositories: {},
+    },
+    members: [
+      {
+        ordinal: 0,
+        canonical_repository: "user/alpha",
+        commit_id: "c".repeat(40),
+        partition: "train",
+        label: 0,
+        event_epoch: 1,
+        numeric12: { la: 5.0 },
+        fix: null,
+        fix_missing_reason: "import_source_omits_fix",
+        lt: null,
+        lt_missing_reason: "upstream_source_omits_lt",
+      },
+    ],
+  });
+  const { wrapper } = await view(DatasetPage, "Viewer", "/datasets/imported");
+  expect(wrapper.text()).toContain("导入文件");
+  expect(wrapper.text()).toContain("CC0-1.0");
+  expect(wrapper.text()).toContain("canonical_repository ← repo");
+  expect(wrapper.text()).toContain("与首次保存时间一致（导入即获取）");
+  expect(
+    wrapper.find('[title*="导入文件没提供修复标志"]').exists(),
+  ).toBe(true);
+  wrapper.unmount();
+});
+
 test("ready dataset renders a 2D feature table with toggles and filters", async () => {
   const calls = [];
   vi.spyOn(client, "request").mockImplementation(async (path) => {

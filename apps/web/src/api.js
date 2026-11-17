@@ -53,6 +53,15 @@ const messages = {
   DATA_NORMALIZATION_DRIFT: "派生数据与原始来源不一致，请重新核验数据。",
   DATA_SOURCE_OR_STORAGE_INVALID:
     "数据源或工件暂不可用，请核对来源或存储后重试。",
+  DATASET_IMPORT_COLUMNS_INVALID:
+    "列映射不合法：请检查是否漏了身份列或 12 个数值特征列，且每一列只映射一次。",
+  DATASET_IMPORT_ROW_INVALID:
+    "文件里有不符合要求的数据行，请按导入说明核对标签、时间与数值。",
+  DATASET_IMPORT_FILE_INVALID:
+    "文件不是可解析的 CSV/JSONL，或编码不是 UTF-8。",
+  DATASET_IMPORT_LIMIT: "文件超过导入上限（20,000 行或 32 MB），请缩小文件后重试。",
+  DATASET_IMPORT_LICENSE_INVALID: "请选择有效的许可声明。",
+  DATASET_IMPORT_PATH_INVALID: "服务器本地路径不可用，请检查路径。",
   DATA_ARTIFACT_DRIFT: "导出工件校验失败，已停止下载。",
   DATA_LICENSE_UNVERIFIED: "数据许可尚未核实，不能用于当前研究导出。",
   DATA_NOT_READY: "数据集尚未完成，暂不能导出。",
@@ -125,7 +134,7 @@ export function createClient(fetcher = (...args) => fetch(...args)) {
   }
   async function raw(path, { signal, responseType = "json", ...options } = {}) {
     const timeout = AbortSignal.timeout(
-      responseType === "blob" ? 60000 : 10000,
+      options.timeoutMs ?? (responseType === "blob" ? 60000 : 10000),
     );
     try {
       const response = await fetcher("/api/v1" + path, {

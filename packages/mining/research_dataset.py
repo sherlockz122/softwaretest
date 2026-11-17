@@ -10,6 +10,8 @@ from itertools import zip_longest
 from pathlib import Path
 
 from packages.mining import public_assets as assets
+from packages.mining.dataset_import import LICENSE_OPTIONS as IMPORT_LICENSES
+from packages.mining.dataset_import import import_key
 from packages.mining.public_dataset import NUMERIC_FIELDS, TOTAL_FIELDS, boolean, epoch, key
 from packages.mining.source_evidence import canonical, content_hash
 
@@ -35,6 +37,7 @@ RULE_HASH = content_hash(
             "dataset_service.py",
             "public_assets.py",
             "public_dataset.py",
+            "dataset_import.py",
         )
     }
     | {
@@ -76,6 +79,7 @@ def preview(asset_id, store=None):
         "labels": quality.get("labels"),
         "first_stored_at": manifest.get("first_stored_at"),
         "acquired_at": identity.get("source_acquisition", {}).get("acquired_at"),
+        "source_kind": identity.get("source_acquisition", {}).get("source_kind", "builtin_asset"),
         "integrity": "pending_worker_verification",
         "historical_replay": False,
         "candidate_release": False,
@@ -143,11 +147,19 @@ def prepare(directory, source_hash, policy, *, tick=None):
     if manifest["content_hash"] != source_hash:
         raise ResearchError("DATA_SOURCE_DRIFT")
     acquisition = manifest["identity"]["source_acquisition"]
-    if (
+    imported = acquisition.get("source_kind") == "user_import"
+    if imported:
+        if (
+            acquisition.get("upstream_code_executed") is not False
+            or acquisition.get("import_license_declaration") not in IMPORT_LICENSES
+        ):
+            raise ResearchError("DATA_LICENSE_UNVERIFIED")
+    elif (
         acquisition.get("apachejit_license") != "CC-BY-4.0"
         or acquisition.get("upstream_code_executed") is not False
     ):
         raise ResearchError("DATA_LICENSE_UNVERIFIED")
+    fix_mapped = not imported or acquisition.get("fix_column_mapped") is True
     budget = assets.Budget(tick=tick)
     inventory = manifest["identity"]["files"]
     raw = snapshot_bytes(directory, "source/apachejit_total.csv", inventory, budget.check)
@@ -169,11 +181,12 @@ def prepare(directory, source_hash, policy, *, tick=None):
             raise ResearchError("DATA_SOURCE_INVALID")
         try:
             record = json.loads(line)
-            cohort, sha = key(original)
+            cohort, sha = import_key(original) if imported else key(original)
             values = {k: float(original[k]) for k in NUMERIC_FIELDS}
             canonical_repository = (
                 "apache/hadoop"
-                if cohort in {"apache/hadoop", "apache/hadoop-hdfs", "apache/hadoop-mapreduce"}
+                if not imported
+                and cohort in {"apache/hadoop", "apache/hadoop-hdfs", "apache/hadoop-mapreduce"}
                 else cohort
             )
             expected = {
@@ -184,12 +197,16 @@ def prepare(directory, source_hash, policy, *, tick=None):
                 "sample_granularity": "commit",
                 "original_fields": original,
                 "event_epoch": epoch(original["author_date"]),
-                "event_clock": "published_author_epoch_UTC",
+                "event_clock": "user_declared_event_epoch_UTC"
+                if imported
+                else "published_author_epoch_UTC",
                 "published_label": "buggy" if boolean(original["buggy"]) else "clean",
-                "label_confidence": "published_SZZ_weak_supervision",
+                "label_confidence": "user_declared_import_label"
+                if imported
+                else "published_SZZ_weak_supervision",
                 "label_available_at": None,
                 "numeric12": values,
-                "published_fix_metadata": boolean(original["fix"]),
+                "published_fix_metadata": boolean(original["fix"]) if fix_mapped else None,
                 "defect_types": None,
                 "type_status": "unknown",
                 "location": None,
@@ -212,12 +229,14 @@ def prepare(directory, source_hash, policy, *, tick=None):
             "event_epoch": expected["event_epoch"],
             "label": int(expected["published_label"] == "buggy"),
             "numeric12": values,
-            "fix": boolean(original["fix"]),
+            "fix": boolean(original["fix"]) if fix_mapped else None,
             "lt": None,
             "lt_missing_reason": "upstream_source_omits_lt",
             "source_rows": [number],
             "cohorts": [cohort],
         }
+        if not fix_mapped:
+            value["fix_missing_reason"] = "import_source_omits_fix"
         if identity in rows:
             previous = rows[identity]
             if any(
@@ -311,8 +330,12 @@ def prepare(directory, source_hash, policy, *, tick=None):
         "features": list(NUMERIC_FIELDS),
         "auxiliary_features": ["fix", "lt"],
         "lt_source": "missing_in_stored_upstream_source",
-        "target": "published_SZZ_binary_post_publication",
-        "event_clock": "published_author_epoch_UTC",
+        "target": "user_declared_import_label"
+        if imported
+        else "published_SZZ_binary_post_publication",
+        "event_clock": "user_declared_event_epoch_UTC"
+        if imported
+        else "published_author_epoch_UTC",
         "capabilities": {
             "research_binary": True,
             "historical_replay": False,
@@ -329,6 +352,7 @@ def prepare(directory, source_hash, policy, *, tick=None):
             "no_preprocessing_fitted_or_models_trained",
             "cross_source_and_code_content_overlap_unverified",
             "lt_unavailable_in_stored_upstream_source",
+            *([] if fix_mapped else ["fix_unavailable_in_imported_source"]),
         ],
     }
     budget.check()

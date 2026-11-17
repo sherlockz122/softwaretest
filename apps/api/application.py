@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from apps.api.auth import router
+from apps.api.assets import router as assets_router
 from apps.api.datasets import router as datasets_router
 from apps.api.models import router as models_router
 from apps.api.predictions import router as predictions_router
@@ -18,6 +19,7 @@ from apps.api.repositories import szz_router
 from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
+from packages.mining.dataset_import import ImportError as DatasetImportError
 from packages.mining.public_assets import AssetError
 from packages.mining.research_dataset import ResearchError
 from packages.modeling.policy import ModelError
@@ -124,6 +126,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
             request, 409, "DATA_SOURCE_OR_STORAGE_INVALID", "数据源或工件不可用，请核对来源后重试"
         )
 
+    @app.exception_handler(DatasetImportError)
+    async def import_error(request: Request, exc: DatasetImportError):
+        return error(
+            request, 422, exc.code, exc.message or "导入请求未通过，请检查文件与列映射"
+        )
+
     @app.exception_handler(PredictionError)
     async def prediction_error(request: Request, exc: PredictionError):
         return error(
@@ -153,6 +161,7 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     app.include_router(repositories_router)
     app.include_router(szz_router)
     app.include_router(datasets_router)
+    app.include_router(assets_router)
     app.include_router(models_router)
     app.include_router(predictions_router)
     if settings.environment != "production":

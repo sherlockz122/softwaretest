@@ -98,7 +98,19 @@ function featureCell(row, name) {
 function featureTitle(row, name) {
   if (name === "lt" && row.lt == null)
     return `上游源数据没提供改动前文件总行数：${row.lt_missing_reason || "未提供"}`;
+  if (name === "fix" && row.fix == null)
+    return `导入文件没提供修复标志：${row.fix_missing_reason || "未提供"}`;
   return undefined;
+}
+const isImport = computed(
+  () => data.data.value?.summary?.source_acquisition?.source_kind === "user_import",
+);
+function sourceColumns(acquisition) {
+  const columns = acquisition?.import_columns;
+  if (!columns) return null;
+  return Object.entries(columns)
+    .map(([field, column]) => `${field} ← ${column}`)
+    .join("；");
 }
 async function download(partition) {
   downloading.value = true;
@@ -139,7 +151,13 @@ async function download(partition) {
       <h2>{{ data.data.value.name }}</h2>
       <dl>
         <dt>用途</dt>
-        <dd>研究用二分类数据（标签来自原公开数据的规则判断）</dd>
+        <dd>
+          {{
+            isImport
+              ? "研究用二分类数据（标签来自导入文件里的声明）"
+              : "研究用二分类数据（标签来自原公开数据的规则判断）"
+          }}
+        </dd>
         <dt>状态</dt>
         <dd>{{ labels[data.data.value.status] || data.data.value.status }}</dd>
         <dt>进度（已处理 / 总数）</dt>
@@ -206,10 +224,24 @@ async function download(partition) {
         <details>
           <summary>数据来源和划分详情</summary>
           <dl>
+            <dt>数据来源类型</dt>
+            <dd>{{ isImport ? "导入文件" : "内置公开资产" }}</dd>
+            <template v-if="isImport">
+              <dt>列映射</dt>
+              <dd class="break-anywhere">
+                {{
+                  sourceColumns(
+                    data.data.value.summary.source_acquisition,
+                  ) || "未记录"
+                }}
+              </dd>
+            </template>
             <dt>原数据获取时间</dt>
             <dd>
               {{
-                date(data.data.value.summary.source_acquisition?.acquired_at)
+                data.data.value.summary.source_acquisition?.acquired_at
+                  ? date(data.data.value.summary.source_acquisition.acquired_at)
+                  : "与首次保存时间一致（导入即获取）"
               }}
             </dd>
             <dt>数据首次保存时间</dt>
@@ -217,6 +249,8 @@ async function download(partition) {
             <dt>使用许可</dt>
             <dd>
               {{
+                data.data.value.summary.source_acquisition
+                  ?.import_license_declaration ||
                 data.data.value.summary.source_acquisition?.apachejit_license ||
                 "待核验"
               }}
@@ -229,7 +263,13 @@ async function download(partition) {
             <dt>合并的重复行</dt>
             <dd>{{ data.data.value.summary.duplicate_rows }}</dd>
             <dt>提交时间</dt>
-            <dd>用的是原作者提交时间。这是事后研究，不表示当时就能知道标签。</dd>
+            <dd>
+              {{
+                isImport
+                  ? "用的是导入文件里声明的事件时间。这是事后研究，不表示当时就能知道标签。"
+                  : "用的是原作者提交时间。这是事后研究，不表示当时就能知道标签。"
+              }}
+            </dd>
           </dl>
           <p
             v-if="

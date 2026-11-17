@@ -274,6 +274,35 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImportPathBody": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "additionalProperties": true,
+            "title": "Columns",
+            "type": "object"
+          },
+          "license": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "License",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "columns",
+          "license"
+        ],
+        "title": "ImportPathBody",
+        "type": "object"
+      },
       "LoginBody": {
         "additionalProperties": false,
         "properties": {
@@ -506,6 +535,155 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/assets/import": {
+      "post": {
+        "operationId": "import_upload_api_v1_assets_import_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "columns",
+            "required": true,
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 2,
+              "title": "Columns",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "license",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "License",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Upload",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/api/v1/assets/import-columns": {
+      "get": {
+        "operationId": "import_columns_api_v1_assets_import_columns_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Columns",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/api/v1/assets/import-from-path": {
+      "post": {
+        "operationId": "import_from_path_api_v1_assets_import_from_path_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPathBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import From Path",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
