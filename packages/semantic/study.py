@@ -108,19 +108,23 @@ def fitted_hash(bundle):
             array(getattr(model, name))
     else:
         array(estimator.classes_)
-        for tree in estimator.estimators_:
-            for name in [
-                "children_left",
-                "children_right",
-                "feature",
-                "threshold",
-                "impurity",
-                "n_node_samples",
-                "weighted_n_node_samples",
-                "value",
-                "missing_go_to_left",
-            ]:
-                array(getattr(tree.tree_, name))
+        if hasattr(estimator, "estimators_"):
+            for tree in estimator.estimators_:
+                for name in [
+                    "children_left",
+                    "children_right",
+                    "feature",
+                    "threshold",
+                    "impurity",
+                    "n_node_samples",
+                    "weighted_n_node_samples",
+                    "value",
+                    "missing_go_to_left",
+                ]:
+                    array(getattr(tree.tree_, name))
+        else:
+            for name in ["coef_", "intercept_"]:
+                array(getattr(estimator, name))
     for name in ["coef_", "intercept_", "classes_"]:
         array(getattr(bundle["calibrator"], name))
     array(bundle["threshold"])
