@@ -4,6 +4,7 @@ import { client } from "../api";
 import { useLatest } from "../latest";
 import { operationKeys } from "../task-tools";
 import RequestError from "../components/RequestError.vue";
+import FixRecommendationsPanel from "../components/FixRecommendationsPanel.vue";
 const repos = useLatest((signal) =>
   client.request("/repositories?page=1&page_size=100", { signal }),
 );
@@ -223,6 +224,12 @@ async function submit() {
           >查看模型</RouterLink
         >
       </div>
+      <FixRecommendationsPanel
+        v-if="mode === 'ref' && candidateRef.trim()"
+        :repository-id="repositoryId"
+        :sha="candidateRef.trim()"
+        @select="(sha) => candidateRef = sha"
+      />
     </template>
     <template v-if="explanation.data.value">
       <h3>解释</h3>

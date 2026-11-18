@@ -15,6 +15,7 @@ import {
 } from "../terms";
 import RequestError from "../components/RequestError.vue";
 import FixPanel from "../components/FixPanel.vue";
+import FixRecommendationsPanel from "../components/FixRecommendationsPanel.vue";
 import SZZPanel from "../components/SZZPanel.vue";
 import FeaturePanel from "../components/FeaturePanel.vue";
 const fixPanel = ref(null);
@@ -652,6 +653,12 @@ onUnmounted(() => clearInterval(poll));
                   </button>
                 </div>
               </div>
+              <FixRecommendationsPanel
+                v-if="selected"
+                :repository-id="String(route.params.id)"
+                :sha="selected.sha"
+                @select="(sha) => selectCommit({ sha })"
+              />
             </li>
           </ul>
           <div class="pagination">

@@ -20,6 +20,7 @@ from apps.api.tasks import diagnostic_router
 from apps.api.tasks import router as tasks_router
 from packages.auth.security import AuthError
 from packages.mining.dataset_import import ImportError as DatasetImportError
+from packages.mining.fix_recommendations import RecommendError
 from packages.mining.public_assets import AssetError
 from packages.mining.research_dataset import ResearchError
 from packages.modeling.policy import ModelError
@@ -135,6 +136,12 @@ def create_app(settings: Settings, connection_factory=Connections) -> FastAPI:
     async def asset_error(request: Request, exc: AssetError):
         return error(
             request, 409, "DATA_SOURCE_OR_STORAGE_INVALID", "数据源或工件不可用，请核对来源后重试"
+        )
+
+    @app.exception_handler(RecommendError)
+    async def recommend_error(request: Request, exc: RecommendError):
+        return error(
+            request, exc.status, exc.code, "修复参考检索未通过，请核对仓库与提交编号"
         )
 
     @app.exception_handler(DatasetImportError)

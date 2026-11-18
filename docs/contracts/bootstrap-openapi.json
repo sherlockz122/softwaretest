@@ -2109,7 +2109,7 @@
     },
     "/api/v1/repositories/{repository_id}/feature-quality": {
       "get": {
-        "operationId": "feature_quality_api_v1_repositories__repository_id__feature_quality_get",
+        "operationId": "fix_recommendations_api_v1_repositories__repository_id__feature_quality_get",
         "parameters": [
           {
             "in": "path",
@@ -2123,83 +2123,25 @@
           },
           {
             "in": "query",
-            "name": "run_id",
+            "name": "sha",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "title": "Run Id",
+              "maxLength": 64,
+              "minLength": 7,
+              "title": "Sha",
               "type": "string"
             }
           },
           {
             "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 20,
               "maximum": 100,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "feature",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "NS",
-                    "ND",
-                    "NF",
-                    "Entropy",
-                    "LA",
-                    "LD",
-                    "LT",
-                    "FIX",
-                    "NDEV",
-                    "AGE",
-                    "NUC",
-                    "EXP",
-                    "REXP",
-                    "SEXP"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Feature"
-            }
-          },
-          {
-            "in": "query",
-            "name": "missing",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Missing"
             }
           }
         ],
@@ -2228,7 +2170,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Feature Quality",
+        "summary": "Fix Recommendations",
         "tags": [
           "repositories"
         ]
@@ -2492,6 +2434,75 @@
           }
         ],
         "summary": "Review Fix",
+        "tags": [
+          "repositories"
+        ]
+      }
+    },
+    "/api/v1/repositories/{repository_id}/fix-recommendations": {
+      "get": {
+        "operationId": "fix_recommendations_api_v1_repositories__repository_id__fix_recommendations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sha",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 7,
+              "title": "Sha",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Fix Recommendations",
         "tags": [
           "repositories"
         ]

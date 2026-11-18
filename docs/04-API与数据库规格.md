@@ -541,3 +541,17 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 错误码：`MODEL_POOL_NOT_FOUND`（404）、`MODEL_POOL_CONTRACT_MISMATCH`（422）、`MODEL_POOL_VERSION_CONFLICT`（409）、`MODEL_POOL_FORBIDDEN`（403）、`MODEL_POOL_INVALID`、`MODEL_POOL_SOURCE_INVALID`（409）、`MODEL_POOL_ARTIFACT_DRIFT`、`MODEL_POOL_ARTIFACT_UNTRUSTED`、`MODEL_POOL_ARTIFACT_MISSING`、`MODEL_POOL_ARTIFACT_LIMIT`、`MODEL_POOL_PRESET_ASSET_MISSING`（409）。
 
 变更记录：`openspec/changes/add-model-pool-reuse`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。
+
+## 第二十九阶段修复参考检索（2026-11-18）
+
+无数据库迁移、无新表。修复参考检索是只读能力：从同一仓库已采集的全部修复提交（含时间上晚于目标提交的修复）里按相似度排序返回参考案例，检索材料不参与模型训练。
+
+端点（前缀 `/api/v1`）：
+
+- `GET /repositories/{repository_id}/fix-recommendations?sha=&limit=`（Viewer 及以上）：目标提交的修复参考列表。查询参数 `sha` 为目标提交编号（7～64 字符），`limit` 默认 20、上限 100。响应含 `items`（每条：fix_sha、message_summary、touched_files、evidence_level、similarity 的 file_overlap/file_path_overlap/feature_distance/evidence_rank）、`total`（匹配总数，可大于 limit）、`limit`、`rule_version`（本次检索使用的修复证据规则版本）、`target` 与 `scope`（`repository_full_history_including_later_fixes`）。
+
+相似度排序：触及文件重叠数量降序 → 路径重合数降序 → 十四维特征距离升序（两边都缺失或没有特征轮次时为 null，排后）→ 证据把握等级降序（高 > 中 > 低）→ 提交编号升序。候选修复口径与 SZZ 冻结一致：规则命中且已确认，或规则命中未复核。目标提交自身不进入参考列表。
+
+错误码：`FIX_RECOMMEND_COMMIT_NOT_FOUND`（404，提交不在该仓库解析历史里）、`FIX_RECOMMEND_REPOSITORY_NOT_FOUND`（404）、`FIX_RECOMMEND_LIMIT_INVALID`（422）。
+
+变更记录：`openspec/changes/add-fix-recommendations`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。

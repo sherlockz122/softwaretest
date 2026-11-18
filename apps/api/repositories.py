@@ -3,10 +3,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy.orm import Session
 
 from apps.api.auth import current_user
 from packages.mining.feature_service import FeatureService
 from packages.mining.fix import FixService
+from packages.mining.fix_recommendations import LIMIT_DEFAULT, LIMIT_MAX, recommend
 from packages.mining.fix_rules import RULE_VERSION
 from packages.mining.szz import SZZService
 from packages.repositories.parse_policy import COMMIT_LIMIT
@@ -102,6 +104,18 @@ def feature_runs(
 
 
 @router.get("/{repository_id:uuid}/feature-quality")
+@router.get("/{repository_id:uuid}/fix-recommendations")
+def fix_recommendations(
+    repository_id: UUID,
+    request: Request,
+    user=Depends(current_user),
+    sha: str = Query(min_length=7, max_length=64),
+    limit: int = Query(default=LIMIT_DEFAULT, ge=1, le=LIMIT_MAX),
+):
+    with Session(request.app.state.connections.engine) as db:
+        return recommend(db, str(repository_id), sha, limit=limit)
+
+
 def feature_quality(
     repository_id: UUID,
     run_id: UUID,
