@@ -30,9 +30,17 @@ test("CSV download uses in-memory authorization and retains JSON errors", async 
   const blob = await client.request("/datasets/fixture?format=csv", {
     responseType: "blob",
   });
-  // 直接用 Blob.text()：测试环境里 Response.blob() 返回的是 Node 的 Blob，
-  // jsdom 的 FileReader 会因为它不是自己那一份 Blob 而拒绝读取。
-  const text = await blob.text();
+  // Node 22 下 Response.blob() 返回 Node 的 Blob（有 text()）；Node 26 起
+  // 改用全局 Blob 构造，jsdom 环境里是极简 Blob（没有 text()），回退 FileReader。
+  const text =
+    typeof blob.text === "function"
+      ? await blob.text()
+      : await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(blob);
+        });
   expect(text).toBe("label,la\n1,2\n");
   await expect(
     client.request("/datasets/bad?format=csv", { responseType: "blob" }),
