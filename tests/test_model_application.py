@@ -882,3 +882,63 @@ def test_preset_registration_and_auto_match(environment):
     service.pool_remove(users[2], preset_id)
     with Session(engine) as db:
         assert db.get(ModelPoolEntry, preset_id).status == "removed"
+
+
+def test_risk_api_rejects_unregistered_drift_and_invalid_params(environment):
+    service, body, users, settings, _, _ = environment
+    with TestClient(create_app(settings), base_url="http://127.0.0.1") as client:
+        login = lambda index: {  # noqa: E731
+            "Authorization": "Bearer "
+            + client.post(
+                "/api/v1/auth/login",
+                json={
+                    "username": users[index].username,
+                    "password": "model-test-only-password",
+                },
+            ).json()["access_token"]
+        }
+        viewer = login(0)
+        member = login(1)
+        ack = client.post(
+            "/api/v1/model-runs",
+            headers=member | {"Idempotency-Key": uuid4().hex},
+            json=body,
+        ).json()
+        path = f"/api/v1/model-runs/{ack['model_run_id']}/risk-items"
+
+        # 未注册（任务未运行完成）一律拒绝
+        assert client.get(path, headers=viewer).status_code == 409
+        assert client.get(path, headers=viewer).json()["code"] == "MODEL_NOT_READY"
+
+        token, payload = service.tasks.claim(ack["task_id"])
+        service.run(ack["task_id"], token, payload)
+
+        # 正常读取：Viewer 可读，返回排序、分页与门槛字段
+        ok = client.get(path, headers=viewer)
+        assert ok.status_code == 200
+        body_json = ok.json()
+        assert set(body_json) >= {"items", "total", "page", "page_size", "threshold"}
+
+        # 参数非法：API 层校验（页码/页大小/分区取值/类型）
+        for params in (
+            {"page": 0},
+            {"page_size": 101},
+            {"partition": ["bogus"]},
+            {"page": "x"},
+        ):
+            response = client.get(path, headers=viewer, params=params)
+            assert response.status_code == 422, params
+            assert response.json()["code"] == "SYSTEM_INVALID_INPUT", params
+        # 服务层校验：同一分区重复传入
+        repeated = client.get(path, headers=viewer, params={"partition": ["train", "train"]})
+        assert repeated.status_code == 422
+        assert repeated.json()["code"] == "MODEL_INVALID_INPUT"
+
+        # 工件漂移：篡改 probabilities.csv 后拒绝读取
+        artifact_path, _record, _report = service.artifact(
+            ack["model_run_id"], "probabilities.csv"
+        )
+        artifact_path.write_bytes(artifact_path.read_bytes() + b"\nbroken")
+        drifted = client.get(path, headers=viewer)
+        assert drifted.status_code == 409
+        assert drifted.json()["code"] == "MODEL_ARTIFACT_DRIFT"

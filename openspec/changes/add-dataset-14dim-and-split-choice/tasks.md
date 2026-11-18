@@ -8,10 +8,10 @@
   - 验证环节：文档结构检查。
   - 具体验证步骤：`openspec validate add-dataset-14dim-and-split-choice --strict` 通过。
   - 证据：本目录 proposal.md/specs/design.md；openspec 校验通过。
-- [ ] 1.2 追踪矩阵登记 US-29（十四维行级数据）与 US-30（比例自选、验证集可选），docs/04、docs/08 同步
+- [x] 1.2 追踪矩阵登记 US-29（十四维行级数据）与 US-30（比例自选、验证集可选），docs/04、docs/08 同步
   - 验证环节：文档一致性检查。
   - 具体验证步骤：docs/07 出现 US-29/US-30 行与第二十六阶段条目；docs/04 的构建请求含 validation_ratio=0 语义；docs/08 的三比例输入与 fix/lt 列说明。
-  - 证据：待补（docs 更新后勾选）。
+  - 证据：docs/07 US-29/US-30 行均为「已实施」并写明载体列（dataset_member.source_json / dataset_version.policy_json）与第二十六阶段条目（2026-11-12，855d069）；docs/04 第二十六阶段（validation_ratio=0 不切验证分区、两分区构建/下载 404 DATA_PARTITION_ABSENT、fix/lt 辅助字段口径）；docs/08 第二十六阶段（三比例输入、验证填 0 说明、十四维列与「样本数」口径）。
 
 ## 2. 十四维行级数据（后端）
 
@@ -68,6 +68,7 @@
   - 验证环节：Docker 起栈后 test_dataset_application.py + test_model_application.py。
   - 具体验证步骤：启动 Docker Desktop → `docker compose --profile full up -d --build` → 上述两个文件全绿。
   - 证据：32/32 通过（2026-11-13，真实 MySQL）。含 test_optional_validation_build_and_member_auxiliaries（CSV 头 fix,lt、下载 validation 抛 DATA_PARTITION_ABSENT）与 test_training_without_validation_partition（calibration_partition=="train"、train_threshold、risk_items 只看 test）。首轮暴露审计重建缺 fix/lt 的漂移误报，已修复并复跑通过。
-- [ ] 5.3 契约导出与全量验收电池
+- [x] 5.3 契约导出与全量验收电池
   - 验证环节：契约检查 + 前端全量。
   - 具体验证步骤：`scripts/check_contracts.py --export` 后 `scripts/check_contracts.py` PASS（已跑，PASS）；`cd apps/web && npx vitest --run` 全绿（已跑，25/25 相关文件）；`openspec validate --all --strict` 全绿（已跑，25 passed）。全量前端与后端电池随 5.2 复跑一起收口。
+  - 证据：check_contracts PASS（公开数据集导入批次重导出后 612 links，2026-11-13）；前端全量 68/68（2026-11-17，含模型池复用新增用例）；openspec validate 25 passed；后端全量电池两次全绿（2026-11-17：750 passed / 20 skipped 与 779 tests / 0 failures / 0 errors / 20 skipped，JUnit 留档 runtime/acceptance/backend-integration.xml）。
