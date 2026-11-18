@@ -47,6 +47,9 @@ const similarityText = (similarity) => {
     <p v-if="data && !data.items.length" class="hint">
       该仓库尚无修复历史，或没有与目标提交相近的修复案例。
     </p>
+    <p v-if="data" class="hint">
+      目标提交：{{ shortId(data.target.sha) }}
+    </p>
     <p v-if="data && data.items.length" class="hint">
       共 {{ data.total }} 条匹配，最多显示 {{ data.limit }} 条；检索规则版本
       {{ data.rule_version }}。

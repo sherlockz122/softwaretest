@@ -201,3 +201,51 @@ test("explanation panel lists factors with directions", async () => {
   expect(send.mock.calls.some(([path]) => path === "/predictions/p-1/explanation")).toBe(true);
   wrapper.unmount();
 });
+test("fix references panel uses the same candidate as the prediction", async () => {
+  const calls = [];
+  const recommendations = {
+    items: [
+      {
+        fix_sha: "a".repeat(40),
+        message_summary: "Fix crash",
+        touched_files: ["Parser.java"],
+        touched_files_shown: 1,
+        evidence_level: "high",
+        similarity: {
+          file_overlap: 1,
+          file_path_overlap: null,
+          feature_distance: 0.5,
+          evidence_rank: 0,
+        },
+      },
+    ],
+    total: 1,
+    limit: 20,
+    rule_version: "fix-evidence-v1",
+    target: { sha: "f".repeat(40), message_summary: "target", touched_files: [] },
+    scope: "repository_full_history_including_later_fixes",
+  };
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    calls.push([path, options]);
+    if (path.startsWith("/repositories?")) return repoList;
+    if (path.startsWith("/models?")) return modelList;
+    if (path.startsWith("/repositories/") && path.includes("fix-recommendations"))
+      return recommendations;
+    return single;
+  });
+  const { wrapper } = await view();
+  await fill(wrapper);
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  const panelCall = calls.find(
+    ([path]) => path.includes("fix-recommendations"),
+  );
+  expect(panelCall).toBeTruthy();
+  // 检索对象与预测提交的候选引用完全一致
+  expect(panelCall[0]).toContain("sha=feature%2Fx");
+  expect(panelCall[0]).toContain("/repositories/repo-1/fix-recommendations");
+  expect(wrapper.text()).toContain("同类修复参考");
+  expect(wrapper.text()).toContain("不是对当前缺陷的根因结论");
+  expect(wrapper.text()).toContain("目标提交：ffffffff");
+  wrapper.unmount();
+});

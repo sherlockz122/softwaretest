@@ -31,9 +31,10 @@
   - 证据：由 add-purpose-separated-datasets 交付（任务 1.5/1.6 已勾选，10/10 全绿）：A17 POST /datasets、A18 GET /datasets、A19 GET /datasets/{id} 与受控下载、RBAC、幂等键与分页全部实施并验收（docs/04 A17~19 行与第四～二十六阶段记录）。
 - [x] 4.3 完成数据集页面，以及真实 Worker 来源和独立新卷验收
   - 证据：由 add-purpose-separated-datasets 交付（任务 1.6 已勾选）：数据集页面衔接任务状态、未知资格与错误状态展示；真实 Worker 来源与独立新卷验收见该 change 4.x 证据（真实 MySQL 应用测试与浏览器 E2E）。
-- [ ] 4.4 验证真实的两类成熟数据和训练可行性，数据不足时明确拒绝
+- [x] 4.4 验证真实的两类成熟数据和训练可行性，数据不足时明确拒绝
   - 验证环节：真实小仓库四步分析 + 只读审计探针。
   - 具体验证步骤：演示栈添加 jsoup（700 提交窗口）跑完解析→Fix→SZZ→特征，scripts/audit_dataset.py 审计成熟两类样本数；结论写入证据。
+  - 证据（2026-11-18，两个真实公开仓库）：jsoup（700 提交窗口）四步全跑通后审计拒绝 `DATA_FEATURE_COVERAGE_INCOMPLETE`（近期窗口覆盖不足，拒绝路径按设计工作）；EventBus（全历史 550 提交，clone→parse→fix→szz→features 全绿）审计 `ready=false`，deficits 为 train/validation/test 全部缺类，标签计数 clean 5 / unknown 545 / buggy 0（unresolved_evidence 484 + content_incomplete 61）——SZZ 基线在小仓库上没有成熟 buggy 标签，两类成熟数据不成立，审计明确拒绝且列出数量与原因。按设计决策 8「探针先行」结论：纵向接入构建不投入实现，4.1 保持未勾选，待标签供给（SZZ 改进或更大仓库）具备后再启动。
 
 ## 5. 移动端验收
 
