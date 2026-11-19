@@ -555,3 +555,13 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 错误码：`FIX_RECOMMEND_COMMIT_NOT_FOUND`（404，提交不在该仓库解析历史里）、`FIX_RECOMMEND_REPOSITORY_NOT_FOUND`（404）、`FIX_RECOMMEND_LIMIT_INVALID`（422）。
 
 变更记录：`openspec/changes/add-fix-recommendations`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。
+
+## 第三十阶段训练预测分离与并发契约（2026-11-18）
+
+无数据库迁移、无新表——本阶段把已在架构里的边界写成明确契约并用测试固化。
+
+**分离契约**：训练与数据集构建请求一律 202 落任务队列（`POST /model-runs`、`POST /datasets`），执行走 worker 租约与 outbox；预测（`GET /model-runs/{id}/risk-items` 与候选/批量预测）由在线服务同步读取已注册模型的密封工件（哈希校验的 model.skops/report.json/probabilities.csv），不产生任务队列消息、不获取任务租约、不等待任何训练任务。训练任务排队或卡死（租约过期未恢复）不影响既有已注册模型的预测。注册发布是训练到预测的唯一通道：任务成功与工件发布在同一事务完成，未注册模型任何状态都不可预测（409 `MODEL_NOT_READY`），已注册运行的任务不可重试（409 `MODEL_STATE_CONFLICT`），预测结果在任务状态查询前后保持一致。
+
+**并发三规则**：① 幂等去重——幂等登记与任务创建在同一事务，`(type, scope_key, idempotency_key)` 唯一约束裁决并发同键请求，其余请求重放返回同一任务标识；② 租约串行——worker 按任务租约一次执行一个实例，执行中崩溃（租约过期）由 reconcile 产出重试任务恢复，终态与一次成功执行一致；③ 所有权隔离——任务按 `user.id + ":" + type` 分 scope，跨用户取消/重试/管理一律 403，产物与报告各归各主。
+
+变更记录：`openspec/changes/add-training-prediction-separation-and-concurrency`。

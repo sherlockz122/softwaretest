@@ -103,7 +103,6 @@ def feature_runs(
     return features(request).runs(str(repository_id), page, page_size)
 
 
-@router.get("/{repository_id:uuid}/feature-quality")
 @router.get("/{repository_id:uuid}/fix-recommendations")
 def fix_recommendations(
     repository_id: UUID,
@@ -116,6 +115,7 @@ def fix_recommendations(
         return recommend(db, str(repository_id), sha, limit=limit)
 
 
+@router.get("/{repository_id:uuid}/feature-quality")
 def feature_quality(
     repository_id: UUID,
     run_id: UUID,

@@ -134,6 +134,11 @@ async function createBatch() {
     <p>
       队列按概率降序、提交时间升序排列，用于安排审查顺序，不是自动合并或拒绝结论。批量预测最多覆盖 90 天、500 条候选。
     </p>
+    <p>
+      这里的预测结果只看「已注册模型」；训练在
+      <RouterLink to="/models">模型研究</RouterLink>
+      完成，训练和预测是分开的两件事：训练走任务队列，预测直接读已注册模型的结果，训练排队或中断不会影响这里已有模型的预测。
+    </p>
     <RequestError
       :error="error || queue.error.value || repos.error.value || models.error.value || explanation.error.value"
     />

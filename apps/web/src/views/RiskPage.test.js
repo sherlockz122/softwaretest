@@ -14,6 +14,7 @@ async function view(role = "Member", path = "/risk") {
     routes: [
       { path: "/risk", component: RiskPage },
       { path: "/tasks/:id", component: { template: "<div/>" } },
+      { path: "/models", component: { template: "<div/>" } },
     ],
   });
   await router.push(path);
@@ -220,5 +221,18 @@ test("explanation button opens the factor panel", async () => {
   expect(send.mock.calls.some(([path]) =>
     path.startsWith("/predictions/p-2/explanation"),
   )).toBe(true);
+  wrapper.unmount();
+});
+
+test("risk page states registered-model boundary and links training page", async () => {
+  vi.spyOn(client, "request").mockImplementation(async (path) => {
+    if (path.startsWith("/repositories?")) return repoList;
+    if (path.startsWith("/models?")) return modelList;
+    return queueData;
+  });
+  const { wrapper } = await view();
+  expect(wrapper.text()).toContain("训练和预测是分开的两件事");
+  expect(wrapper.text()).toContain("训练排队或中断不会影响");
+  expect(wrapper.find('a[href="/models"]').exists()).toBe(true);
   wrapper.unmount();
 });
