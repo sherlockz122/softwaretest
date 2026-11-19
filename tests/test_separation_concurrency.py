@@ -25,7 +25,7 @@ def task_count(db):
     return db.scalar(select(func.count()).select_from(AsyncTask))
 
 
-def test_stuck_training_does_not_block_registered_predictions(environment):
+def test_stuck_training_does_not_block_registered_predictions(environment):  # noqa: F811
     service, body, users, _, engine, _ = environment
     # 注册模型 A：训练完成，风险列表可用
     ack_a, token_a, payload_a = claim(environment)
@@ -47,7 +47,7 @@ def test_stuck_training_does_not_block_registered_predictions(environment):
     assert before == after
 
 
-def test_registered_run_has_no_retry_channel(environment):
+def test_registered_run_has_no_retry_channel(environment):  # noqa: F811
     service, body, users, _, engine, _ = environment
     ack, token, payload = claim(environment)
     service.run(ack["task_id"], token, payload)
@@ -65,7 +65,7 @@ def test_registered_run_has_no_retry_channel(environment):
     assert first == second
 
 
-def test_concurrent_same_idempotency_key_creates_one_task(environment):
+def test_concurrent_same_idempotency_key_creates_one_task(environment):  # noqa: F811
     service, body, users, _, engine, _ = environment
     key = uuid4().hex
 
@@ -89,7 +89,7 @@ def test_concurrent_same_idempotency_key_creates_one_task(environment):
     assert service.detail(results[0]["model_run_id"])["registered"]
 
 
-def test_two_users_concurrent_training_isolated(environment):
+def test_two_users_concurrent_training_isolated(environment):  # noqa: F811
     service, body, users, _, engine, dataset = environment
     # 给第二位 Member 建一份独立数据集
     with TemporaryDirectory(dir=assets.ROOT / "runtime/temp", prefix="two-user-") as name:
@@ -136,7 +136,7 @@ def test_two_users_concurrent_training_isolated(environment):
         assert db.get(AsyncTask, ack_a["task_id"]).status == "succeeded"
 
 
-def test_queue_serial_consumption_and_reconcile_recovery(environment):
+def test_queue_serial_consumption_and_reconcile_recovery(environment):  # noqa: F811
     service, body, users, _, engine, _ = environment
     # 连续提交三个训练：outbox 按提交顺序投递
     acks = [service.create(users[1], uuid4().hex, body, str(uuid4())) for _ in range(3)]
