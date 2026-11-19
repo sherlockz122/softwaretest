@@ -81,6 +81,44 @@ const ratiosInvalid = computed(() => {
   return Math.abs(ratios.reduce((a, b) => a + b, 0) - 100) > 1e-6;
 });
 const assets = computed(() => list.data.value?.assets || []);
+const sourceKind = ref("asset");
+const observationRepo = ref("");
+const observationFeature = ref("");
+const observationSzz = ref([]);
+const repos = useLatest((signal) =>
+  client.request("/repositories?page=1&page_size=100", { signal }),
+);
+const featureRuns = useLatest((input, signal) =>
+  input.id
+    ? client.request(`/repositories/${encodeURIComponent(input.id)}/feature-runs`, {
+        signal,
+      })
+    : Promise.resolve({ items: [], total: 0 }),
+);
+const szzRuns = useLatest((input, signal) =>
+  input.id
+    ? client.request(`/repositories/${encodeURIComponent(input.id)}/szz-runs`, {
+        signal,
+      })
+    : Promise.resolve({ items: [], total: 0 }),
+);
+repos.load(null);
+watch(observationRepo, (id) => {
+  observationFeature.value = "";
+  observationSzz.value = [];
+  if (id) {
+    featureRuns.load({ id });
+    szzRuns.load({ id });
+  }
+});
+const observationReady = computed(() => {
+  if (sourceKind.value !== "repository") return true;
+  return Boolean(
+    observationRepo.value &&
+      observationFeature.value &&
+      observationSzz.value.length,
+  );
+});
 watch(page, (p) => list.load(p), { immediate: true });
 const timer = setInterval(() => {
   if (!document.hidden && !list.loading.value && !client.state.busy)
@@ -88,20 +126,38 @@ const timer = setInterval(() => {
 }, 5000);
 onUnmounted(() => clearInterval(timer));
 async function create() {
-  const selected = assets.value.find((a) => a.asset_id === assetId.value);
-  if (!selected || creating.value) return;
+  if (creating.value) return;
+  if (sourceKind.value === "asset") {
+    if (!assets.value.find((a) => a.asset_id === assetId.value)) return;
+  } else if (!observationReady.value) {
+    return;
+  }
   creating.value = true;
   error.value = null;
-  const body = {
+  const common = {
     name: name.value.trim(),
-    asset_id: selected.asset_id,
-    source_hash: selected.source_hash,
     purpose: "published_binary_12_v1",
     split_strategy: strategy.value,
     train_ratio: Number(trainRatio.value) / 100,
     validation_ratio: Number(validationRatio.value) / 100,
     test_ratio: Number(testRatio.value) / 100,
   };
+  const body =
+    sourceKind.value === "asset"
+      ? {
+          ...common,
+          source_kind: "asset",
+          asset_id: assetId.value,
+          source_hash: assets.value.find((a) => a.asset_id === assetId.value)
+            .source_hash,
+        }
+      : {
+          ...common,
+          source_kind: "repository",
+          repository_id: observationRepo.value,
+          feature_run_id: observationFeature.value,
+          szz_run_ids: [...observationSzz.value],
+        };
   try {
     const result = await client.request("/datasets", {
       method: "POST",
@@ -127,16 +183,16 @@ async function onFileChosen(event) {
   importDone.value = null;
   if (!file) return;
   const head = ((await file.slice(0, 65536).text()).split(/\r?\n/)[0] || "").trim();
-  let names = [];
-  if (head.startsWith("{")) {
-    try {
-      names = Object.keys(JSON.parse(head));
-    } catch {
-      names = [];
+  const names = (() => {
+    if (head.startsWith("{")) {
+      try {
+        return Object.keys(JSON.parse(head));
+      } catch {
+        return [];
+      }
     }
-  } else {
-    names = head.split(",");
-  }
+    return head.split(",");
+  })();
   importColumnNames.value = [...new Set(names)].filter(Boolean);
   autoMatch();
 }
@@ -221,7 +277,63 @@ async function submitImport() {
           :disabled="creating"
       /></label>
       <label
-        >用哪份公开数据<select v-model="assetId" required :disabled="creating">
+        >数据从哪里来<select v-model="sourceKind" :disabled="creating">
+          <option value="asset">公开数据资产（内置 / 导入）</option>
+          <option value="repository">仓库分析结果（四步体检产出）</option>
+        </select></label
+      >
+      <template v-if="sourceKind === 'repository'">
+        <label
+          >选哪个仓库<select v-model="observationRepo" :disabled="creating">
+            <option value="">请选择已分析仓库</option>
+            <option
+              v-for="repo in repos.data.value?.items || []"
+              :key="repo.id"
+              :value="repo.id"
+            >
+              {{ repo.url }} · {{ repo.parse_status || "未解析" }}
+            </option>
+          </select></label
+        >
+        <label
+          >用哪次统计指标轮次<select
+            v-model="observationFeature"
+            :disabled="creating || !observationRepo"
+          >
+            <option value="">请选择特征轮次</option>
+            <option
+              v-for="run in featureRuns.data.value?.items || []"
+              :key="run.root_task_id"
+              :value="run.root_task_id"
+            >
+              {{ run.feature_version }} · {{ run.processed }} 提交 ·
+              {{ run.history_coverage === "full" ? "全历史" : "近期窗口" }}
+            </option>
+          </select></label
+        >
+        <p class="hint">
+          缺陷追溯观察：可多选多次 SZZ
+          轮次（每次观察时间不同，标签成熟度随之推进）。全历史覆盖是数据集成立的前提；数据不足时构建会明确拒绝。
+        </p>
+        <label
+          v-for="run in szzRuns.data.value?.items || []"
+          :key="run.root_task_id"
+          class="check-row"
+          ><input
+            type="checkbox"
+            :value="run.root_task_id"
+            v-model="observationSzz"
+            :disabled="creating || !observationRepo"
+          />SZZ 轮次 {{ run.root_task_id.slice(0, 8) }}（观察截止
+          {{ (run.as_of || "启动时").slice(0, 10) }}）</label
+        >
+      </template>
+      <label
+        >用哪份公开数据<select
+          v-model="assetId"
+          required
+          :disabled="creating || sourceKind !== 'asset'"
+        >
           <option value="">请选择已保存的数据</option>
           <option
             v-for="asset in assets"
@@ -285,7 +397,13 @@ async function submitImport() {
         每个数据集有 14 项特征：12 项数值指标 + 修复标志 + 改动前文件总行数。后台会核对数据来源和两类的数量，全部完成后才能下载。
       </p>
       <button
-        :disabled="creating || !assetId || !name.trim() || ratiosInvalid"
+        :disabled="
+          creating ||
+          (sourceKind === 'asset' && !assetId) ||
+          !name.trim() ||
+          ratiosInvalid ||
+          !observationReady
+        "
       >
         {{ creating ? "正在提交…" : "生成研究数据集" }}
       </button>

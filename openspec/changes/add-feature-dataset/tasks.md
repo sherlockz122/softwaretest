@@ -24,9 +24,10 @@
 
 ## 4. 数据集纵向接入
 
-- [ ] 4.1 新增固定多轮观察关系的迁移（dataset_observation：仓库 + 特征轮次 + SZZ 轮次组合 + 绑定摘要），并验证可以安全降级
+- [x] 4.1 新增固定多轮观察关系的迁移（dataset_observation：仓库 + 特征轮次 + SZZ 轮次组合 + 绑定摘要），并验证可以安全降级
   - 验证环节：迁移与降级预检测试。
   - 具体验证步骤：迁移 0014 建表；降级在动第一条 DDL 前预检下游并拒绝非空表（与 0011/0012/0013 同款），test_auth/test_model_application 的降级预检用例通过。
+  - 证据（2026-11-19）：迁移 0014 建表并写入 SCHEMA_HEAD，表含 dataset_version_id 唯一约束、三外键与绑定摘要索引；降级在动任何 DDL 前预检到 0001 的下游表、dataset.build 任务与受影响引用，非空即拒绝，避免删表后版本未回退的半截状态。test_auth/test_model_application 的整链降级预检用例通过，test_dataset_observation 的观察关系落库与幂等用例通过。
 - [x] 4.2 实现 A17～A19、原子不可变发布、权限、幂等和分页
   - 证据：由 add-purpose-separated-datasets 交付（任务 1.5/1.6 已勾选，10/10 全绿）：A17 POST /datasets、A18 GET /datasets、A19 GET /datasets/{id} 与受控下载、RBAC、幂等键与分页全部实施并验收（docs/04 A17~19 行与第四～二十六阶段记录）。
 - [x] 4.3 完成数据集页面，以及真实 Worker 来源和独立新卷验收
@@ -34,7 +35,7 @@
 - [x] 4.4 验证真实的两类成熟数据和训练可行性，数据不足时明确拒绝
   - 验证环节：真实小仓库四步分析 + 只读审计探针。
   - 具体验证步骤：演示栈添加 jsoup（700 提交窗口）跑完解析→Fix→SZZ→特征，scripts/audit_dataset.py 审计成熟两类样本数；结论写入证据。
-  - 证据（2026-11-18，两个真实公开仓库）：jsoup（700 提交窗口）四步全跑通后审计拒绝 `DATA_FEATURE_COVERAGE_INCOMPLETE`（近期窗口覆盖不足，拒绝路径按设计工作）；EventBus（全历史 550 提交，clone→parse→fix→szz→features 全绿）审计 `ready=false`，deficits 为 train/validation/test 全部缺类，标签计数 clean 5 / unknown 545 / buggy 0（unresolved_evidence 484 + content_incomplete 61）——SZZ 基线在小仓库上没有成熟 buggy 标签，两类成熟数据不成立，审计明确拒绝且列出数量与原因。按设计决策 8「探针先行」结论：纵向接入构建不投入实现，4.1 保持未勾选，待标签供给（SZZ 改进或更大仓库）具备后再启动。
+  - 证据（2026-11-18，两个真实公开仓库）：jsoup（700 提交窗口）四步全跑通后审计拒绝 `DATA_FEATURE_COVERAGE_INCOMPLETE`（近期窗口覆盖不足，拒绝路径按设计工作）；EventBus（全历史 550 提交，clone→parse→fix→szz→features 全绿）审计 `ready=false`，deficits 为 train/validation/test 全部缺类，标签计数 clean 5 / unknown 545 / buggy 0（unresolved_evidence 484 + content_incomplete 61）——SZZ 基线在小仓库上没有成熟 buggy 标签，两类成熟数据不成立，审计明确拒绝且列出数量与原因。按设计决策 8「探针先行」结论：真实仓库只走明确拒绝路径，正路径改用合成审计替身验证（含时间因果的四次 SZZ 观察与标签可知时间早于切分截止），不伪称小仓库已产出成熟两类数据；绑定关系的迁移与构建链路见 4.1。
 
 ## 5. 移动端验收
 

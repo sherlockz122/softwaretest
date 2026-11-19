@@ -69,16 +69,22 @@ class DatasetSource:
         self.settings, self.engine = settings, connections.engine
         self.storage = storage or Storage(settings)
 
-    def load(self, *args, **kwargs):
+    def load(self, *args, ratios=None, **kwargs):
         try:
-            return self._load(*args, **kwargs)
+            return self._load(*args, ratios=ratios, **kwargs)
         except DatasetError:
             raise
         except (FeatureInputError, KeyError, TypeError, ValueError, IndexError):
             raise DatasetError("DATA_SOURCE_CONFLICT") from None
 
     def _load(
-        self, repository_id, feature_run_id, szz_run_ids, snapshot_at=None, window_days=WINDOW_DAYS
+        self,
+        repository_id,
+        feature_run_id,
+        szz_run_ids,
+        snapshot_at=None,
+        window_days=WINDOW_DAYS,
+        ratios=None,
     ):
         # No table update, audit insert, Git command, remote lookup or historical repair.
         if not 1 <= len(szz_run_ids) <= 32 or len(set(szz_run_ids)) != len(szz_run_ids):
@@ -105,7 +111,12 @@ class DatasetSource:
             now = database_now(db)
             if snapshot_at is not None and snapshot_at > now:
                 raise DatasetError("DATA_SNAPSHOT_IN_FUTURE")
-            policy = Policy(snapshot_at or now, window_days)
+            policy = Policy(
+                snapshot_at or now,
+                window_days,
+                **({"train": ratios["train"], "validation": ratios["validation"],
+                    "test": ratios["test"]} if ratios else {}),
+            )
             repo = db.get(Repository, repository_id, with_for_update={"read": True})
             feature = db.get(FeatureRun, feature_run_id, with_for_update={"read": True})
             if (
@@ -377,8 +388,8 @@ class DatasetSource:
             tick()
             return snapshot, tuple(vectors), tuple(observations), policy
 
-    def audit(self, *args, **kwargs):
-        source = self.load(*args, **kwargs)
+    def audit(self, *args, ratios=None, **kwargs):
+        source = self.load(*args, ratios=ratios, **kwargs)
         deadline = time.monotonic() + 30
 
         def tick():

@@ -99,9 +99,28 @@
         "additionalProperties": false,
         "properties": {
           "asset_id": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Asset Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "feature_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Run Id"
           },
           "name": {
             "maxLength": 80,
@@ -115,9 +134,37 @@
             "title": "Purpose",
             "type": "string"
           },
+          "repository_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Id"
+          },
           "source_hash": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Source Hash",
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Hash"
+          },
+          "source_kind": {
+            "default": "asset",
+            "enum": [
+              "asset",
+              "repository"
+            ],
+            "title": "Source Kind",
             "type": "string"
           },
           "split_strategy": {
@@ -128,6 +175,23 @@
             ],
             "title": "Split Strategy",
             "type": "string"
+          },
+          "szz_run_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Szz Run Ids"
           },
           "test_ratio": {
             "default": 0.15,
@@ -152,9 +216,7 @@
           }
         },
         "required": [
-          "name",
-          "asset_id",
-          "source_hash"
+          "name"
         ],
         "title": "DatasetBody",
         "type": "object"
@@ -2109,7 +2171,7 @@
     },
     "/api/v1/repositories/{repository_id}/feature-quality": {
       "get": {
-        "operationId": "fix_recommendations_api_v1_repositories__repository_id__feature_quality_get",
+        "operationId": "feature_quality_api_v1_repositories__repository_id__feature_quality_get",
         "parameters": [
           {
             "in": "path",
@@ -2123,25 +2185,83 @@
           },
           {
             "in": "query",
-            "name": "sha",
+            "name": "run_id",
             "required": true,
             "schema": {
-              "maxLength": 64,
-              "minLength": 7,
-              "title": "Sha",
+              "format": "uuid",
+              "title": "Run Id",
               "type": "string"
             }
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
             "required": false,
             "schema": {
               "default": 20,
               "maximum": 100,
               "minimum": 1,
-              "title": "Limit",
+              "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "feature",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "NS",
+                    "ND",
+                    "NF",
+                    "Entropy",
+                    "LA",
+                    "LD",
+                    "LT",
+                    "FIX",
+                    "NDEV",
+                    "AGE",
+                    "NUC",
+                    "EXP",
+                    "REXP",
+                    "SEXP"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Feature"
+            }
+          },
+          {
+            "in": "query",
+            "name": "missing",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Missing"
             }
           }
         ],
@@ -2170,7 +2290,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Fix Recommendations",
+        "summary": "Feature Quality",
         "tags": [
           "repositories"
         ]

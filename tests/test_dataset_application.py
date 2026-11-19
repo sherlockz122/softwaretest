@@ -8,10 +8,12 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import event, inspect, select
 from sqlalchemy.orm import Session
 
 from apps.api.application import create_app
+from apps.api.datasets import DatasetBody
 from packages.auth.security import PASSWORD_HASHER, CurrentUser
 from packages.mining import dataset_service as module
 from packages.mining import public_assets as assets
@@ -212,6 +214,27 @@ def test_download_artifact_drift_refused(environment):
     path.write_bytes(path.read_bytes() + b"modified")
     with pytest.raises(research.ResearchError, match="DATA_ARTIFACT_DRIFT"):
         service.download(ack["dataset_id"], "train")
+
+
+def test_api_body_accepts_repository_source_and_rejects_mixed_fields():
+    asset_body = {
+        "name": "asset source",
+        "asset_id": "a" * 64,
+        "source_hash": "b" * 64,
+    }
+    repository_body = {
+        "name": "observation source",
+        "source_kind": "repository",
+        "repository_id": str(uuid4()),
+        "feature_run_id": str(uuid4()),
+        "szz_run_ids": [str(uuid4())],
+    }
+    assert DatasetBody(**asset_body).source_kind == "asset"
+    assert DatasetBody(**repository_body).source_kind == "repository"
+    with pytest.raises(ValidationError):
+        DatasetBody(**asset_body, source_kind="repository")
+    with pytest.raises(ValidationError):
+        DatasetBody(**repository_body, asset_id="a" * 64, source_hash="b" * 64)
 
 
 def test_api_roles_routes_csv_and_owner_guard(environment):

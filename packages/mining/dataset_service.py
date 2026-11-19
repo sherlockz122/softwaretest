@@ -5,7 +5,7 @@ import os
 import shutil
 import time
 from datetime import timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import func, insert, select
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session
 
 from packages.mining import public_assets as assets
 from packages.mining import research_dataset as research
-from packages.persistence.models import AsyncTask, DatasetMember, DatasetVersion
+from packages.mining.source_evidence import content_hash
+from packages.persistence.models import (
+    AsyncTask,
+    DatasetMember,
+    DatasetObservation,
+    DatasetVersion,
+    Repository,
+)
 from packages.tasks.service import TaskError, TaskService, audit, database_now, key_valid
 
 BATCH_SIZE = 500
@@ -38,6 +45,12 @@ class DatasetService:
         }
         research.policy_valid(policy)
         scope = user.id + ":dataset.build"
+        if request.get("source_kind", "asset") not in ("asset", "repository"):
+            raise research.ResearchError("DATA_POLICY_INVALID")
+        if request.get("source_kind") == "repository":
+            binding = self.observation_binding(request)
+        else:
+            binding = None
 
         def existing(db):
             row = db.scalar(
@@ -60,10 +73,39 @@ class DatasetService:
                 self.tasks.actor(db, user)
                 if replay := existing(db):
                     return replay
-                # Only bounded metadata; heavyweight verification is performed by the Worker.
-                source = research.preview(request["asset_id"], self.store)
-                if source["source_hash"] != request["source_hash"]:
-                    raise research.ResearchError("DATA_SOURCE_DRIFT")
+                if binding is not None:
+                    # 同一仓库、同一轮次组合与同一政策的重复请求返回同一数据集版本。
+                    # 政策列是 MySQL 原生 JSON，等值比较在 SQL 层受格式影响，先按绑定
+                    # 缩小范围再在 Python 侧比较政策字典。
+                    rows = db.execute(
+                        select(DatasetObservation.dataset_version_id, DatasetVersion.policy_json)
+                        .join(
+                            DatasetVersion,
+                            DatasetVersion.id == DatasetObservation.dataset_version_id,
+                        )
+                        .where(
+                            DatasetObservation.binding_hash == binding,
+                            DatasetVersion.output_json.is_not(None),
+                        )
+                    ).all()
+                    for repeated, stored_policy in rows:
+                        if stored_policy == policy:
+                            task = db.get(AsyncTask, repeated)
+                            if task:
+                                return self.tasks.acknowledgement(task) | {
+                                    "dataset_id": repeated
+                                }
+                if binding is not None:
+                    # 只做有界预检；轮次摘要与成熟度由 Worker 在构建时全量校验
+                    if not db.get(Repository, request["repository_id"]):
+                        raise research.ResearchError("DATA_SOURCE_INVALID")
+                    asset_id = source_hash = binding
+                else:
+                    # Only bounded metadata; heavyweight verification is performed by the Worker.
+                    source = research.preview(request["asset_id"], self.store)
+                    if source["source_hash"] != request["source_hash"]:
+                        raise research.ResearchError("DATA_SOURCE_DRIFT")
+                    asset_id, source_hash = request["asset_id"], request["source_hash"]
                 task = self.tasks.new_task(
                     db,
                     user.id,
@@ -83,11 +125,23 @@ class DatasetService:
                         latest_task_id=task.id,
                         name=request["name"],
                         purpose=request["purpose"],
-                        asset_id=request["asset_id"],
-                        source_hash=request["source_hash"],
+                        asset_id=asset_id,
+                        source_hash=source_hash,
                         policy_json=policy,
                     )
                 )
+                if binding is not None:
+                    db.flush()
+                    db.add(
+                        DatasetObservation(
+                            id=str(uuid4()),
+                            dataset_version_id=task.id,
+                            repository_id=request["repository_id"],
+                            feature_run_id=request["feature_run_id"],
+                            szz_run_ids_json=request["szz_run_ids"],
+                            binding_hash=binding,
+                        )
+                    )
                 db.flush()
                 return self.tasks.acknowledgement(task) | {"dataset_id": task.id}
         except IntegrityError as exc:
@@ -98,6 +152,211 @@ class DatasetService:
                 if replay := existing(db):
                     return replay
             raise
+
+    FEATURE_TO_RESEARCH = {
+        "NS": "ns",
+        "ND": "nd",
+        "NF": "nf",
+        "Entropy": "ent",
+        "LA": "la",
+        "LD": "ld",
+        "NDEV": "ndev",
+        "AGE": "age",
+        "NUC": "nuc",
+        "EXP": "aexp",
+        "REXP": "arexp",
+        "SEXP": "asexp",
+    }
+    RESEARCH_TO_FEATURE = {name: feature for feature, name in FEATURE_TO_RESEARCH.items()}
+
+    @staticmethod
+    def observation_binding(request):
+        """把仓库与轮次组合归一化成绑定哈希；轮次内容摘要由构建时全量校验。"""
+        szz_run_ids = request.get("szz_run_ids")
+        if (
+            not isinstance(szz_run_ids, list)
+            or not 1 <= len(szz_run_ids) <= 32
+            or len(set(szz_run_ids)) != len(szz_run_ids)
+            or any(type(value) is not str or not value.strip() for value in szz_run_ids)
+        ):
+            raise research.ResearchError("DATA_OBSERVATION_SELECTION_INVALID")
+        for field in ("repository_id", "feature_run_id"):
+            if type(request.get(field)) is not str or not request[field].strip():
+                raise research.ResearchError("DATA_OBSERVATION_SELECTION_INVALID")
+            try:
+                UUID(request[field])
+            except (ValueError, AttributeError):
+                raise research.ResearchError("DATA_OBSERVATION_SELECTION_INVALID") from None
+        for value in szz_run_ids:
+            try:
+                UUID(value)
+            except (ValueError, AttributeError):
+                raise research.ResearchError("DATA_OBSERVATION_SELECTION_INVALID") from None
+        return content_hash(
+            {
+                "repository_id": request["repository_id"],
+                "feature_run_id": request["feature_run_id"],
+                "szz_run_ids": sorted(szz_run_ids),
+            }
+        )
+
+    def prepare_repository(self, request, policy, check):
+        """仓库轮次 → 成熟两类样本行与元数据；审计不足时明确拒绝并写明原因。"""
+        from types import SimpleNamespace
+
+        from packages.mining.dataset import DatasetError
+        from packages.mining.dataset import audit as maturity_audit
+        from packages.mining.dataset_source import DatasetSource
+
+        source = DatasetSource(self.settings, SimpleNamespace(engine=self.engine))
+        ratios = {k: policy[k + "_ratio"] for k in research.PARTITIONS}
+        snapshot, vectors, observations, audit_policy = source.load(
+            request["repository_id"],
+            request["feature_run_id"],
+            request["szz_run_ids"],
+            ratios=ratios,
+        )
+        result = maturity_audit(snapshot, vectors, observations, audit_policy, tick=check)
+        if not result["ready"]:
+            raise DatasetError("DATA_MATURE_SAMPLES_INSUFFICIENT")
+        with Session(self.engine) as db:
+            repository = db.get(Repository, request["repository_id"])
+            if repository is None:
+                raise research.ResearchError("DATA_SOURCE_INVALID")
+            url = (repository.canonical_url or "").rstrip("/")
+            repository_name = url.split("://", 1)[-1].removesuffix(".git") or url
+        members, excluded_missing = self.members_from_audit(result, repository_name, check)
+        counts = {
+            partition: {
+                "clean": sum(
+                    1 for m in members if m["partition"] == partition and m["label"] == 0
+                ),
+                "buggy": sum(
+                    1 for m in members if m["partition"] == partition and m["label"] == 1
+                ),
+            }
+            for partition in research.PARTITIONS
+            if any(m["partition"] == partition for m in members)
+        }
+        if (
+            not members
+            or excluded_missing
+            and not any(m["label"] for m in members)
+            or any(not value["clean"] or not value["buggy"] for value in counts.values())
+        ):
+            raise DatasetError("DATA_MATURE_SAMPLES_INSUFFICIENT")
+        binding = self.observation_binding(request)
+        metadata = {
+            "version": research.VERSION,
+            "rule_hash": result["rule_hash"],
+            "numeric_encoding": "canonical-json-text-roundtrip-v1",
+            "policy": policy,
+            "source_hash": binding,
+            "asset_id": binding,
+            "asset_quality_hash": result["source_digest"],
+            "source_acquisition": {
+                "source_kind": "repository_observation",
+                "repository_id": request["repository_id"],
+                "feature_run_id": request["feature_run_id"],
+                "szz_run_ids": sorted(request["szz_run_ids"]),
+                "binding_hash": binding,
+                "snapshot_at": result["policy"]["snapshot_at"],
+                "label_version": result["label_version"],
+                "feature_version": result["feature_version"],
+                "head_sha": result["head_sha"],
+            },
+            "source_first_stored_at": None,
+            "rows": len(members),
+            "original_rows": len(result["labels"]),
+            "duplicate_rows": 0,
+            "excluded_missing_rows": excluded_missing,
+            "unknown_rows": result["label_counts"].get("unknown", 0),
+            "members_hash": content_hash(members),
+            "partitions": counts,
+            "repositories": {
+                repository_name: {
+                    "clean": sum(1 for m in members if m["label"] == 0),
+                    "buggy": sum(1 for m in members if m["label"] == 1),
+                }
+            },
+            "cohorts": {
+                repository_name: {
+                    "clean": sum(1 for m in members if m["label"] == 0),
+                    "buggy": sum(1 for m in members if m["label"] == 1),
+                }
+            },
+            "features": list(research.NUMERIC_FIELDS),
+            "auxiliary_features": ["fix", "lt"],
+            "lt_source": "kamei14_LT_or_missing",
+            "target": "mature_SZZ_binary_time_labels_v1",
+            "event_clock": "published_author_epoch_UTC",
+            "capabilities": {
+                "research_binary": True,
+                "historical_replay": False,
+                "candidate_release": False,
+                "research_semantic": False,
+                "type_prediction": False,
+                "localization": False,
+            },
+            "limitations": [
+                "mature_SZZ_labels_not_gold",
+                "not_historical_online_simulation",
+                "unknown_labels_not_included",
+                "individual_missing_feature_rows_excluded",
+                "no_preprocessing_fitted_or_models_trained",
+            ],
+        }
+        return members, metadata, content_hash(metadata)
+
+    @classmethod
+    def members_from_audit(cls, result, repository_name, check=lambda: None):
+        """把审计结论转成 research 同构的成员行；缺失特征行排除，绝不插补。"""
+        by_sha = {row["sha"]: row for row in result["labels"]}
+        members = []
+        excluded_missing = 0
+        for partition in research.PARTITIONS:
+            for sha in result["split"][partition]:
+                check()
+                row = by_sha[sha]
+                # 按 research.NUMERIC_FIELDS 顺序构造：CSV 表头必须与 CSV_FIELDS 一致；
+                # 数值统一转 float（内核可能产出整数），CSV 往返后 canonical 才一致
+                values = {
+                    name: (
+                        float(row["values"][cls.RESEARCH_TO_FEATURE[name]])
+                        if row["values"][cls.RESEARCH_TO_FEATURE[name]] is not None
+                        else None
+                    )
+                    for name in research.NUMERIC_FIELDS
+                }
+                if any(value is None for value in values.values()):
+                    excluded_missing += 1
+                    continue
+                fix = row["values"].get("FIX")
+                lt = row["values"].get("LT")
+                members.append(
+                    {
+                        "ordinal": len(members),
+                        "canonical_repository": repository_name,
+                        "commit_id": sha,
+                        "event_epoch": int(row["event_time"].timestamp()),
+                        "label": 1 if row["label"] == "buggy" else 0,
+                        "partition": partition,
+                        "numeric12": values,
+                        "source_rows": [sha],
+                        "cohorts": [repository_name],
+                        "fix": fix,
+                        "lt": lt,
+                        "lt_missing_reason": (
+                            row["missing_reasons"].get("LT") if lt is None else None
+                        ),
+                        **(
+                            {"fix_missing_reason": row["missing_reasons"].get("FIX")}
+                            if fix is None
+                            else {}
+                        ),
+                    }
+                )
+        return members, excluded_missing
 
     def fenced(self, db, task_id, token):
         task = self.tasks.locked(db, task_id)
@@ -357,12 +616,15 @@ class DatasetService:
                     "test_ratio",
                 )
             }
-            members, metadata, plan_hash = research.prepare(
-                research.asset_path(request["asset_id"], self.store),
-                request["source_hash"],
-                policy,
-                tick=check,
-            )
+            if request.get("source_kind") == "repository":
+                members, metadata, plan_hash = self.prepare_repository(request, policy, check)
+            else:
+                members, metadata, plan_hash = research.prepare(
+                    research.asset_path(request["asset_id"], self.store),
+                    request["source_hash"],
+                    policy,
+                    tick=check,
+                )
             frozen = self.freeze(task_id, token, metadata, plan_hash)
             if frozen is None:
                 raise DatasetStopped
@@ -389,16 +651,27 @@ class DatasetService:
             KeyError,
             TypeError,
         ) as exc:
+            from packages.mining.dataset import DatasetError
+
             with Session(self.engine) as db, db.begin():
                 context = self.fenced(db, task_id, token)
                 if context:
                     task, _, _ = context
-                    code = (
-                        exc.code
-                        if isinstance(exc, research.ResearchError)
-                        else "DATA_SOURCE_OR_STORAGE_INVALID"
-                    )
-                    self.tasks.terminal(db, task, "failed", code)
+                    if isinstance(exc, DatasetError):
+                        code = exc.code
+                        self.tasks.terminal(db, task, "failed", code)
+                        task.error_message = (
+                            "真实数据不足：仓库轮次审计未产出成熟两类样本，"
+                            "数量与原因见任务记录（原始标签不足或观察覆盖不完整），"
+                            "不移动切分边界、不伪造样本。"
+                        )
+                    else:
+                        code = (
+                            exc.code
+                            if isinstance(exc, research.ResearchError)
+                            else "DATA_SOURCE_OR_STORAGE_INVALID"
+                        )
+                        self.tasks.terminal(db, task, "failed", code)
                     audit(db, task, "dataset.failed")
 
     @staticmethod

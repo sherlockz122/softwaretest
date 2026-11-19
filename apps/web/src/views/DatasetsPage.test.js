@@ -62,7 +62,7 @@ test("uncertain create retains request identity and binds preview source hash", 
     });
   const { wrapper, router } = await view(DatasetsPage);
   await wrapper.get("input").setValue("research");
-  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  await wrapper.findAll("select")[1].setValue(asset.asset_id);
   await wrapper.get("form").trigger("submit");
   await flushPromises();
   await wrapper.get("form").trigger("submit");
@@ -72,6 +72,7 @@ test("uncertain create retains request identity and binds preview source hash", 
     attempts[1][1].headers["Idempotency-Key"],
   );
   expect(JSON.parse(attempts[1][1].body)).toMatchObject({
+    source_kind: "asset",
     source_hash: asset.source_hash,
     purpose: "published_binary_12_v1",
   });
@@ -90,7 +91,7 @@ test("create sends user-chosen ratios and allows zero validation", async () => {
   });
   const { wrapper } = await view(DatasetsPage);
   await wrapper.get("input").setValue("two-way");
-  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  await wrapper.findAll("select")[1].setValue(asset.asset_id);
   const numbers = wrapper.findAll('input[type="number"]');
   await numbers[0].setValue(80);
   await numbers[1].setValue(0);
@@ -110,7 +111,7 @@ test("ratios that do not sum to 100 disable submission with a hint", async () =>
   vi.spyOn(client, "request").mockResolvedValue(listing);
   const { wrapper } = await view(DatasetsPage);
   await wrapper.get("input").setValue("research");
-  await wrapper.findAll("select")[0].setValue(asset.asset_id);
+  await wrapper.findAll("select")[1].setValue(asset.asset_id);
   const numbers = wrapper.findAll('input[type="number"]');
   await numbers[2].setValue(10);
   await flushPromises();
@@ -460,5 +461,58 @@ test("ready dataset renders a 2D feature table with toggles and filters", async 
   expect(calls.some((p) => p.includes("filter_partition=test"))).toBe(true);
   expect(calls.some((p) => p.includes("filter_label=1"))).toBe(true);
   expect(wrapper.text()).toContain("当前按筛选条件显示");
+  wrapper.unmount();
+});
+
+test("repository source picks rounds and submits observation body", async () => {
+  const posts = [];
+  vi.spyOn(client, "request").mockImplementation(async (path, options) => {
+    if (options?.method === "POST") {
+      posts.push(JSON.parse(options.body));
+      return { dataset_id: "obs-ds" };
+    }
+    if (path.startsWith("/datasets?")) return { items: [], total: 0, assets: [] };
+    if (path.startsWith("/repositories?"))
+      return {
+        items: [{ id: "repo-1", url: "https://example.com/a.git", parse_status: "parsed" }],
+        total: 1,
+      };
+    if (path.includes("feature-runs"))
+      return {
+        items: [
+          {
+            root_task_id: "feat-1",
+            feature_version: "kamei14-dg-v1",
+            processed: 51,
+            history_coverage: "full",
+          },
+        ],
+        total: 1,
+      };
+    if (path.includes("szz-runs"))
+      return {
+        items: [{ root_task_id: "szz-1", as_of: "2024-06-01T00:00:00Z" }],
+        total: 1,
+      };
+    return { items: [], total: 0, assets: [] };
+  });
+  const { wrapper } = await view(DatasetsPage);
+  await wrapper.findAll("select")[0].setValue("repository");
+  await flushPromises();
+  expect(wrapper.text()).toContain("选哪个仓库");
+  await wrapper.findAll("select")[1].setValue("repo-1");
+  await flushPromises();
+  await wrapper.findAll("select")[2].setValue("feat-1");
+  const checkbox = wrapper.find('input[type="checkbox"][value="szz-1"]');
+  checkbox.element.checked = true;
+  await checkbox.trigger("change");
+  await wrapper.get("form").trigger("submit");
+  await flushPromises();
+  expect(posts[0]).toMatchObject({
+    source_kind: "repository",
+    repository_id: "repo-1",
+    feature_run_id: "feat-1",
+    szz_run_ids: ["szz-1"],
+  });
   wrapper.unmount();
 });

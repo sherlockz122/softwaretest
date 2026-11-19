@@ -149,3 +149,16 @@ def test_input_size_and_deadline_reject_read_only(szz_env, monkeypatch):
     monkeypatch.setattr("packages.mining.dataset_source.time.monotonic", lambda: next(stamps))
     with pytest.raises(DatasetError, match="DATA_AUDIT_TIMEOUT"):
         source.load(szz_env[4], feature, [szz])
+
+
+def test_custom_split_ratios_reach_policy(szz_env):
+    source, feature, szz = sources(szz_env)
+    ratios = {"train": 0.60, "validation": 0.20, "test": 0.20}
+    loaded = source.load(szz_env[4], feature, [szz], ratios=ratios)
+    assert loaded[3].train == 0.60
+    assert loaded[3].validation == 0.20
+    assert loaded[3].test == 0.20
+    with pytest.raises(DatasetError, match="DATA_SPLIT_INVALID"):
+        source.load(
+            szz_env[4], feature, [szz], ratios={"train": 0.60, "validation": 0.20, "test": 0.30}
+        )

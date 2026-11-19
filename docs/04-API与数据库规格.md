@@ -565,3 +565,22 @@ v2 feature_item.input_json 为 SHA、最小 commit 数值输入、message_purpos
 **并发三规则**：① 幂等去重——幂等登记与任务创建在同一事务，`(type, scope_key, idempotency_key)` 唯一约束裁决并发同键请求，其余请求重放返回同一任务标识；② 租约串行——worker 按任务租约一次执行一个实例，执行中崩溃（租约过期）由 reconcile 产出重试任务恢复，终态与一次成功执行一致；③ 所有权隔离——任务按 `user.id + ":" + type` 分 scope，跨用户取消/重试/管理一律 403，产物与报告各归各主。
 
 变更记录：`openspec/changes/add-training-prediction-separation-and-concurrency`。
+
+## 第三十一阶段纵向数据集接入（2026-11-19）
+
+新增 `dataset_observation` 表（迁移 0014，接在 model_pool 之后）：每个数据集版本最多一条观察关系，记下仓库、已接受的特征轮次、1～32 个 SZZ 轮次与绑定摘要。降级在动第一条 DDL 前预检下游链，只要下游还有数据就拒绝，做法与 0011～0013 一致，避免删表之后版本没回退的半截状态。
+
+`POST /datasets` 的请求体新增来源分支：
+
+| 来源 | 必填字段 | 含义 |
+|---|---|---|
+| `asset`（默认） | `asset_id`、`source_hash` | 内置或导入的公开数据资产，行为与旧版本一致 |
+| `repository` | `repository_id`、`feature_run_id`、`szz_run_ids`（1～32 个） | 已接受仓库的冻结轮次组合，切分政策字段不变 |
+
+两种来源互斥：仓库来源带资产字段、资产来源带轮次字段、缺字段或轮次数越界，都在任务创建前返回 422。仓库来源先冻结观察关系再做构建：同一仓库、同一轮次组合与同一切分政策的重复请求返回同一数据集版本，重试沿用原关系而不新建绑定；换一个轮次组合不会被旧绑定覆盖。绑定摘要像一次性的封条——封条相同就认作同一份数据，封条不同就另起一版，既不拆封重切也不把旧内容悄悄换成新的。
+
+构建把审计结论换成成员行时，十二个数值特征按固定顺序统一转成浮点数（内核可能产出整数，只有统一表示才能让 CSV 往返后的内容摘要一致），缺任一特征的行直接排除、绝不插补。审计说两类不齐或覆盖不完整时，任务失败并把数量与原因写进错误信息，明确「不移动切分边界、不伪造样本」。真实小仓库探针的 buggy 标签本来就不足，所以正路径用合成审计替身验证全链路（含观察落库、幂等与训练注册），真实仓库走明确拒绝路径。
+
+错误码：`DATA_OBSERVATION_SELECTION_INVALID`（422，来源字段、轮次组合或 UUID 不合法）、`DATA_MATURE_SAMPLES_INSUFFICIENT`（任务失败，成熟两类样本不足）、`DATA_FEATURE_COVERAGE_INCOMPLETE`（任务失败，特征轮次不是全历史）。原有的 `DATA_OBSERVATION_TIME_UNVERIFIED`、`DATA_OBSERVATION_INVALID` 继续由成熟度内核给出。
+
+变更记录：`openspec/changes/add-feature-dataset`。OpenAPI 见 [bootstrap-openapi.json](contracts/bootstrap-openapi.json)（已重导出）。

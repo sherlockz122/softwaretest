@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from packages.persistence.canonical_json import CanonicalJSON
 
-SCHEMA_HEAD = "0013_model_pool"
+SCHEMA_HEAD = "0014_dataset_observation"
 
 
 class Base(DeclarativeBase):
@@ -832,6 +832,30 @@ class ModelPoolEntry(Base):
     status: Mapped[str] = mapped_column(
         VARCHAR(16, charset="ascii", collation="ascii_bin"), default="active"
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DATETIME(fsp=6), nullable=False, server_default=func.utc_timestamp(6)
+    )
+
+
+class DatasetObservation(Base):
+    """固定多轮观察关系：一次数据集构建绑定的仓库与轮次组合（来源契约）。"""
+    __tablename__ = "dataset_observation"
+    __table_args__ = (
+        UniqueConstraint("dataset_version_id", name="uq_dataset_observation_version"),
+        Index("ix_dataset_observation_binding", "binding_hash", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(uuid_column(), primary_key=True)
+    dataset_version_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("dataset_version.id", ondelete="RESTRICT"), nullable=False
+    )
+    repository_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("repository.id", ondelete="RESTRICT"), nullable=False
+    )
+    feature_run_id: Mapped[str] = mapped_column(
+        uuid_column(), ForeignKey("feature_run.root_task_id", ondelete="RESTRICT"), nullable=False
+    )
+    szz_run_ids_json: Mapped[dict] = mapped_column(CanonicalJSON())
+    binding_hash: Mapped[str] = mapped_column(hash_column())
     created_at: Mapped[datetime] = mapped_column(
         DATETIME(fsp=6), nullable=False, server_default=func.utc_timestamp(6)
     )

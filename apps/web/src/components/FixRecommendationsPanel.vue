@@ -44,17 +44,17 @@ const similarityText = (similarity) => {
       这些是同一仓库里真实存在过的修复提交，按「触及文件重叠、改动特征距离、证据把握」排序，包括时间上晚于目标提交的修复。它们是同类缺陷的修法示例，不是对当前缺陷的根因结论。
     </p>
     <RequestError :error="items.error.value" />
-    <p v-if="data && !data.items.length" class="hint">
+    <p v-if="data && !data.items?.length" class="hint">
       该仓库尚无修复历史，或没有与目标提交相近的修复案例。
     </p>
     <p v-if="data" class="hint">
-      目标提交：{{ shortId(data.target.sha) }}
+      目标提交：{{ shortId(data.target?.sha) }}
     </p>
-    <p v-if="data && data.items.length" class="hint">
+    <p v-if="data && data.items?.length" class="hint">
       共 {{ data.total }} 条匹配，最多显示 {{ data.limit }} 条；检索规则版本
       {{ data.rule_version }}。
     </p>
-    <table v-if="data && data.items.length">
+    <table v-if="data && data.items?.length">
       <thead>
         <tr>
           <th>修复提交</th>
