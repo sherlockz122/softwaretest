@@ -365,6 +365,34 @@
         "title": "ImportPathBody",
         "type": "object"
       },
+      "LlmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "default": "deepseek",
+            "maxLength": 32,
+            "title": "Provider",
+            "type": "string"
+          },
+          "repository_id": {
+            "format": "uuid",
+            "title": "Repository Id",
+            "type": "string"
+          },
+          "sha": {
+            "maxLength": 64,
+            "minLength": 7,
+            "title": "Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository_id",
+          "sha"
+        ],
+        "title": "LlmBody",
+        "type": "object"
+      },
       "LoginBody": {
         "additionalProperties": false,
         "properties": {
@@ -1812,6 +1840,76 @@
           }
         ],
         "summary": "Candidate",
+        "tags": [
+          "predictions"
+        ]
+      }
+    },
+    "/api/v1/predictions/llm": {
+      "post": {
+        "description": "大模型评审：只看提交说明和改动概况，不发送源码。",
+        "operationId": "llm_api_v1_predictions_llm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Llm",
+        "tags": [
+          "predictions"
+        ]
+      }
+    },
+    "/api/v1/predictions/llm/providers": {
+      "get": {
+        "description": "可选的大模型入口，未配置的也会返回，标记为 configured=false。",
+        "operationId": "llm_providers_api_v1_predictions_llm_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Llm Providers",
         "tags": [
           "predictions"
         ]

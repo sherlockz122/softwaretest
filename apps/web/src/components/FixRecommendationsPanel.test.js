@@ -40,7 +40,7 @@ const response = {
   target: { sha: "c".repeat(40), message_summary: "", touched_files: [] },
   scope: "repository_full_history_including_later_fixes",
 };
-test("panel lists references with reasons and keeps the disclaimer", async () => {
+test("panel lists references without exposing scoring details", async () => {
   const send = vi.spyOn(client, "request").mockResolvedValue(response);
   const wrapper = mount(FixRecommendationsPanel, {
     props: { repositoryId: "repo", sha: "c".repeat(40) },
@@ -48,14 +48,16 @@ test("panel lists references with reasons and keeps the disclaimer", async () =>
   await flushPromises();
   expect(send.mock.calls[0][0]).toContain("/repositories/repo/fix-recommendations");
   expect(send.mock.calls[0][0]).toContain(`sha=${"c".repeat(40)}`);
-  expect(wrapper.text()).toContain("不是对当前缺陷的根因结论");
+  expect(wrapper.text()).toContain("以前修过类似问题的提交");
   expect(wrapper.text()).toContain("共 2 条匹配，最多显示 20 条");
-  expect(wrapper.text()).toContain("fix-evidence-v1");
   expect(wrapper.text()).toContain("Fix crash in parser");
-  expect(wrapper.text()).toContain("触及了 2 个相同文件");
-  expect(wrapper.text()).toContain("改动特征距离 0.42");
-  expect(wrapper.text()).toContain("相似度低");
-  expect(wrapper.text()).toContain("高");
+  expect(wrapper.text()).toContain("src/Parser.java");
+  // 只留三列：修复提交、提交信息摘要、触及文件。
+  expect(wrapper.findAll("th").map((cell) => cell.text())).toEqual([
+    "修复提交",
+    "提交信息摘要",
+    "触及文件",
+  ]);
   const buttons = wrapper.findAll("button.link");
   expect(buttons).toHaveLength(2);
   await buttons[0].trigger("click");

@@ -652,15 +652,14 @@ onUnmounted(() => clearInterval(poll));
                     下一页文件
                   </button>
                 </div>
+                <FixRecommendationsPanel
+                  :repository-id="String(route.params.id)"
+                  :sha="selected.sha"
+                  @select="(sha) => selectCommit({ sha })"
+                />
               </div>
             </li>
           </ul>
-          <FixRecommendationsPanel
-            v-if="selected"
-            :repository-id="String(route.params.id)"
-            :sha="selected.sha"
-            @select="(sha) => selectCommit({ sha })"
-          />
           <div class="pagination">
             <button
               :disabled="page <= 1 || commits.loading.value"

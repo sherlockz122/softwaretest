@@ -28,6 +28,9 @@ const messages = {
   PRED_NOT_FOUND: "预测结果不存在，请刷新后重试。",
   PRED_STATE_CONFLICT: "预测任务状态或记录发生变化，请刷新后重试。",
   PRED_VERSION_CONFLICT: "预测口径已升级，请重新提交评审。",
+  LLM_NOT_CONFIGURED: "还没有配置大模型：在 .env 里填写 DG_LLM_API_KEY 后重启后端。",
+  LLM_UNAVAILABLE: "大模型暂时不可用：服务没启动或网络不通，请检查所选入口的配置。",
+  LLM_PROVIDER_UNKNOWN: "没有这个大模型入口，请刷新页面重新选择。",
   MODEL_RISK_LIST_LIMIT:
     "这次运行的提交数量超过风险列表能处理的上限，列表暂时打不开；训练和评估结果不受影响。",
   MODEL_DATASET_NOT_FOUND: "找不到这次训练用的数据集，请返回数据集列表检查。",

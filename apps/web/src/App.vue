@@ -28,10 +28,8 @@ async function logout() {
         <RouterLink to="/repositories">仓库目录</RouterLink>
         <RouterLink to="/datasets">数据集</RouterLink>
         <RouterLink to="/models">模型研究</RouterLink>
-        <RouterLink to="/review">合入前评审</RouterLink>
-        <RouterLink to="/risk">风险队列</RouterLink>
-        <RouterLink to="/tasks">任务中心</RouterLink
-        ><RouterLink to="/health">连接检查</RouterLink>
+        <RouterLink to="/predict">模型预测</RouterLink>
+        <RouterLink to="/tasks">任务中心</RouterLink>
       </nav>
       <div v-if="client.state.user" class="account">
         <span

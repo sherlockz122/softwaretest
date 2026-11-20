@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     repository_max_bytes: int = Field(default=2 * 1024**3, ge=1024**2, le=100 * 1024**3)
     repository_timeout_seconds: int = Field(default=900, ge=10, le=3600)
     repository_parse_timeout_seconds: int = Field(default=1800, ge=10, le=86400)
+    # 大模型评审：默认走 DeepSeek 的兼容接口，没配 key 时接口返回未配置。
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_model: str = "deepseek-chat"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = Field(default=45, ge=5, le=180)
+    # 本地 Ollama 走它自带的 OpenAI 兼容接口；容器里用 host.docker.internal 访问宿主机。
+    ollama_base_url: str = "http://host.docker.internal:11434/v1"
+    ollama_model: str = "qwen2.5:7b"
+    # 其它 OpenAI 兼容服务（OpenRouter、Groq、vLLM 等），填了才出现在选择里。
+    custom_llm_base_url: str = ""
+    custom_llm_model: str = ""
+    custom_llm_api_key: SecretStr | None = None
 
     @model_validator(mode="after")
     def task_timing(self):

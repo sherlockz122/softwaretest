@@ -38,6 +38,14 @@ class BatchBody(BaseModel):
     max_candidates: StrictInt = Field(default=500, ge=1, le=500)
 
 
+class LlmBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repository_id: UUID
+    sha: str = Field(min_length=7, max_length=64)
+    provider: str = Field(default="deepseek", max_length=32)
+
+
 def service(request):
     return PredictionService(request.app.state.settings, request.app.state.connections)
 
@@ -82,3 +90,25 @@ def results(
 @router.get("/predictions/{prediction_id:uuid}/explanation")
 def explanation(prediction_id: UUID, request: Request, user=Depends(current_user)):
     return service(request).explanation(str(prediction_id))
+
+
+@router.get("/predictions/llm/providers")
+def llm_providers(request: Request, user=Depends(current_user)):
+    """可选的大模型入口，未配置的也会返回，标记为 configured=false。"""
+    from packages.prediction import llm as llm_review
+
+    return {"items": llm_review.providers(request.app.state.settings)}
+
+
+@router.post("/predictions/llm")
+def llm(body: LlmBody, request: Request, user=Depends(current_user)):
+    """大模型评审：只看提交说明和改动概况，不发送源码。"""
+    from packages.prediction import llm as llm_review
+
+    return llm_review.review(
+        request.app.state.settings,
+        request.app.state.connections.engine,
+        str(body.repository_id),
+        body.sha,
+        body.provider,
+    )

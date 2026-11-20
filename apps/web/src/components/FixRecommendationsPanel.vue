@@ -24,24 +24,12 @@ watch(
   { immediate: true },
 );
 const data = computed(() => items.data.value);
-const levelNames = { high: "高", medium: "中", low: "低", null: "—" };
-const similarityText = (similarity) => {
-  const parts = [];
-  if (similarity.file_overlap > 0)
-    parts.push(`触及了 ${similarity.file_overlap} 个相同文件`);
-  if (similarity.file_path_overlap)
-    parts.push(`路径重合 ${similarity.file_path_overlap} 个`);
-  if (similarity.feature_distance != null)
-    parts.push(`改动特征距离 ${similarity.feature_distance.toFixed(2)}`);
-  if (parts.length === 0) return "与目标改动相似度低（没有相同文件，特征也较远）";
-  return parts.join("，");
-};
 </script>
 <template>
   <section class="recommendations">
     <h2>同类修复参考</h2>
     <p class="hint">
-      这些是同一仓库里真实存在过的修复提交，按「触及文件重叠、改动特征距离、证据把握」排序，包括时间上晚于目标提交的修复。它们是同类缺陷的修法示例，不是对当前缺陷的根因结论。
+      同一个仓库里以前修过类似问题的提交，按改到的文件和改动大小排出来的。里面可能有时间在后面的提交，它们是用来看思路的，不代表这次的问题和它们一样。
     </p>
     <RequestError :error="items.error.value" />
     <p v-if="data && !data.items?.length" class="hint">
@@ -51,8 +39,7 @@ const similarityText = (similarity) => {
       目标提交：{{ shortId(data.target?.sha) }}
     </p>
     <p v-if="data && data.items?.length" class="hint">
-      共 {{ data.total }} 条匹配，最多显示 {{ data.limit }} 条；检索规则版本
-      {{ data.rule_version }}。
+      共 {{ data.total }} 条匹配，最多显示 {{ data.limit }} 条。
     </p>
     <table v-if="data && data.items?.length">
       <thead>
@@ -60,8 +47,6 @@ const similarityText = (similarity) => {
           <th>修复提交</th>
           <th>提交信息摘要</th>
           <th>触及文件</th>
-          <th>证据把握</th>
-          <th>相似理由</th>
         </tr>
       </thead>
       <tbody>
@@ -75,8 +60,6 @@ const similarityText = (similarity) => {
           <td>
             {{ item.touched_files.join("、") || "—" }}
           </td>
-          <td>{{ levelNames[item.evidence_level ?? "null"] }}</td>
-          <td>{{ similarityText(item.similarity) }}</td>
         </tr>
       </tbody>
     </table>
