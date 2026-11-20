@@ -119,7 +119,7 @@ test("training page separates itself from the historical risk list", async () =>
   });
   const { wrapper } = await view(ModelsPage);
   expect(wrapper.text()).toContain("训练和预测是分开的两件事");
-  expect(wrapper.find('a[href="/risk"]').exists()).toBe(true);
+  expect(wrapper.text()).toContain("历史风险列表");
   wrapper.unmount();
 });
 

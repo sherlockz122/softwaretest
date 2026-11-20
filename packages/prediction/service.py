@@ -442,6 +442,12 @@ class PredictionService:
             coefficients = model.named_steps["logisticregression"].coef_[0]
             contributions = np.asarray(matrix, dtype=float) * (coefficients / scaler.scale_)
             method = "lr-scaled-coefficient-v1"
+        elif hasattr(model, "coef_"):
+            # 标准化在训练前由特征矩阵完成，估计器本身是普通逻辑回归；
+            # 入参已经是标准化后的值，贡献度直接用系数乘数值。
+            coefficients = np.asarray(model.coef_[0], dtype=float)
+            contributions = np.asarray(matrix, dtype=float) * coefficients
+            method = "lr-coefficient-v1"
         else:
             import shap
 

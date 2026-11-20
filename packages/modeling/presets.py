@@ -86,11 +86,21 @@ def preset_partitions(members):
 
 
 def train_preset(spec, asset_directory, source_hash, *, tick=None):
-    """按预置规格在给定资产上训练估计器（标准化在训练分区拟合、校准按既有规则）。"""
+    """按预置规格在给定资产上训练估计器（标准化在训练分区拟合、校准按既有规则）。
+
+    预置走的是和正常训练同一条预处理：先按规格里的 features/forms 构造矩阵
+    （逻辑回归默认标准化），再交给 fit_model。少了这一步，未标准化的原始
+    数值差异会让 lbfgs 在几千轮内都收不敛，启动注册因此失败。
+    """
     members, _metadata, _digest = research.prepare(
         asset_directory, source_hash, PRESET_RATIOS, tick=tick
     )
     partitions = preset_partitions(members)
+    matrices, _stats = train.feature_matrix(
+        partitions, spec["features"], spec["forms"]
+    )
+    for partition, matrix in matrices.items():
+        partitions[partition]["x"] = matrix
     estimator, _calibrator, _threshold, _partition, _first, _second = train.fit_model(
         partitions, spec["plugin"], spec["params"], spec["seed"]
     )
